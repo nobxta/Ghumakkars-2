@@ -678,3 +678,22 @@ View trips: ${tripsUrl}
     throw new Error('Failed to send email');
   }
 }
+
+// Generic sendEmail function for custom emails
+export async function sendEmail(options: { to: string; subject: string; html: string; text?: string }) {
+  const mailOptions = {
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text || options.html.replace(/<[^>]*>/g, ''),
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.error('Error sending email:', error);
+    throw new Error('Failed to send email');
+  }
+}

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     // Get webhook signature from headers

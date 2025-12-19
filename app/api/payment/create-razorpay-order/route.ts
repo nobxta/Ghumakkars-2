@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();

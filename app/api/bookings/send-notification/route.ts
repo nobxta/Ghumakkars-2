@@ -7,6 +7,8 @@ import {
   sendSeatLockConfirmedEmail 
 } from '@/lib/email';
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const { bookingId, status, rejectionReason, tripDetails, userEmail, userName } = await request.json();

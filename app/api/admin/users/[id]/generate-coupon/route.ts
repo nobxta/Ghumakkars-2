@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendCouponEmail } from '@/lib/email';
 
+export const runtime = "nodejs";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

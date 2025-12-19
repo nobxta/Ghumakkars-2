@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getResetTokenEmail, removeResetToken } from '@/lib/reset-token-store';
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const { token, password } = await request.json();

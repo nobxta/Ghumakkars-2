@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Upload } from 'lucide-react';
+import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Upload, Plus, X, Tag, Percent, DollarSign, Calendar, MapPin, Users, Clock, Filter } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const supabase = createClient();

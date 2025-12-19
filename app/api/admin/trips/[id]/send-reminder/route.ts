@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendEmail } from '@/lib/email';
 
+export const runtime = "nodejs";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

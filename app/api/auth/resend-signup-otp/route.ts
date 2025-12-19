@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
