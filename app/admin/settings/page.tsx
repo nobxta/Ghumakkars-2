@@ -59,10 +59,19 @@ export default function AdminSettingsPage() {
     max_total_discount: '',
   });
 
-  useEffect(() => {
-    fetchPaymentSettings();
-    setLoading(false);
-  }, []);
+  const fetchCoupons = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('coupon_codes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCoupons(data || []);
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
+    }
+  };
 
   const fetchPaymentSettings = async () => {
     try {
@@ -92,6 +101,11 @@ export default function AdminSettingsPage() {
     }
   };
 
+  useEffect(() => {
+    fetchPaymentSettings();
+    fetchCoupons();
+    setLoading(false);
+  }, []);
 
   const handleSavePaymentSettings = async () => {
     setSaving(true);
