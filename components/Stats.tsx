@@ -57,7 +57,7 @@ export default function Stats() {
             Our Impact in Numbers
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Building a community of adventurous students exploring India's diverse landscapes
+            Building a community of adventurous students exploring India&apos;s diverse landscapes
           </p>
         </ScrollAnimation>
 

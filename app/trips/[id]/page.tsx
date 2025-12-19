@@ -86,7 +86,7 @@ export default function TripDetailPage() {
         <div className="text-center px-4">
           <MapPin className="h-16 w-16 md:h-20 md:w-20 text-purple-300 mx-auto mb-4" />
           <h2 className="text-2xl md:text-3xl font-light text-gray-900 mb-3 tracking-tight">Journey Not Found</h2>
-          <p className="text-sm md:text-base text-gray-600 mb-6 font-light">The trip you're looking for doesn't exist or has been removed</p>
+          <p className="text-sm md:text-base text-gray-600 mb-6 font-light">The trip you&apos;re looking for doesn&apos;t exist or has been removed</p>
           <Link href="/" className="inline-flex items-center text-purple-600 hover:text-gray-600 font-medium transition-colors">
             <ArrowLeft className="h-4 w-4 mr-2" />
             <span>Return to Home</span>
@@ -223,7 +223,7 @@ export default function TripDetailPage() {
                 <div className="pt-8 border-t border-purple-100">
                   <div className="flex items-center mb-5 md:mb-6">
                     <Shield className="h-6 w-6 md:h-7 md:w-7 text-green-600 mr-3" />
-                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">What's Included</h3>
+                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">What&apos;s Included</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     {trip.included_features.map((feature, index) => (

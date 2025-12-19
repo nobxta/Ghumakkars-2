@@ -1343,7 +1343,7 @@ export default function AdminUserDetailsPage() {
               <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-4 rounded-xl border-2 border-orange-200">
                 <p className="text-sm font-semibold text-orange-800 flex items-center gap-2">
                   <Gift className="h-4 w-4" />
-                  A unique coupon code will be generated and sent to the user's email address.
+                  A unique coupon code will be generated and sent to the user&apos;s email address.
                 </p>
               </div>
               <div className="flex justify-end gap-3 pt-6 border-t border-orange-100">

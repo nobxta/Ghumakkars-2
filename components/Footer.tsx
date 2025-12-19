@@ -18,7 +18,7 @@ export default function Footer() {
               <span>Ghumakkars</span>
             </h3>
             <p className="text-sm md:text-base text-gray-600 mb-6 md:mb-8 max-w-lg font-light leading-relaxed">
-              Empowering Indian university students to explore India's breathtaking destinations through 
+              Empowering Indian university students to explore India&apos;s breathtaking destinations through 
               thoughtfully curated, budget-friendly travel experiences. Join our community of passionate 
               travelers creating unforgettable memories without compromising on adventure.
             </p>

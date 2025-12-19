@@ -1124,7 +1124,7 @@ export default function EditTripPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  What's Included
+                  What&apos;s Included
                 </label>
                 <div className="space-y-2 mb-5">
                   {includedItems.map((item, index) => (
@@ -1167,7 +1167,7 @@ export default function EditTripPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  What's Not Included
+                  What&apos;s Not Included
                 </label>
                 <div className="space-y-2 mb-5">
                   {excludedItems.map((item, index) => (

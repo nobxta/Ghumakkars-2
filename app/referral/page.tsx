@@ -218,7 +218,7 @@ export default function ReferralPage() {
             <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">{totalReferrals}</div>
             <div className="text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">Total Referrals</div>
             <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-purple-200">
-              <p className="text-xs text-gray-600">People you've invited</p>
+              <p className="text-xs text-gray-600">People you&apos;ve invited</p>
             </div>
           </div>
           
@@ -390,7 +390,7 @@ export default function ReferralPage() {
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">No Referrals Yet</h3>
             <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4">Start sharing your referral code to earn rewards!</p>
-            <p className="text-xs sm:text-sm text-gray-500">You'll earn ₹{rewardAmount} for each friend who makes their first booking.</p>
+            <p className="text-xs sm:text-sm text-gray-500">You&apos;ll earn ₹{rewardAmount} for each friend who makes their first booking.</p>
           </div>
         )}
 

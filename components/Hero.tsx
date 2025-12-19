@@ -40,7 +40,7 @@ export default function Hero() {
         
         {/* Main Heading */}
         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold mb-4 sm:mb-5 md:mb-6 lg:mb-8 text-gray-900 tracking-tight animate-fade-in leading-[1.1] sm:leading-tight px-2">
-          Discover India's Hidden
+          Discover India&apos;s Hidden
           <span className="block mt-1 sm:mt-2 md:mt-3 font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
             Gems & Wonders
           </span>

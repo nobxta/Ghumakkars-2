@@ -1256,7 +1256,7 @@ export default function AdminBookingsPage() {
                   <AlertTriangle className="h-12 w-12 text-yellow-600 mx-auto mb-3" />
                   <p className="font-semibold text-gray-900 mb-2">Select a Transaction to Review</p>
                   <p className="text-sm text-gray-600">
-                    Click <span className="font-bold text-purple-600">"Review Now"</span> on a pending payment transaction above to verify or reject it.
+                    Click <span className="font-bold text-purple-600">&quot;Review Now&quot;</span> on a pending payment transaction above to verify or reject it.
                   </p>
                 </div>
               )}

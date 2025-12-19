@@ -52,7 +52,7 @@ export default function DestinationsShowcase() {
             Explore by Category
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Discover India's diverse landscapes through our carefully curated destination categories
+            Discover India&apos;s diverse landscapes through our carefully curated destination categories
           </p>
         </div>
 

@@ -1026,7 +1026,7 @@ export default function BookTripPage() {
         {!canBook && (
           <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700">
             <p className="font-medium text-sm md:text-base">Not enough spots available</p>
-            <p className="text-xs md:text-sm mt-1">Only {availableSpots} spot(s) available, but you're trying to book {totalPassengers}.</p>
+            <p className="text-xs md:text-sm mt-1">Only {availableSpots} spot(s) available, but you&apos;re trying to book {totalPassengers}.</p>
           </div>
         )}
 
@@ -1245,7 +1245,7 @@ export default function BookTripPage() {
               ))}
 
               {passengers.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No additional passengers. Click "Add Passenger" to add more.</p>
+                <p className="text-sm text-gray-500 italic">No additional passengers. Click &quot;Add Passenger&quot; to add more.</p>
               )}
             </div>
           </div>
@@ -1622,9 +1622,9 @@ export default function BookTripPage() {
               </h3>
               <ol className="space-y-1 md:space-y-2 text-xs md:text-sm text-gray-700 list-decimal list-inside">
                 <li>Make payment using the QR code or UPI ID below</li>
-                <li>After successful payment, you'll receive a transaction ID (Txn ID)</li>
+                <li>After successful payment, you&apos;ll receive a transaction ID (Txn ID)</li>
                 <li>Enter the transaction ID in the field below</li>
-                <li>Click "Submit Booking" to complete your reservation</li>
+                <li>Click &quot;Submit Booking&quot; to complete your reservation</li>
               </ol>
             </div>
 

@@ -257,7 +257,7 @@ export default function BookingsPage() {
                     <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                     <div>
                       <p className="text-sm text-green-900 font-medium mb-1">Booking Submitted Successfully!</p>
-                      <p className="text-sm text-green-700">Your booking has been submitted. We're reviewing your payment and will confirm shortly.</p>
+                      <p className="text-sm text-green-700">Your booking has been submitted. We&apos;re reviewing your payment and will confirm shortly.</p>
                     </div>
                   </div>
                 </div>
@@ -347,7 +347,7 @@ export default function BookingsPage() {
                             <div className="pt-2 border-t border-purple-100">
                               <p className="text-xs text-yellow-600 font-medium flex items-center">
                                 <AlertCircle className="h-3 w-3 mr-1" />
-                                Payment under review. We'll notify you once verified.
+                                Payment under review. We&apos;ll notify you once verified.
                               </p>
                             </div>
                           )}
@@ -397,7 +397,7 @@ export default function BookingsPage() {
                   <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
                     <p className="text-sm text-blue-900 font-medium mb-1">Sign in to book a trip</p>
-                    <p className="text-sm text-blue-700">You can explore trips without signing in, but you'll need an account to make a booking.</p>
+                    <p className="text-sm text-blue-700">You can explore trips without signing in, but you&apos;ll need an account to make a booking.</p>
                   </div>
                 </div>
               </div>

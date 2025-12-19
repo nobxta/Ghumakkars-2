@@ -275,7 +275,7 @@ export default function AdminDashboard() {
           <div className="text-center py-12 bg-purple-50 border-2 border-purple-100 rounded-lg">
             <MapPin className="h-12 w-12 text-purple-300 mx-auto mb-4" />
             <p className="text-lg text-gray-700 font-medium mb-2">No trips created yet</p>
-            <p className="text-sm text-gray-600">Click "Create New Trip" to get started</p>
+            <p className="text-sm text-gray-600">Click &quot;Create New Trip&quot; to get started</p>
           </div>
         )}
       </div>

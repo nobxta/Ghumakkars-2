@@ -502,7 +502,7 @@ export default function AdminTripsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Mark "{selectedTrip.title}" as completed?</p>
+            <p className="text-gray-600 mb-4">Mark &quot;{selectedTrip.title}&quot; as completed?</p>
             <div className="flex space-x-3">
               <button
                 onClick={() => setShowCompleteModal(false)}
@@ -532,7 +532,7 @@ export default function AdminTripsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Cancel "{selectedTrip.title}"?</p>
+            <p className="text-gray-600 mb-4">Cancel &quot;{selectedTrip.title}&quot;?</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Reason (Optional)</label>
               <textarea
@@ -575,7 +575,7 @@ export default function AdminTripsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Postpone "{selectedTrip.title}" to a new date?</p>
+            <p className="text-gray-600 mb-4">Postpone &quot;{selectedTrip.title}&quot; to a new date?</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">New Date</label>
               <input
@@ -618,7 +618,7 @@ export default function AdminTripsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Update price for "{selectedTrip.title}"</p>
+            <p className="text-gray-600 mb-4">Update price for &quot;{selectedTrip.title}&quot;</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">New Price (₹)</label>
               <input

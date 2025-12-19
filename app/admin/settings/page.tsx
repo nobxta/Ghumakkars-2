@@ -597,7 +597,7 @@ export default function AdminSettingsPage() {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Amount credited to referrer's wallet when a referred user makes their first booking
+                Amount credited to referrer&apos;s wallet when a referred user makes their first booking
               </p>
             </div>
 

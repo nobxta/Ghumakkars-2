@@ -371,7 +371,7 @@ export default function TripsPage() {
             <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">No trips found</h2>
             <p className="text-gray-600 mb-6 max-w-md mx-auto text-sm">
-              We couldn't find any trips matching your criteria. Try adjusting your search or filters.
+              We couldn&apos;t find any trips matching your criteria. Try adjusting your search or filters.
             </p>
             <button
               onClick={() => {
