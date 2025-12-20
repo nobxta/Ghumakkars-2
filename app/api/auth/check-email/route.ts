@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
@@ -18,9 +19,19 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Check in auth.users
-    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
-    
-    const userInAuth = users?.find(u => u.email?.toLowerCase() === normalizedEmail);
+    const { data, error: listError } = await adminClient.auth.admin.listUsers();
+
+    if (listError || !data?.users) {
+      return NextResponse.json(
+        { error: 'Unable to fetch users' },
+        { status: 500 }
+      );
+    }
+
+    const users = data.users as SupabaseUser[];
+    const userInAuth = users.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
 
     // Check in profiles
     const { data: profiles } = await adminClient

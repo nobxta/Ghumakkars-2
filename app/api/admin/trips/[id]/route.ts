@@ -72,7 +72,7 @@ export async function GET(
     // Fetch user profiles for bookings
     let users: any[] = [];
     if (bookings && bookings.length > 0) {
-      const userIds = [...new Set(bookings.map((b: any) => b.user_id).filter(Boolean))];
+      const userIds = Array.from(new Set(bookings.map((b: any) => b.user_id).filter(Boolean)));
       if (userIds.length > 0) {
         const { data: profiles } = await adminClient
           .from('profiles')

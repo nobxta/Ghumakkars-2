@@ -23,6 +23,7 @@ interface Trip {
   included_features?: string[];
   highlights?: string[];
   is_active: boolean;
+  booking_disabled?: boolean;
 }
 
 export default function TripDetailPage() {

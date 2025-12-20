@@ -9,7 +9,7 @@ const resetTokens = new Map<string, ResetTokenEntry>();
 // Clean up expired tokens every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of resetTokens.entries()) {
+  for (const [key, entry] of Array.from(resetTokens.entries())) {
     if (entry.expiresAt < now) {
       resetTokens.delete(key);
     }

@@ -25,6 +25,7 @@ interface Trip {
   is_active: boolean;
   booking_deadline_date?: string;
   seat_lock_price?: number;
+  booking_disabled?: boolean;
 }
 
 interface Booking {

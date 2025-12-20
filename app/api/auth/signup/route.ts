@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
+import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
@@ -73,9 +74,9 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
     
     // Check in auth.users - look for all users (including deleted/inactive)
-    const { data: { users }, error: listUsersError } = await adminClient.auth.admin.listUsers();
+    const { data, error: listUsersError } = await adminClient.auth.admin.listUsers();
     
-    if (listUsersError) {
+    if (listUsersError || !data?.users) {
       console.error('Error listing users:', listUsersError);
       return NextResponse.json(
         { error: 'Unable to verify account. Please try again.' },
@@ -83,7 +84,10 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const existingUserByEmail = users?.find(u => u.email?.toLowerCase() === normalizedEmail);
+    const users = data.users as SupabaseUser[];
+    const existingUserByEmail = users.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
     
     if (existingUserByEmail) {
       // Log detailed info about the existing user for debugging

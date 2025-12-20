@@ -112,7 +112,9 @@ export async function POST(request: NextRequest) {
       } else if (allVerified) {
         // All payments verified - check if it's full payment or seat lock
         const totalPaid = allPayments.reduce((sum, p) => sum + parseFloat(String(p.payment_status === 'verified' ? bookingData?.payment_amount : 0)), 0);
-        const fullPrice = (bookingData?.trips?.discounted_price || 0) * (booking?.number_of_participants || 1);
+        const tripsArray = bookingData?.trips;
+        const trip = Array.isArray(tripsArray) && tripsArray.length > 0 ? tripsArray[0] : null;
+        const fullPrice = (trip?.discounted_price || 0) * (booking?.number_of_participants || 1);
         
         if (booking?.payment_method === 'seat_lock' && totalPaid < fullPrice) {
           bookingStatus = 'seat_locked';

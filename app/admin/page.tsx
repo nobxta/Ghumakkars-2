@@ -20,6 +20,7 @@ interface Trip {
   end_date: string;
   image_url?: string;
   is_active: boolean;
+  booking_disabled?: boolean;
 }
 
 export default function AdminDashboard() {

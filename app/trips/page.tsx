@@ -28,6 +28,7 @@ interface Trip {
   booking_deadline_date?: string;
   seat_lock_price?: number;
   early_bird_price?: number;
+  booking_disabled?: boolean;
 }
 
 export default function TripsPage() {

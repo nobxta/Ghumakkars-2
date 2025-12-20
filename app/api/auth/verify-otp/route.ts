@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOTP } from '@/lib/otp-store';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
@@ -45,16 +46,19 @@ export async function POST(request: NextRequest) {
 
     // Get user from Supabase Auth using admin client
     const adminClient = createAdminClient();
-    const { data: { users }, error: userError } = await adminClient.auth.admin.listUsers();
+    const { data, error: userError } = await adminClient.auth.admin.listUsers();
 
-    if (userError) {
+    if (userError || !data?.users) {
       return NextResponse.json(
         { error: 'Failed to verify user' },
         { status: 500 }
       );
     }
 
-    const user = users.find(u => u.email?.toLowerCase() === normalizedEmail);
+    const users = data.users as SupabaseUser[];
+    const user = users.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
 
     if (!user) {
       return NextResponse.json(
