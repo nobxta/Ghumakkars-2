@@ -7,12 +7,21 @@ const nextConfig = {
         ...config.resolve.fallback,
       };
       
-      // Add to externals to prevent webpack from trying to bundle them
+      // Externalize packages that use native modules or break the server bundle
+      const externalPackages = [
+        'whatsapp-web.js',
+        'qrcode-terminal',
+        '@whiskeysockets/baileys',
+        'sharp',
+        'pino',
+        'qrcode',
+        '@hapi/boom',
+      ];
       const originalExternals = config.externals || [];
       config.externals = [
         ...(Array.isArray(originalExternals) ? originalExternals : [originalExternals]),
         ({ request }, callback) => {
-          if (request === 'whatsapp-web.js' || request === 'qrcode-terminal') {
+          if (request && externalPackages.some((pkg) => request === pkg || request.startsWith(pkg + '/'))) {
             return callback(null, `commonjs ${request}`);
           }
           callback();
