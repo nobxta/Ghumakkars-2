@@ -9,10 +9,11 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'verifyOtp', AUTH_LIMITS.verifyOtp);
-    if (!limit.ok) {
+    if (limit.ok === false) {
+      const retryAfter = limit.retryAfter;
       return NextResponse.json(
         { error: 'Too many attempts. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
       );
     }
     const { email, otp } = await request.json();

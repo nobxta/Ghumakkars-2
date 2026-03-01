@@ -71,7 +71,7 @@ export async function POST(
       .from('admin_activity_log')
       .insert({
         user_id: userId,
-        admin_id: user.id,
+        admin_id: auth.user.id,
         action_type: 'reminder_sent',
         action_description: `Sent payment reminder for booking "${booking.trips?.title || 'Trip'}" - Remaining: ₹${remainingAmount.toLocaleString()}`,
         metadata: {

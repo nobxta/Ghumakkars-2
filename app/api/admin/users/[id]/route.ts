@@ -136,7 +136,7 @@ export async function PATCH(
         .from('admin_activity_log')
         .insert({
           user_id: userId,
-          admin_id: user.id,
+          admin_id: auth.user.id,
           action_type: 'profile_updated',
           action_description: `Updated profile fields: ${changedFields.join(', ')}`,
           metadata: {

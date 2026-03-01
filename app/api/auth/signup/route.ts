@@ -11,10 +11,11 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'signup', AUTH_LIMITS.signup);
-    if (!limit.ok) {
+    if (limit.ok === false) {
+      const retryAfter = limit.retryAfter;
       return NextResponse.json(
         { error: 'Too many signup attempts. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
       );
     }
     const { firstName, lastName, email, phone, password, referralCode } = await request.json();

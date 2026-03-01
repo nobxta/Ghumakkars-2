@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       booking_status: parseFloat(amountPaid) >= parseFloat(String(booking.final_amount || 0)) ? 'confirmed' : 'seat_locked',
       reference_id: `CASH_${Date.now()}`,
       payment_reviewed_at: new Date().toISOString(),
-      payment_reviewed_by: user.id,
+      payment_reviewed_by: auth.user.id,
       payment_review_notes: notes || null,
     };
 

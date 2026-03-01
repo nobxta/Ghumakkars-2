@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const updateData: any = {
       payment_status: status,
       payment_reviewed_at: new Date().toISOString(),
-      payment_reviewed_by: user.id,
+      payment_reviewed_by: auth.user.id,
       payment_review_notes: reviewNotes || null,
     };
 

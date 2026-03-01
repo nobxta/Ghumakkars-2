@@ -10,10 +10,11 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'sendOtp', AUTH_LIMITS.sendOtp);
-    if (!limit.ok) {
+    if (limit.ok === false) {
+      const retryAfter = limit.retryAfter;
       return NextResponse.json(
         { error: 'Too many OTP requests. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
       );
     }
     const { email } = await request.json();

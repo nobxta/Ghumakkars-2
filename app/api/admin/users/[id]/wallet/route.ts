@@ -63,7 +63,7 @@ export async function POST(
       .from('admin_activity_log')
       .insert({
         user_id: userId,
-        admin_id: user.id,
+        admin_id: auth.user.id,
         action_type: action === 'set' ? 'wallet_set' : 'wallet_add',
         action_description: actionDescription,
         metadata: {

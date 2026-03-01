@@ -77,7 +77,7 @@ export async function POST(
       used_count: 0,
       is_active: true,
       description: description || `Special discount for ${userProfile.full_name || userProfile.first_name || 'user'}`,
-      created_by: user.id,
+      created_by: auth.user.id,
     };
 
     if (expiryDate) {
@@ -103,7 +103,7 @@ export async function POST(
       .from('admin_activity_log')
       .insert({
         user_id: userId,
-        admin_id: user.id,
+        admin_id: auth.user.id,
         action_type: 'coupon_generated',
         action_description: `Generated coupon code "${coupon.code}" with ₹${discountAmount} discount${expiryDate ? ` (valid till ${new Date(expiryDate).toLocaleDateString()})` : ''}`,
         metadata: {
