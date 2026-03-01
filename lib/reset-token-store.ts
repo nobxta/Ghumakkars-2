@@ -1,44 +1,55 @@
-// In-memory reset token store (for production, use Redis or database)
-interface ResetTokenEntry {
-  email: string;
-  expiresAt: number;
-}
+/**
+ * Reset token store backed by Supabase (shared across server instances).
+ * Replaces in-memory store so verify-reset-token and send-password-reset see the same data.
+ */
+import { createAdminClient } from './supabase/admin';
 
-const resetTokens = new Map<string, ResetTokenEntry>();
-
-// Clean up expired tokens every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of Array.from(resetTokens.entries())) {
-    if (entry.expiresAt < now) {
-      resetTokens.delete(key);
-    }
+export async function storeResetToken(
+  token: string,
+  email: string,
+  expiresInMinutes: number = 60
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+  const adminClient = createAdminClient();
+  const { error } = await adminClient
+    .from('password_reset_tokens')
+    .upsert(
+      {
+        token,
+        email: email.toLowerCase(),
+        expires_at: expiresAt.toISOString(),
+      },
+      { onConflict: 'token' }
+    );
+  if (error) {
+    console.error('[reset-token-store] storeResetToken error:', error);
+    throw new Error('Failed to store reset token');
   }
-}, 5 * 60 * 1000);
-
-export function storeResetToken(token: string, email: string, expiresInMinutes: number = 60): void {
-  const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
-  resetTokens.set(token, {
-    email: email.toLowerCase(),
-    expiresAt,
-  });
 }
 
-export function getResetTokenEmail(token: string): string | null {
-  const entry = resetTokens.get(token);
-  if (!entry) {
+export async function getResetTokenEmail(token: string): Promise<string | null> {
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient
+    .from('password_reset_tokens')
+    .select('email, expires_at')
+    .eq('token', token)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[reset-token-store] getResetTokenEmail error:', error);
     return null;
   }
+  if (!data) return null;
 
-  if (entry.expiresAt < Date.now()) {
-    resetTokens.delete(token);
+  const expiresAt = new Date(data.expires_at);
+  if (expiresAt.getTime() < Date.now()) {
+    await adminClient.from('password_reset_tokens').delete().eq('token', token);
     return null;
   }
-
-  return entry.email;
+  return data.email;
 }
 
-export function removeResetToken(token: string): void {
-  resetTokens.delete(token);
+export async function removeResetToken(token: string): Promise<void> {
+  const adminClient = createAdminClient();
+  await adminClient.from('password_reset_tokens').delete().eq('token', token);
 }
-

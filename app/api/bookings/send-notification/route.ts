@@ -1,24 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { 
-  sendBookingReceivedEmail, 
-  sendBookingConfirmedEmail, 
+import { requireAuth, requireAdmin, isInternalRequest } from '@/lib/auth-helpers';
+import {
+  sendBookingReceivedEmail,
+  sendBookingConfirmedEmail,
   sendBookingRejectedEmail,
-  sendSeatLockConfirmedEmail 
+  sendSeatLockConfirmedEmail
 } from '@/lib/email';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { bookingId, status, rejectionReason, tripDetails, userEmail, userName } = await request.json();
+    const body = await request.json();
+    const { bookingId, status, rejectionReason, tripDetails, userEmail: bodyUserEmail, userName: bodyUserName } = body;
 
-    if (!bookingId || !status || !userEmail) {
+    if (!bookingId || !status) {
       return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { error: 'Missing required parameters: bookingId and status' },
         { status: 400 }
       );
     }
+
+    // Access control: internal (webhook), admin, or owner of the booking
+    const internal = isInternalRequest(request);
+    if (!internal) {
+      const auth = await requireAuth();
+      if (auth instanceof NextResponse) return auth;
+
+      const adminAuth = await requireAdmin();
+      const isAdmin = !(adminAuth instanceof NextResponse);
+
+      const adminClient = createAdminClient();
+      const { data: bookingForAuth, error: fetchAuthError } = await adminClient
+        .from('bookings')
+        .select('user_id, primary_passenger_email, primary_passenger_name')
+        .eq('id', bookingId)
+        .single();
+
+      if (fetchAuthError || !bookingForAuth) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+
+      if (!isAdmin && bookingForAuth.user_id !== auth.user.id) {
+        return NextResponse.json(
+          { error: 'You can only send notifications for your own booking' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Resolve userEmail/userName from body or from booking
+    let userEmail = bodyUserEmail;
+    let userName = bodyUserName;
 
     // Use provided tripDetails or fetch booking details
     let trip: any;
@@ -70,6 +104,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Trip details not found' },
         { status: 404 }
+      );
+    }
+
+    userEmail = userEmail || booking?.primary_passenger_email;
+    userName = userName || booking?.primary_passenger_name;
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: 'Missing user email for notification' },
+        { status: 400 }
       );
     }
 
@@ -141,6 +184,23 @@ export async function POST(request: NextRequest) {
             whatsappGroupLink: trip.whatsapp_group_link,
           }
         );
+
+        // Send WhatsApp notification
+        try {
+          const phoneNumber = booking.primary_passenger_phone || (booking as any).phone;
+          if (phoneNumber) {
+            await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/send-booking-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: booking.id,
+              }),
+            });
+          }
+        } catch (whatsappError) {
+          console.error('Error sending WhatsApp notification:', whatsappError);
+          // Don't fail the whole process if WhatsApp fails
+        }
         break;
 
       case 'rejected':

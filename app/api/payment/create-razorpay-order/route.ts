@@ -56,6 +56,15 @@ export async function POST(request: NextRequest) {
 
     const order = await razorpay.orders.create(options);
 
+    // Store razorpay_order_id on booking so webhook can find it when it runs
+    // before the client's verify-razorpay-payment (avoids "Booking not found" in webhook)
+    if (bookingId) {
+      await adminClient
+        .from('bookings')
+        .update({ razorpay_order_id: order.id })
+        .eq('id', bookingId);
+    }
+
     return NextResponse.json({
       orderId: order.id,
       amount: order.amount,

@@ -30,12 +30,9 @@ export default function ForgotPasswordPage() {
 
       if (!response.ok) {
         if (data.suggestion === 'signup') {
-          setError(`${data.error}. ${data.message}`);
-          setTimeout(() => {
-            router.push('/auth/signup');
-          }, 3000);
+          setError('no_account');
         } else {
-          throw new Error(data.error || 'Failed to send reset email');
+          setError(data.error || 'Failed to send reset email');
         }
         return;
       }
@@ -114,17 +111,24 @@ export default function ForgotPasswordPage() {
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
-              <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium mb-1">Error</p>
-                <p className="text-red-600">{error}</p>
-                {error.includes('No account found') && (
-                  <Link href="/auth/signup" className="mt-2 inline-flex items-center text-red-700 hover:text-red-800 font-semibold underline underline-offset-2 transition-colors">
-                    Create Account →
+            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl text-amber-800 text-sm animate-in slide-in-from-top-5 duration-300">
+              {error === 'no_account' ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-amber-800">No account found with this email.</p>
+                  <Link
+                    href="/auth/signup"
+                    className="inline-flex items-center justify-center space-x-2 w-full py-3 bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 rounded-xl font-semibold text-amber-900 transition-colors"
+                  >
+                    <span>Create account</span>
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex items-start space-x-3">
+                  <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
+                  <p className="text-red-600">{error}</p>
+                </div>
+              )}
             </div>
           )}
 

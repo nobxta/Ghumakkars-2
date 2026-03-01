@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 
 interface Trip {
@@ -26,6 +26,7 @@ interface Trip {
   postponed_to_date?: string;
   completed_at?: string;
   actual_participants?: number;
+  show_on_user_side?: boolean;
 }
 
 export default function AdminTripsPage() {
@@ -46,10 +47,17 @@ export default function AdminTripsPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    fetchTrips();
-    const interval = setInterval(fetchTrips, 30000);
+    syncTripStatusThenFetch();
+    const interval = setInterval(syncTripStatusThenFetch, 60000); // sync every minute
     return () => clearInterval(interval);
   }, []);
+
+  const syncTripStatusThenFetch = async () => {
+    try {
+      await fetch('/api/admin/trips/sync-status', { method: 'POST' });
+    } catch (_) {}
+    await fetchTrips();
+  };
 
   const fetchTrips = async () => {
     try {
@@ -136,12 +144,38 @@ export default function AdminTripsPage() {
     }
   };
 
-  // Categorize trips by status
-  const getTripStatus = (trip: Trip) => {
-    if (trip.status) return trip.status;
-    return trip.is_active ? 'active' : 'draft';
+  const handleToggleVisibility = async (tripId: string, show: boolean) => {
+    try {
+      const response = await fetch(`/api/admin/trips/${tripId}/visibility`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_on_user_side: show }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      await fetchTrips();
+      setShowActionMenu(null);
+      alert(show ? 'Trip is now visible on user side' : 'Trip is now hidden from user side');
+    } catch (error: any) {
+      alert('Error: ' + error.message);
+    }
   };
 
+  // Categorize trips by status (ongoing = active and today within start_date..end_date)
+  const getTripStatus = (trip: Trip): string => {
+    if (trip.status && !['active'].includes(trip.status)) return trip.status;
+    const base = trip.status || (trip.is_active ? 'active' : 'draft');
+    if (base !== 'active' || !trip.start_date || !trip.end_date) return base;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(trip.start_date);
+    const end = new Date(trip.end_date);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    if (today >= start && today <= end) return 'ongoing';
+    return base;
+  };
+
+  const ongoingTrips = trips.filter(trip => getTripStatus(trip) === 'ongoing');
   const activeTrips = trips.filter(trip => getTripStatus(trip) === 'active');
   const scheduledTrips = trips.filter(trip => getTripStatus(trip) === 'scheduled');
   const draftTrips = trips.filter(trip => getTripStatus(trip) === 'draft');
@@ -151,6 +185,7 @@ export default function AdminTripsPage() {
 
   const stats = {
     total: trips.length,
+    ongoing: ongoingTrips.length,
     active: activeTrips.length,
     scheduled: scheduledTrips.length,
     draft: draftTrips.length,
@@ -164,6 +199,7 @@ export default function AdminTripsPage() {
     const status = getTripStatus(trip);
     const statusColors = {
       active: 'border-green-200 bg-green-50/30',
+      ongoing: 'border-emerald-300 bg-emerald-50/40',
       scheduled: 'border-yellow-200 bg-yellow-50/30',
       draft: 'border-gray-200 bg-gray-50/30',
       completed: 'border-blue-200 bg-blue-50/30',
@@ -204,15 +240,16 @@ export default function AdminTripsPage() {
                   <button
                     onClick={() => {
                       setSelectedTrip(trip);
-                      if (trip.status === 'active') {
+                      if (status === 'active') {
                         setShowCompleteModal(true);
                       }
                     }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                    disabled={trip.status !== 'active'}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={status !== 'active' && status !== 'ongoing'}
+                    title={status === 'completed' ? 'Already completed' : (status !== 'active' && status !== 'ongoing') ? 'Only active/ongoing trips can be marked complete' : 'Mark this trip as completed'}
                   >
                     <CheckCircle className="h-4 w-4" />
-                    <span>Mark Complete</span>
+                    <span>{status === 'completed' ? 'Completed' : 'Mark Complete'}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -220,7 +257,7 @@ export default function AdminTripsPage() {
                       setShowCancelModal(true);
                     }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                    disabled={trip.status === 'completed' || trip.status === 'cancelled'}
+                    disabled={status === 'completed' || status === 'cancelled'}
                   >
                     <XCircle className="h-4 w-4" />
                     <span>Cancel Trip</span>
@@ -231,7 +268,7 @@ export default function AdminTripsPage() {
                       setShowPostponeModal(true);
                     }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                    disabled={trip.status === 'completed' || trip.status === 'cancelled'}
+                    disabled={status === 'completed' || status === 'cancelled'}
                   >
                     <Clock className="h-4 w-4" />
                     <span>Postpone</span>
@@ -239,14 +276,16 @@ export default function AdminTripsPage() {
                   <button
                     onClick={() => handleSendReminder(trip.id)}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                    disabled={trip.status !== 'active' || actionLoading}
+                    disabled={(status !== 'active' && status !== 'ongoing') || actionLoading}
                   >
                     <Send className="h-4 w-4" />
                     <span>Send Reminder</span>
                   </button>
                   <button
                     onClick={() => handleToggleBooking(trip.id, !trip.booking_disabled)}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={status === 'completed'}
+                    title={status === 'completed' ? 'Completed trips have bookings closed' : undefined}
                   >
                     <Ban className="h-4 w-4" />
                     <span>{trip.booking_disabled ? 'Enable' : 'Disable'} Bookings</span>
@@ -257,11 +296,32 @@ export default function AdminTripsPage() {
                       setNewPrice(trip.discounted_price.toString());
                       setShowPriceModal(true);
                     }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={status === 'completed'}
+                    title={status === 'completed' ? 'Cannot change price for completed trips' : undefined}
                   >
                     <DollarSign className="h-4 w-4" />
                     <span>Change Price</span>
                   </button>
+                  {(status === 'completed' || status === 'cancelled' || status === 'postponed') && (
+                    <button
+                      onClick={() => handleToggleVisibility(trip.id, !(trip.show_on_user_side !== false))}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      title={trip.show_on_user_side !== false ? 'Hide from user-facing Past Trips' : 'Show on user-facing Past Trips'}
+                    >
+                      {trip.show_on_user_side !== false ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          <span>Hide from user side</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          <span>Show on user side</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                   <hr className="my-1" />
                   <button
                     onClick={() => handleDelete(trip.id)}
@@ -317,6 +377,7 @@ export default function AdminTripsPage() {
             : status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200'
             : status === 'cancelled' ? 'bg-red-100 text-red-700 border-red-200'
             : status === 'postponed' ? 'bg-orange-100 text-orange-700 border-orange-200'
+            : status === 'ongoing' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
             : status === 'scheduled' ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
             : 'bg-gray-100 text-gray-700 border-gray-200'
           }`}>
@@ -324,6 +385,9 @@ export default function AdminTripsPage() {
           </span>
           {trip.booking_disabled && (
             <span className="text-xs text-red-600 font-medium">Bookings Disabled</span>
+          )}
+          {(status === 'completed' || status === 'cancelled' || status === 'postponed') && trip.show_on_user_side === false && (
+            <span className="text-xs text-gray-500 font-medium">Hidden from users</span>
           )}
           <Link
             href={`/admin/trips/${trip.id}`}
@@ -364,10 +428,14 @@ export default function AdminTripsPage() {
       </div>
 
       {/* Stats - Compact */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div className="bg-white rounded-xl border-2 border-purple-200 p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Total</p>
           <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+        </div>
+        <div className="bg-white rounded-xl border-2 border-emerald-200 p-3 shadow-md">
+          <p className="text-xs text-gray-600 mb-1">Ongoing</p>
+          <p className="text-xl font-bold text-emerald-600">{stats.ongoing}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Active</p>
@@ -397,7 +465,24 @@ export default function AdminTripsPage() {
 
       {/* Trips Sections */}
       <div className="space-y-6">
-            {/* Active Trips */}
+            {/* Ongoing Trips (within trip dates) */}
+            {ongoingTrips.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                    <Clock className="h-5 w-5 text-emerald-600 mr-2" />
+                    Ongoing Trips ({ongoingTrips.length})
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {ongoingTrips.map((trip) => (
+                    <TripCard key={trip.id} trip={trip} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Active Trips (upcoming) */}
             {activeTrips.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-4">

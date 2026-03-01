@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, Clock, Users, IndianRupee, Tag, ArrowRight, Search, Filter, Calendar, TrendingUp } from 'lucide-react';
+import { MapPin, Clock, Users, IndianRupee, Tag, ArrowRight, Search, Filter, Calendar, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 
 interface Trip {
   id: string;
@@ -25,6 +25,9 @@ interface Trip {
   included_features?: string[];
   highlights?: string[];
   is_active: boolean;
+  status?: string;
+  completed_at?: string;
+  postponed_to_date?: string;
   booking_deadline_date?: string;
   seat_lock_price?: number;
   early_bird_price?: number;
@@ -35,6 +38,7 @@ export default function TripsPage() {
   const router = useRouter();
   const supabase = createClient();
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [completedTrips, setCompletedTrips] = useState<Trip[]>([]);
   const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,18 +71,25 @@ export default function TripsPage() {
 
       if (activeError) throw activeError;
       
-      // Fetch completed trips separately
-      const { data: completedData, error: completedError } = await supabase
+      // Fetch past trips (completed, cancelled, postponed) — only those with show_on_user_side = true (RLS)
+      const { data: pastData, error: pastError } = await supabase
         .from('trips')
         .select('*')
-        .eq('status', 'completed')
-        .order('completed_at', { ascending: false })
-        .limit(10);
+        .in('status', ['completed', 'cancelled', 'postponed'])
+        .order('updated_at', { ascending: false })
+        .limit(20);
 
-      if (completedError) console.error('Error fetching completed trips:', completedError);
-      
-      setTrips(activeData || []);
-      setFilteredTrips(activeData || []);
+      if (pastError) console.error('Error fetching past trips:', pastError);
+
+      const pastStatuses = ['completed', 'cancelled', 'postponed'];
+      const pastIds = new Set((pastData || []).map((t: Trip) => t.id));
+      // Ensure completed/cancelled/postponed never show under Available (exclude by status and by id)
+      const availableOnly = (activeData || []).filter(
+        (t: Trip) => !pastStatuses.includes(t.status || '') && !pastIds.has(t.id)
+      );
+      setTrips(availableOnly);
+      setFilteredTrips(availableOnly);
+      setCompletedTrips(pastData || []);
     } catch (error) {
       console.error('Error fetching trips:', error);
     } finally {
@@ -228,12 +239,14 @@ export default function TripsPage() {
           </div>
         </div>
 
-        {/* Active Trips */}
-        {filteredTrips.length > 0 && (
+        {/* Available Trips — only show trips that are not completed/cancelled/postponed */}
+        {(() => {
+          const availableToShow = filteredTrips.filter(t => !['completed', 'cancelled', 'postponed'].includes(t.status || ''));
+          return availableToShow.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Available Trips</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-              {filteredTrips.map((trip) => {
+              {availableToShow.map((trip) => {
                 const availableSpots = trip.max_participants - trip.current_participants;
                 const displayImage = trip.cover_image_url || trip.image_url;
                 const displayDescription = trip.short_description || trip.description;
@@ -364,10 +377,83 @@ export default function TripsPage() {
               })}
             </div>
           </div>
+          );
+        })()}
+
+        {/* Past / Completed Trips - view only, no booking */}
+        {completedTrips.length > 0 && (
+          <div className="mt-10 pt-8 border-t border-gray-200">
+            <h2 className="text-xl font-bold text-gray-700 mb-1 flex items-center">
+              <CheckCircle className="h-5 w-5 text-blue-600 mr-2" />
+              Past Trips
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">Past journeys — view details only (booking closed)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+              {completedTrips.map((trip) => {
+                const displayImage = trip.cover_image_url || trip.image_url;
+                const displayDescription = trip.short_description || trip.description;
+                const pastStatus = trip.status || 'completed';
+                const badgeClass = pastStatus === 'cancelled' ? 'bg-red-600' : pastStatus === 'postponed' ? 'bg-orange-600' : 'bg-blue-600';
+                const BadgeIcon = pastStatus === 'cancelled' ? XCircle : pastStatus === 'postponed' ? Clock : CheckCircle;
+                return (
+                  <div
+                    key={trip.id}
+                    className="bg-white border border-gray-200 rounded-xl overflow-hidden opacity-90 hover:opacity-100 transition-opacity"
+                  >
+                    {displayImage ? (
+                      <Link href={`/trips/${trip.id}`} className="block relative h-40 sm:h-48 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
+                        <div className={`absolute top-3 right-3 ${badgeClass} text-white px-3 py-1 text-xs font-bold rounded-full shadow flex items-center space-x-1`}>
+                          <BadgeIcon className="h-3 w-3" />
+                          <span>{pastStatus.charAt(0).toUpperCase() + pastStatus.slice(1)}</span>
+                        </div>
+                      </Link>
+                    ) : (
+                      <Link href={`/trips/${trip.id}`} className="block relative h-40 sm:h-48 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
+                        <div className={`absolute top-3 right-3 ${badgeClass} text-white px-3 py-1 text-xs font-bold rounded-full shadow flex items-center space-x-1`}>
+                          <BadgeIcon className="h-3 w-3" />
+                          <span>{pastStatus.charAt(0).toUpperCase() + pastStatus.slice(1)}</span>
+                        </div>
+                        <MapPin className="h-12 w-12 text-gray-300" />
+                      </Link>
+                    )}
+                    <div className="p-4">
+                      <Link href={`/trips/${trip.id}`}>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-1 line-clamp-2 hover:text-purple-600 transition-colors">
+                          {trip.title}
+                        </h3>
+                      </Link>
+                      <div className="flex items-center text-gray-500 mb-2 text-sm">
+                        <MapPin className="h-4 w-4 mr-1.5 flex-shrink-0" />
+                        <span>{trip.destination}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{displayDescription}</p>
+                      <div className="flex items-center flex-wrap gap-2 text-xs text-gray-500 mb-4">
+                        <span className="flex items-center"><Clock className="h-3.5 w-3.5 mr-1" />{trip.duration_days} Days</span>
+                        <span className="flex items-center"><Users className="h-3.5 w-3.5 mr-1" />{trip.current_participants} participants</span>
+                        {trip.completed_at && (
+                          <span>Completed {new Date(trip.completed_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        )}
+                        {pastStatus === 'postponed' && trip.postponed_to_date && (
+                          <span className="text-orange-600 font-medium">New date: {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        )}
+                      </div>
+                      <Link
+                        href={`/trips/${trip.id}`}
+                        className="block w-full text-center py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        View Trip Details
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
-        {/* No Trips Found */}
-        {filteredTrips.length === 0 ? (
+        {/* No Trips Found — only when there are no available and no past trips */}
+        {filteredTrips.length === 0 && completedTrips.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
             <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">No trips found</h2>

@@ -62,9 +62,16 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return response
+  // Protect /admin: no session → redirect to home (no admin UI or copy ever sent)
+  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  return response;
 }
 
 export const config = {

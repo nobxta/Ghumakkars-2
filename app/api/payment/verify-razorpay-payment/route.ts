@@ -56,10 +56,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment not successful' }, { status: 400 });
     }
 
-    // Update booking with payment details
+    const paymentAmount = typeof payment.amount === 'number' ? payment.amount : parseInt(String(payment.amount || 0));
+    const amountInRupees = paymentAmount / 100; // Convert from paise to rupees
+
+    // Update booking with payment details (only if bookingId provided)
     if (bookingId) {
-      const paymentAmount = typeof payment.amount === 'number' ? payment.amount : parseInt(String(payment.amount || 0));
-      const amountInRupees = paymentAmount / 100; // Convert from paise to rupees
+      // 1. Verify booking exists and belongs to the authenticated user
+      const { data: existingBooking, error: fetchBookingError } = await adminClient
+        .from('bookings')
+        .select('id, user_id, final_amount, payment_method, trip_id, number_of_participants')
+        .eq('id', bookingId)
+        .single();
+
+      if (fetchBookingError || !existingBooking) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+
+      if (existingBooking.user_id !== user.id) {
+        return NextResponse.json(
+          { error: 'You can only confirm payment for your own booking' },
+          { status: 403 }
+        );
+      }
+
+      // 2. Optional: verify payment amount is at least the booking amount (allow small rounding)
+      const expectedAmount = parseFloat(String(existingBooking.final_amount ?? 0));
+      if (expectedAmount > 0 && amountInRupees < expectedAmount - 0.01) {
+        return NextResponse.json(
+          { error: 'Payment amount does not match booking amount' },
+          { status: 400 }
+        );
+      }
 
       await adminClient
         .from('bookings')
@@ -76,62 +103,68 @@ export async function POST(request: NextRequest) {
         .eq('id', bookingId);
 
       // Create payment transaction
-      const { data: booking } = await adminClient
-        .from('bookings')
-        .select('final_amount, payment_method, user_id')
-        .eq('id', bookingId)
-        .single();
+      const booking = existingBooking;
+      await adminClient
+        .from('payment_transactions')
+        .insert([
+          {
+            booking_id: bookingId,
+            transaction_id: razorpay_payment_id,
+            amount: amountInRupees,
+            payment_type: booking.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
+            payment_status: 'verified',
+            payment_mode: 'razorpay',
+          },
+        ]);
 
-      if (booking) {
-        await adminClient
-          .from('payment_transactions')
-          .insert([
-            {
-              booking_id: bookingId,
-              transaction_id: razorpay_payment_id,
-              amount: amountInRupees,
-              payment_type: booking.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
-              payment_status: 'verified',
-              payment_mode: 'razorpay', // Track payment mode
-            },
-          ]);
+      // 3. Increment trip participants (same logic as webhook)
+      if (booking.trip_id) {
+        const { data: trip } = await adminClient
+          .from('trips')
+          .select('current_participants')
+          .eq('id', booking.trip_id)
+          .single();
 
-        // Process referral reward if this is user's first confirmed booking
-        try {
-          // Check if this is first confirmed booking
-          const { count: previousBookings } = await adminClient
-            .from('bookings')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', booking.user_id)
-            .in('booking_status', ['confirmed', 'seat_locked'])
-            .neq('id', bookingId);
-
-          if (previousBookings === 0) {
-            // This is first booking - process referral reward
-            const { data: result, error: referralError } = await adminClient.rpc('process_referral_reward', {
-              p_booking_id: bookingId
-            });
-            
-            if (referralError) {
-              console.error('Error processing referral reward:', referralError);
-            } else if (result) {
-              console.log('Referral reward processed successfully for booking:', bookingId);
-            } else {
-              console.log('Referral reward processing returned false for booking:', bookingId);
-            }
-          }
-        } catch (referralError) {
-          console.error('Error processing referral reward:', referralError);
-          // Don't fail the whole request if referral processing fails
+        if (trip) {
+          await adminClient
+            .from('trips')
+            .update({
+              current_participants: (trip.current_participants || 0) + (booking.number_of_participants || 1),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', booking.trip_id);
         }
+      }
+
+      // Process referral reward if this is user's first confirmed booking
+      try {
+        const { count: previousBookings } = await adminClient
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', booking.user_id)
+          .in('booking_status', ['confirmed', 'seat_locked'])
+          .neq('id', bookingId);
+
+        if (previousBookings === 0) {
+          const { data: result, error: referralError } = await adminClient.rpc('process_referral_reward', {
+            p_booking_id: bookingId
+          });
+
+          if (referralError) {
+            console.error('Error processing referral reward:', referralError);
+          } else if (result) {
+            console.log('Referral reward processed successfully for booking:', bookingId);
+          }
+        }
+      } catch (referralError) {
+        console.error('Error processing referral reward:', referralError);
       }
     }
 
-    const paymentAmount = typeof payment.amount === 'number' ? payment.amount : parseInt(String(payment.amount || 0));
     return NextResponse.json({
       success: true,
       paymentId: razorpay_payment_id,
-      amount: paymentAmount / 100,
+      amount: amountInRupees,
     });
   } catch (error: any) {
     console.error('Error verifying Razorpay payment:', error);

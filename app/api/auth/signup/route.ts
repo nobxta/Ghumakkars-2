@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
+import { storePendingSignup } from '@/lib/pending-signup-store';
+import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const limit = checkRateLimit(request, 'signup', AUTH_LIMITS.signup);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
     const { firstName, lastName, email, phone, password, referralCode } = await request.json();
 
     // Validation - Check all required fields
@@ -198,149 +207,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in Supabase Auth (unverified)
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+    // Store pending signup (account is created only after OTP verification)
+    await storePendingSignup({
       email: normalizedEmail,
-      password,
-      email_confirm: false, // User needs to verify email via OTP
-      user_metadata: {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: formattedPhone,
-        full_name: `${firstName.trim()} ${lastName.trim()}`,
-      },
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      phone: formattedPhone,
+      referral_code: referralCode?.trim().toUpperCase() || null,
     });
-
-    if (createError || !newUser.user) {
-      console.error('Error creating auth user:', createError);
-      return NextResponse.json(
-        { error: createError?.message || 'Failed to create account. Please try again.' },
-        { status: 500 }
-      );
-    }
-
-    // Generate referral code for new user
-    // Try to use the database function, fallback to manual generation
-    let userReferralCode: string;
-    try {
-      const { data: referralCodeData, error: rpcError } = await adminClient.rpc('generate_referral_code');
-      if (rpcError || !referralCodeData) {
-        throw new Error('RPC failed');
-      }
-      userReferralCode = referralCodeData;
-    } catch (error) {
-      // Fallback: generate code from user ID + random
-      userReferralCode = newUser.user.id.substring(0, 8).toUpperCase() + 
-        Math.random().toString(36).substring(2, 6).toUpperCase();
-    }
-
-    // Handle referral code if provided
-    let referredByUserId = null;
-    if (referralCode && referralCode.trim()) {
-      const normalizedRefCode = referralCode.trim().toUpperCase();
-      // Find referrer by referral code
-      const { data: referrerProfile } = await adminClient
-        .from('profiles')
-        .select('id')
-        .eq('referral_code', normalizedRefCode)
-        .single();
-
-      if (referrerProfile && referrerProfile.id !== newUser.user.id) {
-        referredByUserId = referrerProfile.id;
-      }
-    }
-
-    // Create profile in database
-    const { error: profileError } = await adminClient
-      .from('profiles')
-      .insert([
-        {
-          id: newUser.user.id,
-          email: normalizedEmail,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
-          phone: formattedPhone,
-          phone_number: formattedPhone, // Also set phone_number for backward compatibility
-          role: 'user',
-          email_verified: false,
-          referral_code: userReferralCode,
-          referred_by: referredByUserId,
-          wallet_balance: 0,
-        },
-      ]);
-
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      // If profile creation fails, delete the auth user to maintain data consistency
-      try {
-        await adminClient.auth.admin.deleteUser(newUser.user.id);
-      } catch (deleteError) {
-        console.error('Error deleting auth user after profile creation failure:', deleteError);
-      }
-      return NextResponse.json(
-        { error: profileError.message || 'Failed to create profile. Please try again.' },
-        { status: 500 }
-      );
-    }
-
-    // Create referral record if user was referred
-    if (referredByUserId) {
-      try {
-        // Fetch referrer's profile to get name and email
-        const { data: referrerProfile } = await adminClient
-          .from('profiles')
-          .select('email, first_name, last_name, full_name')
-          .eq('id', referredByUserId)
-          .single();
-
-        const referrerName = referrerProfile?.full_name || 
-          (referrerProfile?.first_name && referrerProfile?.last_name
-            ? `${referrerProfile.first_name} ${referrerProfile.last_name}`
-            : referrerProfile?.first_name || referrerProfile?.last_name || 'Unknown');
-        const referrerEmail = referrerProfile?.email || '';
-
-        // Get referred user details
-        const referredUserName = `${firstName.trim()} ${lastName.trim()}`;
-        const referredUserEmail = normalizedEmail;
-
-        await adminClient
-          .from('referrals')
-          .insert([
-            {
-              referrer_id: referredByUserId,
-              referred_user_id: newUser.user.id,
-              referral_code: referralCode.trim().toUpperCase(),
-              reward_status: 'pending',
-              referrer_name: referrerName,
-              referrer_email: referrerEmail,
-              referred_user_name: referredUserName,
-              referred_user_email: referredUserEmail,
-            },
-          ]);
-      } catch (referralError) {
-        console.error('Error creating referral record:', referralError);
-        // Don't fail signup if referral record creation fails
-      }
-    }
 
     // Generate and store OTP for email verification
     const otp = generateOTP();
     await storeOTP(normalizedEmail, otp, 10, 'signup'); // 10 minutes expiry
 
-    // Send OTP email for signup/registration
+    // Send OTP email
     try {
       await sendSignupOTPEmail(normalizedEmail, otp, firstName.trim());
     } catch (emailError) {
       console.error('Error sending signup OTP email:', emailError);
-      // Don't fail the signup if email fails, but log it
-      // User can request OTP resend later
+      return NextResponse.json(
+        { error: 'Failed to send verification code. Please try again.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      userId: newUser.user.id,
-      message: 'Account created successfully! Please check your email for the OTP to verify your account.',
+      message: 'Verification code sent. Check your email and enter the code to complete signup.',
     });
   } catch (error: any) {
     console.error('Error during signup:', error);

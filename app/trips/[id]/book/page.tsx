@@ -192,23 +192,16 @@ export default function BookTripPage() {
 
   const fetchPaymentSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('payment_settings')
-        .select('payment_qr_url, payment_upi_id, payment_mode')
-        .limit(1)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error fetching payment settings:', error);
-      } else if (data) {
-        const mode = (data.payment_mode || 'manual') as 'manual' | 'razorpay';
-        setPaymentMode(mode);
-        setPaymentSettings({
-          qrUrl: data.payment_qr_url || undefined,
-          upiId: data.payment_upi_id || undefined,
-          paymentMode: mode,
-        });
-      }
+      const res = await fetch('/api/payment/settings');
+      if (!res.ok) return;
+      const data = await res.json();
+      const mode = (data.paymentMode ?? data.payment_mode ?? 'manual') as 'manual' | 'razorpay';
+      setPaymentMode(mode);
+      setPaymentSettings({
+        qrUrl: data.qrUrl ?? data.payment_qr_url ?? undefined,
+        upiId: data.upiId ?? data.payment_upi_id ?? undefined,
+        paymentMode: mode,
+      });
     } catch (error) {
       console.error('Error fetching payment settings:', error);
     }
@@ -333,41 +326,38 @@ export default function BookTripPage() {
         }))
       ];
 
-      // Create booking first with pending status
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .insert([
-          {
-            trip_id: trip.id,
-            user_id: user.id,
-            number_of_participants: totalPassengers,
-            total_price: basePrice,
-            final_amount: finalAmount,
-            coupon_code: couponApplied?.coupon?.code || null,
-            coupon_discount: couponDiscount,
-            wallet_amount_used: walletAmountUsed,
-            primary_passenger_name: primaryName,
-            primary_passenger_email: primaryEmail,
-            primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
-            primary_passenger_gender: primaryGender,
-            primary_passenger_age: parseInt(primaryAge),
-            emergency_contact_name: emergencyContactName,
-            emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-            college: college && college !== 'Skip' ? college : null,
-            passengers: allPassengers,
-            payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
-            payment_mode: 'razorpay',
-            payment_status: 'pending',
-            booking_status: 'pending',
-            amount_paid: 0,
-          },
-        ])
-        .select()
-        .single();
+      const bookingPayload = {
+        trip_id: trip.id,
+        number_of_participants: totalPassengers,
+        total_price: basePrice,
+        final_amount: finalAmount,
+        coupon_code: couponApplied?.coupon?.code || null,
+        coupon_discount: couponDiscount,
+        wallet_amount_used: walletAmountUsed,
+        primary_passenger_name: primaryName,
+        primary_passenger_email: primaryEmail,
+        primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
+        primary_passenger_gender: primaryGender,
+        primary_passenger_age: parseInt(primaryAge),
+        emergency_contact_name: emergencyContactName,
+        emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
+        college: college && college !== 'Skip' ? college : null,
+        passengers: allPassengers,
+        payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
+        payment_mode: 'razorpay',
+        payment_status: 'pending',
+        booking_status: 'pending',
+        amount_paid: 0,
+      };
 
-      if (bookingError) {
-        console.error('Booking error:', bookingError);
-        throw bookingError;
+      const bookingRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingPayload),
+      });
+      const bookingData = await bookingRes.json();
+      if (!bookingRes.ok) {
+        throw new Error(bookingData.error || 'Failed to create booking');
       }
 
       // Create Razorpay order (only for remaining amount after wallet)
@@ -544,68 +534,39 @@ export default function BookTripPage() {
         }))
       ];
 
-      // Create booking with cash payment
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .insert([
-          {
-            trip_id: trip.id,
-            user_id: user.id,
-            number_of_participants: totalPassengers,
-            total_price: basePrice,
-            final_amount: finalAmount,
-            coupon_code: couponApplied?.coupon?.code || null,
-            coupon_discount: couponDiscount,
-            wallet_amount_used: walletAmountUsed,
-            primary_passenger_name: primaryName,
-            primary_passenger_email: primaryEmail,
-            primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
-            primary_passenger_gender: primaryGender,
-            primary_passenger_age: parseInt(primaryAge),
-            emergency_contact_name: emergencyContactName,
-            emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-            college: college && college !== 'Skip' ? college : null,
-            passengers: allPassengers,
-            payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
-            payment_mode: 'cash',
-            payment_status: 'cash_pending',
-            booking_status: 'pending',
-            amount_paid: 0,
-            reference_id: null, // Cash payments don't have transaction ID initially
-          },
-        ])
-        .select()
-        .single();
+      const cashBookingPayload = {
+        trip_id: trip.id,
+        number_of_participants: totalPassengers,
+        total_price: basePrice,
+        final_amount: finalAmount,
+        coupon_code: couponApplied?.coupon?.code || null,
+        coupon_discount: couponDiscount,
+        wallet_amount_used: walletAmountUsed,
+        primary_passenger_name: primaryName,
+        primary_passenger_email: primaryEmail,
+        primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
+        primary_passenger_gender: primaryGender,
+        primary_passenger_age: parseInt(primaryAge),
+        emergency_contact_name: emergencyContactName,
+        emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
+        college: college && college !== 'Skip' ? college : null,
+        passengers: allPassengers,
+        payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
+        payment_mode: 'cash',
+        payment_status: 'cash_pending',
+        booking_status: 'pending',
+        amount_paid: 0,
+        reference_id: null,
+      };
 
-      if (bookingError) {
-        console.error('Booking error:', bookingError);
-        throw bookingError;
-      }
-
-      // If coupon was applied, record the usage
-      if (couponApplied && bookingData.id) {
-        const { data: couponData } = await supabase
-          .from('coupon_codes')
-          .select('id')
-          .eq('code', couponApplied.coupon.code)
-          .single();
-
-        if (couponData) {
-          await supabase
-            .from('coupon_usages')
-            .insert([
-              {
-                coupon_id: couponData.id,
-                booking_id: bookingData.id,
-                user_id: user.id,
-                discount_amount: couponDiscount,
-              },
-            ]);
-
-          await supabase.rpc('increment_coupon_usage', {
-            coupon_id: couponData.id,
-          });
-        }
+      const cashBookingRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cashBookingPayload),
+      });
+      const bookingData = await cashBookingRes.json();
+      if (!cashBookingRes.ok) {
+        throw new Error(bookingData.error || 'Failed to create booking');
       }
 
       // Send notification

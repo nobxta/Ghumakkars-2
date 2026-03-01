@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, Lock, UserPlus, ArrowLeft, User, Phone, MessageSquare, Eye, EyeOff, RotateCw, ChevronRight, ChevronLeft, Sparkles, CheckCircle, XCircle, Check, Gift } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, User, Phone, MessageSquare, Eye, EyeOff, RotateCw, ChevronRight, ChevronLeft, CheckCircle, XCircle, Check, Gift } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function SignUpClient() {
@@ -35,8 +35,25 @@ export default function SignUpClient() {
   const [resendLoading, setResendLoading] = useState(false);
   const router = useRouter();
   
-  // Store password temporarily for auto-login after OTP verification
+  // Store password temporarily for verify + auto-login after OTP
   const [tempPassword, setTempPassword] = useState('');
+  // Show OTP input only after "code sent" animation (so we don't show input before OTP is sent)
+  const [otpInputReady, setOtpInputReady] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Redirect to profile if already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        router.replace('/profile');
+        return;
+      }
+      setCheckingAuth(false);
+    };
+    checkUser();
+  }, [router]);
 
   // Countdown timer for resend OTP
   useEffect(() => {
@@ -45,6 +62,16 @@ export default function SignUpClient() {
       return () => clearTimeout(timer);
     }
   }, [resendTimer]);
+
+  // Step 3: reveal OTP input only after short "code sent" animation
+  useEffect(() => {
+    if (step !== 3) {
+      setOtpInputReady(false);
+      return;
+    }
+    const t = setTimeout(() => setOtpInputReady(true), 2500);
+    return () => clearTimeout(t);
+  }, [step]);
 
   // Handle Step 1: Personal Information
   const handleStep1 = async (e: React.FormEvent) => {
@@ -103,7 +130,6 @@ export default function SignUpClient() {
       return;
     }
 
-    setStep(3);
     setError('');
     setLoading(true);
 
@@ -126,15 +152,36 @@ export default function SignUpClient() {
         }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data: { error?: string; success?: boolean; message?: string } = {};
+      if (contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+      }
+      if (typeof data !== 'object' || data === null) {
+        data = {};
+      }
+
+      const safeError = (msg: string | undefined): string => {
+        if (!msg || typeof msg !== 'string') return 'Something went wrong. Please try again.';
+        if (msg.length > 500 || msg.trim().startsWith('<!') || msg.includes('</')) {
+          return 'Connection error. Please check your internet and try again.';
+        }
+        return msg;
+      };
 
       if (!response.ok) {
+        const err = safeError(data.error);
+        const fallback = err === 'Something went wrong. Please try again.';
         if (response.status === 409) {
-          setError(data.error || 'An account with this email or phone number already exists');
+          setError(fallback ? 'This email is already registered. Please sign in instead.' : err);
         } else if (response.status === 400) {
-          setError(data.error || 'Please check your input and try again');
+          setError(fallback ? 'Please check your input and try again' : err);
         } else {
-          setError(data.error || 'Failed to create account. Please try again.');
+          setError(fallback ? 'Failed to create account. Please try again.' : err);
         }
         setStep(2);
         setLoading(false);
@@ -143,10 +190,16 @@ export default function SignUpClient() {
 
       setTempPassword(password);
       setResendTimer(60);
-      setMessage('Account created successfully! Please check your email for the OTP verification code.');
+      setStep(3);
+      setMessage('');
       setLoading(false);
     } catch (error: any) {
-      setError(error.message || 'An unexpected error occurred. Please try again.');
+      const msg = error?.message ?? '';
+      if (msg.length > 500 || msg.trim().startsWith('<!') || msg.includes('</') || msg === 'Failed to fetch') {
+        setError('Connection error. Please check your internet and try again.');
+      } else {
+        setError(msg || 'Something went wrong. Please try again.');
+      }
       setStep(2);
       setLoading(false);
     }
@@ -164,7 +217,7 @@ export default function SignUpClient() {
       const response = await fetch('/api/auth/verify-signup-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail, otp: otp.trim() }),
+        body: JSON.stringify({ email: trimmedEmail, otp: otp.trim(), password: tempPassword }),
       });
 
       const data = await response.json();
@@ -173,7 +226,7 @@ export default function SignUpClient() {
         if (response.status === 400) {
           setError(data.error || 'Invalid or expired OTP. Please check and try again.');
         } else if (response.status === 404) {
-          setError(data.error || 'Account not found. Please try signing up again.');
+          setError(data.error || 'Verification expired. Please start signup again.');
         } else {
           setError(data.error || 'Failed to verify OTP. Please try again.');
         }
@@ -247,7 +300,7 @@ export default function SignUpClient() {
 
   // Step Progress Indicator Component
   const StepIndicator = ({ currentStep }: { currentStep: number }) => (
-    <div className="mb-8">
+    <div className="mb-4 md:mb-6">
       <div className="flex items-center justify-center space-x-2 md:space-x-4">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center">
@@ -272,135 +325,152 @@ export default function SignUpClient() {
           </div>
         ))}
       </div>
-      <p className="text-center mt-4 text-sm text-gray-500 font-medium">
+      <p className="text-center mt-2 md:mt-4 text-xs md:text-sm text-gray-500 font-medium">
         Step {currentStep} of 3
       </p>
     </div>
   );
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-50/30">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+      </div>
+    );
+  }
+
   // Step 3: OTP Verification
   if (step === 3) {
     return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
+      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
           <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
 
-        <div className="max-w-md w-full relative z-10">
-          <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-6 md:mb-8 text-sm font-medium transition-all duration-200 group">
+        <div className="w-full max-w-md flex-1 flex flex-col min-h-0 relative z-10">
+          <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 md:mb-6 text-sm font-medium transition-all duration-200 group shrink-0">
             <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
             <span>Back to Home</span>
           </Link>
           
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
+          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
             
-            <div className="text-center mb-8 relative">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl mb-4 shadow-lg">
-                <MessageSquare className="h-7 w-7 text-white" />
-              </div>
+            <div className="text-center mb-5 md:mb-6 relative shrink-0">
               <StepIndicator currentStep={3} />
-              <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-3 tracking-tight">Verify Your Email</h1>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-light text-gray-900 mb-2 md:mb-3 tracking-tight">
+                Email verification
+              </h1>
               <p className="text-base text-gray-600 font-light">
-                We sent a verification code to<br />
-                <span className="font-semibold text-purple-600">{email}</span>
+                Enter the 6-digit code we sent to<br />
+                <span className="font-semibold text-purple-600 break-all">{email}</span>
               </p>
             </div>
 
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
+            {!otpInputReady ? (
+              <div className="mb-6 rounded-2xl border-2 border-purple-100 bg-gradient-to-br from-purple-50/80 to-white p-8 text-center">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 mb-4">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">Sending verification code</p>
+                <p className="mt-1 text-xs text-gray-500">Please wait. We’re sending the code to your email.</p>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-3">
                 <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium mb-1">Verification Failed</p>
-                  <p className="text-red-600">{error}</p>
-                </div>
+                <p>{error}</p>
               </div>
-            )}
+            ) : null}
 
-            {message && (
-              <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
+            {message ? (
+              <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium">{message}</p>
-                </div>
+                <p className="font-medium">{message}</p>
               </div>
-            )}
+            ) : null}
 
-            <form onSubmit={handleStep3} className="space-y-6">
-              <div className="space-y-2">
-                <label htmlFor="otp" className="block text-sm font-semibold text-gray-700">
-                  Enter Verification Code
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <MessageSquare className={`h-5 w-5 transition-colors ${otp ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
+            {otpInputReady && (
+              <form onSubmit={handleStep3} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="rounded-xl border-2 border-purple-100 bg-white p-4 space-y-3">
+                  <label htmlFor="otp" className="block text-sm font-semibold text-gray-700">
+                    Verification code
+                  </label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <MessageSquare className={`h-5 w-5 transition-colors ${otp ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
+                    </div>
+                    <input
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                      maxLength={6}
+                      className="w-full pl-12 pr-4 py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-center text-2xl tracking-[0.35em] font-semibold text-gray-900 placeholder-gray-300 transition-all duration-200"
+                      placeholder="000000"
+                      autoFocus
+                    />
                   </div>
-                  <input
-                    id="otp"
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    required
-                    maxLength={6}
-                    className="w-full pl-12 pr-4 py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-center text-3xl tracking-[0.3em] font-semibold text-gray-900 placeholder-gray-300 transition-all duration-200"
-                    placeholder="000000"
-                    autoFocus
-                  />
+                  <p className="text-xs text-gray-500 flex items-center justify-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    Check your inbox for the code
+                  </p>
                 </div>
-                <p className="text-sm text-gray-500 font-light flex items-center justify-center space-x-2">
-                  <Mail className="h-4 w-4" />
-                  <span>Check your email for the 6-digit code</span>
-                </p>
-                <div className="text-center pt-2">
+
+                <div className="text-center">
                   {resendTimer > 0 ? (
                     <p className="text-sm text-gray-500">
-                      Resend code in <span className="font-semibold text-purple-600">{resendTimer}s</span>
+                      Resend available in <span className="font-semibold text-purple-600">{resendTimer}s</span>
                     </p>
                   ) : (
                     <button
                       type="button"
                       onClick={handleResendOTP}
                       disabled={resendLoading}
-                      className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center space-x-2 group"
+                      className="text-sm text-purple-600 hover:text-purple-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                     >
                       {resendLoading ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-purple-600 border-t-transparent"></div>
-                          <span>Sending...</span>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-purple-600 border-t-transparent" />
+                          Sending…
                         </>
                       ) : (
                         <>
-                          <RotateCw className="h-4 w-4 group-hover:rotate-180 transition-transform duration-500" />
-                          <span>Resend Code</span>
+                          <RotateCw className="h-4 w-4" />
+                          Resend code
                         </>
                       )}
                     </button>
                   )}
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    <span>Verifying...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-5 w-5" />
-                    <span>Verify & Continue</span>
-                  </>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                >
+                  {loading ? (
+                    <>
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Verifying…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-5 w-5" />
+                      Verify and continue
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
 
-            <div className="mt-8 text-center">
+            <div className="mt-6 text-center shrink-0">
               <button
                 onClick={() => setStep(2)}
                 className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 inline-flex items-center space-x-2 group"
@@ -418,41 +488,35 @@ export default function SignUpClient() {
   // Step 2: Password Setup
   if (step === 2) {
     return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
+      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
           <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
         </div>
 
-        <div className="max-w-md w-full relative z-10">
-          <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-6 md:mb-8 text-sm font-medium transition-all duration-200 group">
+        <div className="w-full max-w-md flex-1 flex flex-col min-h-0 relative z-10">
+          <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 md:mb-6 text-sm font-medium transition-all duration-200 group shrink-0">
             <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
             <span>Back to Home</span>
           </Link>
           
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
+          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
             
-          <div className="text-center mb-8 relative">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl mb-4 shadow-lg">
-              <Lock className="h-7 w-7 text-white" />
-            </div>
+          <div className="text-center mb-5 md:mb-6 relative shrink-0">
             <StepIndicator currentStep={2} />
-            <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-3 tracking-tight">Create Password</h1>
-            <p className="text-base text-gray-600 font-light">Choose a secure password for your account</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-light text-gray-900 mb-2 md:mb-3 tracking-tight">Create Password</h1>
+            <p className="text-sm sm:text-base text-gray-600 font-light">Choose a secure password for your account</p>
           </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
+              <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
                 <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium mb-1">Error</p>
-                  <p className="text-red-600">{error}</p>
-                </div>
+                <p className="text-red-600">{error}</p>
               </div>
             )}
 
-            <form onSubmit={handleStep2} className="space-y-6">
+            <form onSubmit={handleStep2} className="space-y-4 sm:space-y-6 flex-1 flex flex-col min-h-0">
               <div className="space-y-2">
                 <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
                   New Password
@@ -530,26 +594,28 @@ export default function SignUpClient() {
                 )}
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || password !== confirmPassword || password.length < 6}
-                className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    <span>Creating Account...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Continue</span>
-                    <ChevronRight className="h-5 w-5" />
-                  </>
-                )}
-              </button>
+              <div className="mt-auto pt-4">
+                <button
+                  type="submit"
+                  disabled={loading || password !== confirmPassword || password.length < 6}
+                  className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-3.5 sm:py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                      <span>Creating Account...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Continue</span>
+                      <ChevronRight className="h-5 w-5" />
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
 
-            <div className="mt-8 text-center">
+            <div className="mt-6 text-center shrink-0">
               <button
                 onClick={() => setStep(1)}
                 className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 inline-flex items-center space-x-2 group"
@@ -566,41 +632,35 @@ export default function SignUpClient() {
 
   // Step 1: Personal Information
   return (
-    <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
+    <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
         <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
       </div>
 
-      <div className="max-w-md w-full relative z-10">
-        <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-6 md:mb-8 text-sm font-medium transition-all duration-200 group">
+      <div className="w-full max-w-md flex-1 flex flex-col min-h-0 relative z-10">
+        <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 md:mb-6 text-sm font-medium transition-all duration-200 group shrink-0">
           <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           <span>Back to Home</span>
         </Link>
         
-        <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
           
-          <div className="text-center mb-8 relative">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl mb-4 shadow-lg">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
+          <div className="text-center mb-5 md:mb-6 relative shrink-0">
             <StepIndicator currentStep={1} />
-            <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-3 tracking-tight">Join Ghumakkars</h1>
-            <p className="text-base text-gray-600 font-light">Start your journey of discovery and adventure</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-light text-gray-900 mb-2 md:mb-3 tracking-tight">Join Ghumakkars</h1>
+            <p className="text-sm sm:text-base text-gray-600 font-light">Start your journey of discovery and adventure</p>
           </div>
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
               <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium mb-1">Error</p>
-                <p className="text-red-600">{error}</p>
-              </div>
+              <p className="text-red-600">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleStep1} className="space-y-5 md:space-y-6">
+          <form onSubmit={handleStep1} className="space-y-4 sm:space-y-5 md:space-y-6 flex-1 flex flex-col min-h-0">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label htmlFor="firstName" className="block text-sm font-semibold text-gray-700">
@@ -710,16 +770,18 @@ export default function SignUpClient() {
               )}
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>Continue</span>
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <div className="mt-auto pt-4">
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-3.5 sm:py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>Continue</span>
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center shrink-0">
             <p className="text-sm text-gray-600 mb-2">
               Already have an account?
             </p>
@@ -736,4 +798,6 @@ export default function SignUpClient() {
     </div>
   );
 }
+
+
 

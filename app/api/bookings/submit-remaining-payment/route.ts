@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { internalFetchHeaders } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
       if (bookingData) {
         await fetch(`${request.nextUrl.origin}/api/bookings/send-notification`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: internalFetchHeaders(),
           body: JSON.stringify({
             bookingId: bookingId,
             status: 'pending',

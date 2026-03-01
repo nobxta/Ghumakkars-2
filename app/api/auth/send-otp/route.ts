@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendLoginOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const limit = checkRateLimit(request, 'sendOtp', AUTH_LIMITS.sendOtp);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many OTP requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
     const { email } = await request.json();
 
     if (!email || !email.includes('@')) {

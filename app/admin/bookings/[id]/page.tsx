@@ -291,7 +291,9 @@ export default function AdminBookingDetailsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-xs sm:text-sm text-gray-600 mb-1">Name</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.primary_passenger_name || booking.profiles?.first_name && booking.profiles?.last_name ? `${booking.profiles.first_name} ${booking.profiles.last_name}` : 'N/A'}</p>
+              <p className="font-semibold text-gray-900 text-sm sm:text-base">
+                {booking.primary_passenger_name || (booking.profiles ? `${(booking.profiles.first_name || '')} ${(booking.profiles.last_name || '')}`.trim() : '') || 'N/A'}
+              </p>
             </div>
             <div>
               <p className="text-xs sm:text-sm text-gray-600 mb-1">Email</p>

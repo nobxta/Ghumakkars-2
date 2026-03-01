@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed } from 'lucide-react';
+import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle } from 'lucide-react';
 
 interface Trip {
   id: string;
@@ -20,9 +20,16 @@ interface Trip {
   start_date: string;
   end_date?: string;
   image_url?: string;
+  cover_image_url?: string;
   included_features?: string[];
+  excluded_features?: string[];
   highlights?: string[];
   is_active: boolean;
+  status?: string;
+  completed_at?: string;
+  postponed_to_date?: string;
+  cancellation_reason?: string;
+  actual_participants?: number;
   booking_disabled?: boolean;
 }
 
@@ -99,21 +106,61 @@ export default function TripDetailPage() {
 
   const availableSpots = trip.max_participants - trip.current_participants;
   const isLowAvailability = availableSpots < 5 && availableSpots > 0;
+  const isCompleted = trip.status === 'completed';
+  const isCancelled = trip.status === 'cancelled';
+  const isPostponed = trip.status === 'postponed';
+  const isPastTrip = isCompleted || isCancelled || isPostponed;
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
       {/* Hero Section with Image */}
       <div className="relative h-[50vh] md:h-[60vh] lg:h-[70vh] overflow-hidden">
-        {trip.image_url ? (
+        {(trip.cover_image_url || trip.image_url) ? (
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${trip.image_url})` }}
+            style={{ backgroundImage: `url(${trip.cover_image_url || trip.image_url})` }}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+            {isCompleted && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <CheckCircle className="h-5 w-5" />
+                <span>Trip Completed</span>
+              </div>
+            )}
+            {isCancelled && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <X className="h-5 w-5" />
+                <span>Trip Cancelled</span>
+              </div>
+            )}
+            {isPostponed && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <Clock className="h-5 w-5" />
+                <span>Trip Postponed{trip.postponed_to_date ? ` to ${new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-purple-400 to-purple-300 flex items-center justify-center">
             <MapPin className="h-32 w-32 text-white/30" />
+            {isCompleted && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <CheckCircle className="h-5 w-5" />
+                <span>Trip Completed</span>
+              </div>
+            )}
+            {isCancelled && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <X className="h-5 w-5" />
+                <span>Trip Cancelled</span>
+              </div>
+            )}
+            {isPostponed && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
+                <Clock className="h-5 w-5" />
+                <span>Trip Postponed</span>
+              </div>
+            )}
           </div>
         )}
         
@@ -240,11 +287,106 @@ export default function TripDetailPage() {
                   </div>
                 </div>
               )}
+
+              {trip.excluded_features && trip.excluded_features.length > 0 && (
+                <div className="pt-8 border-t border-purple-100">
+                  <div className="flex items-center mb-5 md:mb-6">
+                    <AlertCircle className="h-6 w-6 md:h-7 md:w-7 text-amber-600 mr-3" />
+                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">What&apos;s Not Included</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                    {trip.excluded_features.map((feature, index) => (
+                      <div key={index} className="flex items-start group bg-amber-50/50 p-4 rounded-xl hover:bg-amber-100/50 transition-colors border border-amber-100">
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className="w-6 h-6 md:w-7 md:h-7 bg-amber-500 rounded-full flex items-center justify-center">
+                            <X className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                          </div>
+                        </div>
+                        <span className="text-sm md:text-base text-gray-700 font-medium leading-relaxed ml-3">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="lg:col-span-1">
             <div className="bg-gradient-to-br from-white to-purple-50/30 backdrop-blur-sm border-2 border-purple-200 rounded-xl md:rounded-2xl shadow-2xl p-6 md:p-8 lg:sticky lg:top-24">
+              {isPastTrip ? (
+                /* Completed / Cancelled / Postponed — view only, no booking */
+                <>
+                  <div className="text-center mb-6">
+                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${isCancelled ? 'bg-red-100' : isPostponed ? 'bg-orange-100' : 'bg-blue-100'}`}>
+                      {isCancelled ? <X className="h-10 w-10 text-red-600" /> : isPostponed ? <Clock className="h-10 w-10 text-orange-600" /> : <CheckCircle className="h-10 w-10 text-blue-600" />}
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                      {isCancelled ? 'Trip Cancelled' : isPostponed ? 'Trip Postponed' : 'Trip Completed'}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {isCancelled
+                        ? 'This trip was cancelled. For any queries or refunds, please contact us.'
+                        : isPostponed
+                        ? 'This trip has been postponed. Booking is closed for the original dates.'
+                        : 'This journey has ended. Booking is closed.'}
+                    </p>
+                  </div>
+                  <div className="space-y-4 mb-6">
+                    {isCompleted && trip.completed_at && (
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                        <p className="text-xs text-gray-600 mb-1">Completed on</p>
+                        <p className="font-semibold text-gray-900">
+                          {new Date(trip.completed_at).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                    )}
+                    {isPostponed && trip.postponed_to_date && (
+                      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                        <p className="text-xs text-gray-600 mb-1">New date</p>
+                        <p className="font-semibold text-gray-900">
+                          {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                    )}
+                    {isCancelled && trip.cancellation_reason && (
+                      <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                        <p className="text-xs text-gray-600 mb-1">Reason</p>
+                        <p className="text-sm text-gray-800">{trip.cancellation_reason}</p>
+                      </div>
+                    )}
+                    <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 flex items-center">
+                          <Users className="h-5 w-5 mr-2 text-gray-500" />
+                          Participants
+                        </span>
+                        <span className="font-bold text-gray-900">
+                          {(trip.actual_participants ?? trip.current_participants)}/{trip.max_participants}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
+                      <p className="text-sm text-gray-600 mb-1">Price was</p>
+                      <p className="font-bold text-gray-900 flex items-center">
+                        <IndianRupee className="h-5 w-5 mr-1" />
+                        {trip.discounted_price.toLocaleString()}/person
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200">
+                    <p className="text-center text-sm text-gray-500">
+                      {isCancelled ? 'Contact us for any questions or refunds.' : 'You can view the itinerary and highlights below. Check out other trips to book your next adventure.'}
+                    </p>
+                    <Link
+                      href="/trips"
+                      className="mt-4 block w-full text-center py-3 bg-gray-200 text-gray-800 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
+                    >
+                      Browse Available Trips
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
               {/* Pricing Section */}
               <div className="mb-6 md:mb-8 pb-6 border-b-2 border-purple-200">
                 {trip.original_price > trip.discounted_price && (
@@ -315,17 +457,19 @@ export default function TripDetailPage() {
               {/* Book Button */}
               <button
                 onClick={handleBookNow}
-                disabled={!trip.is_active || availableSpots === 0}
+                disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
                 className={`w-full py-5 md:py-6 rounded-xl font-bold text-lg md:text-xl tracking-wide uppercase shadow-2xl transform transition-all duration-200 ${
-                  !trip.is_active || availableSpots === 0
+                  !trip.is_active || availableSpots === 0 || trip.booking_disabled
                     ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                     : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 hover:scale-105 hover:shadow-3xl'
                 }`}
               >
                 <div className="flex items-center justify-center space-x-2">
-                  {trip.is_active && availableSpots > 0 && <Heart className="h-5 w-5" />}
+                  {trip.is_active && availableSpots > 0 && !trip.booking_disabled && <Heart className="h-5 w-5" />}
                   <span>
-                    {!trip.is_active
+                    {trip.booking_disabled
+                      ? 'Bookings Closed'
+                      : !trip.is_active
                       ? 'Journey Unavailable'
                       : availableSpots === 0
                       ? 'Fully Booked'
@@ -335,7 +479,7 @@ export default function TripDetailPage() {
               </button>
 
               {/* Urgency Message */}
-              {trip.is_active && availableSpots > 0 && (
+              {trip.is_active && availableSpots > 0 && !trip.booking_disabled && (
                 <div className={`mt-5 p-4 rounded-xl border-2 ${
                   isLowAvailability 
                     ? 'bg-orange-50 border-orange-300' 
@@ -381,6 +525,8 @@ export default function TripDetailPage() {
                   </div>
                 </div>
               </div>
+                </>
+              )}
             </div>
           </div>
         </div>

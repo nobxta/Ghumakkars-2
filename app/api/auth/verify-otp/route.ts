@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOTP } from '@/lib/otp-store';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const limit = checkRateLimit(request, 'verifyOtp', AUTH_LIMITS.verifyOtp);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
     const { email, otp } = await request.json();
 
     if (!email || !otp) {
@@ -67,6 +75,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Mark email as confirmed so password login works next time (fixes "Invalid login credentials" for unconfirmed users)
+    const authUser = user as SupabaseUser & { email_confirmed_at?: string | null };
+    if (!authUser.email_confirmed_at) {
+      await adminClient.auth.admin.updateUserById(user.id, { email_confirm: true });
+    }
+
     // Generate a magic link for the user to sign in
     const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
       type: 'magiclink',
@@ -80,11 +94,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // #region agent log
+    const actionLink = linkData.properties?.action_link;
+    const props = linkData.properties as { hashed_token?: string };
+    const hashedToken = props?.hashed_token;
+    let fromUrl: string | null = null;
+    if (actionLink) {
+      try {
+        const u = new URL(actionLink);
+        fromUrl = u.searchParams.get('token_hash') ?? u.searchParams.get('token');
+      } catch {}
+    }
+    const queryKeys = actionLink ? Array.from(new URL(actionLink).searchParams.keys()) : [];
+    fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'verify-otp/route.ts:response',message:'generateLink response',data:{hasActionLink:!!actionLink,queryParamKeys:queryKeys,hasHashedToken:!!hashedToken,hasFromUrl:!!fromUrl},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+
+    const tokenHash = hashedToken ?? fromUrl ?? undefined;
+
     return NextResponse.json({ 
       success: true,
       userId: user.id,
       email: user.email,
-      magicLink: linkData.properties?.action_link,
+      magicLink: actionLink,
+      token_hash: tokenHash,
     });
   } catch (error: any) {
     console.error('Error verifying OTP:', error);

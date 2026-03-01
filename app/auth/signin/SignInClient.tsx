@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Mail, Lock, LogIn, ArrowLeft, Smartphone, MessageSquare, Sparkles, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
+import { Mail, Lock, LogIn, ArrowLeft, Smartphone, MessageSquare, Sparkles, CheckCircle, XCircle, ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 export default function SignInClient() {
   const searchParams = useSearchParams();
@@ -16,8 +16,32 @@ export default function SignInClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // Redirect to profile (or admin) if already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        if (profile?.role === 'admin') {
+          router.replace('/admin');
+        } else {
+          router.replace('/profile');
+        }
+        return;
+      }
+      setCheckingAuth(false);
+    };
+    checkUser();
+  }, [router]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,19 +51,25 @@ export default function SignInClient() {
 
     try {
       if (loginMethod === 'password') {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error: signInError } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password,
         });
 
-        if (error) {
-          if (error.message.includes('Invalid login credentials') || error.message.includes('invalid') || error.message.includes('Invalid')) {
-            throw new Error('Invalid email or password. Please check your credentials and try again.');
-          } else if (error.message.includes('Email not confirmed')) {
-            throw new Error('Please verify your email address before signing in.');
-          } else {
-            throw new Error(error.message || 'Failed to sign in. Please try again.');
+        if (signInError) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[SignIn] Supabase auth error:', signInError.message, signInError);
           }
+          const msg = signInError.message || '';
+          // Email confirmation required (Supabase may phrase this differently)
+          if (/email not confirmed|confirm your email|verify your email|user not confirmed|account not confirmed/i.test(msg)) {
+            throw new Error('Please verify your email first. Check your inbox for the verification link or OTP from when you signed up. You can also try "Login with OTP" below.');
+          }
+          // Invalid credentials - show helpful message and suggest alternatives
+          if (/invalid login credentials|invalid credentials|invalid email or password/i.test(msg)) {
+            throw new Error('INVALID_CREDENTIALS'); // Special marker for UI message
+          }
+          throw new Error(msg || 'Invalid email or password.');
         }
 
         const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -103,17 +133,21 @@ export default function SignInClient() {
             }
           }
 
-          if (data.magicLink) {
-            const url = new URL(data.magicLink);
-            const token = url.searchParams.get('token');
-            const type = url.searchParams.get('type');
+          if (data.magicLink || data.token_hash) {
+            const tokenHash = data.token_hash ?? (data.magicLink ? (() => { try { const u = new URL(data.magicLink); return u.searchParams.get('token_hash') ?? u.searchParams.get('token'); } catch { return null; } })() : null);
 
-            if (token && type) {
+            // #region agent log
+            fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'SignInClient.tsx:verifyOtp',message:'before verifyOtp',data:{hasTokenHash:!!tokenHash,tokenHashLen:tokenHash?.length,hasMagicLink:!!data.magicLink},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+            // #endregion
+
+            if (tokenHash) {
               const { error: verifyError } = await supabase.auth.verifyOtp({
-                email,
-                token,
-                type: 'magiclink' as any,
+                ...(data.token_hash ? { token_hash: data.token_hash, type: 'magiclink' as const } : { email: email.trim().toLowerCase(), token: tokenHash, type: 'magiclink' as any }),
               });
+
+              // #region agent log
+              if (verifyError) fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'SignInClient.tsx:verifyOtp',message:'verifyOtp error',data:{errorMessage:verifyError?.message,errorCode:verifyError?.code},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+              // #endregion
 
               if (verifyError) throw verifyError;
 
@@ -145,7 +179,14 @@ export default function SignInClient() {
         }
       }
     } catch (error: any) {
-      setError(error.message || 'An error occurred');
+      const msg = error?.message ?? '';
+      if (msg === 'Failed to fetch' || msg.includes('fetch') || msg.includes('network') || error?.name === 'TypeError') {
+        setError('Connection error. Please check your internet and try again.');
+      } else if (msg === 'INVALID_CREDENTIALS') {
+        setError('Invalid email or password. Try "Login with OTP" (no password needed) or "Forgot Password" to reset.');
+      } else {
+        setError(msg || 'Invalid email or password.');
+      }
     } finally {
       setLoading(false);
     }
@@ -167,6 +208,14 @@ export default function SignInClient() {
     setError('');
     setMessage('');
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-50/30">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
@@ -204,15 +253,7 @@ export default function SignInClient() {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
               <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium mb-1">Error</p>
-                <p className="text-red-600">{error}</p>
-                {error.includes('No account found') && (
-                  <Link href="/auth/signup" className="mt-2 inline-flex items-center text-red-700 hover:text-red-800 font-semibold underline underline-offset-2 transition-colors">
-                    Create Account →
-                  </Link>
-                )}
-              </div>
+              <p className="text-red-600">{error}</p>
             </div>
           )}
 
@@ -261,13 +302,22 @@ export default function SignInClient() {
                   </div>
                   <input
                     id="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full pl-12 pr-4 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 text-gray-900 placeholder-gray-400"
+                    autoComplete="current-password"
+                    className="w-full pl-12 pr-12 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 text-gray-900 placeholder-gray-400"
                     placeholder="Enter your password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-purple-400 hover:text-purple-600 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
                 <div className="flex items-center justify-between pt-2">
                   <button
@@ -396,4 +446,6 @@ export default function SignInClient() {
     </div>
   );
 }
+
+
 

@@ -2,13 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Upload, Plus, X, Tag, Percent, DollarSign, Calendar, MapPin, Users, Clock, Filter } from 'lucide-react';
+import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Upload, Plus, X, Tag, Percent, DollarSign, Calendar, MapPin, Users, Clock, Filter, MessageSquare, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<'general' | 'payment'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'payment' | 'whatsapp'>('general');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // WhatsApp Settings
+  const [whatsappStatus, setWhatsappStatus] = useState<'ready' | 'not_ready' | 'initializing' | 'checking'>('checking');
+  const [whatsappQRCode, setWhatsappQRCode] = useState<string | null>(null);
+  const [whatsappInitializing, setWhatsappInitializing] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [testUserName, setTestUserName] = useState('');
+  const [testSending, setTestSending] = useState(false);
   
   // General Settings
   const [settings, setSettings] = useState({
@@ -101,10 +109,141 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const [whatsappInstalled, setWhatsappInstalled] = useState<boolean>(true);
+
+  const checkWhatsAppStatus = async () => {
+    try {
+      const response = await fetch('/api/whatsapp/init');
+      const data = await response.json();
+      
+      if (data.success) {
+        setWhatsappStatus(data.ready ? 'ready' : 'not_ready');
+        setWhatsappInstalled(data.installed !== false);
+      } else {
+        setWhatsappStatus('not_ready');
+        setWhatsappInstalled(data.installed !== false);
+      }
+    } catch (error: any) {
+      console.error('Error checking WhatsApp status:', error);
+      setWhatsappStatus('not_ready');
+      setWhatsappInstalled(false);
+    }
+  };
+
+  const initializeWhatsApp = async () => {
+    setWhatsappInitializing(true);
+    setWhatsappStatus('initializing');
+    setWhatsappQRCode(null);
+    
+    try {
+      // Poll for QR code - keep trying until we get it
+      const pollForQR = async (attempts = 0): Promise<void> => {
+        if (attempts > 40) { // 20 seconds max (40 * 500ms)
+          setWhatsappInitializing(false);
+          setWhatsappStatus('not_ready');
+          alert('QR code generation timed out. Please try again.');
+          return;
+        }
+
+        const response = await fetch('/api/whatsapp/init', {
+          method: 'POST',
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          if (data.ready) {
+            setWhatsappStatus('ready');
+            setWhatsappQRCode(null);
+            setWhatsappInitializing(false);
+            return;
+          } else if (data.qrCode) {
+            // Use QR code image if available, otherwise use QR code string
+            setWhatsappQRCode(data.qrCodeImage || data.qrCode);
+            setWhatsappStatus('not_ready');
+            setWhatsappInitializing(false);
+            
+            // Poll for ready status after QR is shown
+            const pollInterval = setInterval(async () => {
+              const statusResponse = await fetch('/api/whatsapp/init');
+              const statusData = await statusResponse.json();
+              
+              if (statusData.success && statusData.ready) {
+                clearInterval(pollInterval);
+                setWhatsappStatus('ready');
+                setWhatsappQRCode(null);
+              }
+            }, 3000); // Check every 3 seconds
+            
+            // Clear interval after 5 minutes
+            setTimeout(() => {
+              clearInterval(pollInterval);
+            }, 300000);
+            return;
+          }
+        }
+
+        // If no QR code yet, wait and try again
+        if (!data.qrCode && !data.ready) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return pollForQR(attempts + 1);
+        }
+      };
+
+      await pollForQR();
+    } catch (error) {
+      console.error('Error initializing WhatsApp:', error);
+      setWhatsappStatus('not_ready');
+      setWhatsappInitializing(false);
+      alert('Failed to initialize WhatsApp. Please try again.');
+    }
+  };
+
+  const sendTestNotification = async () => {
+    if (!testPhoneNumber || !testUserName) {
+      alert('Please enter both phone number and name');
+      return;
+    }
+
+    setTestSending(true);
+    try {
+      const response = await fetch('/api/whatsapp/test-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: testPhoneNumber,
+          userName: testUserName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Test notification sent successfully!');
+        setTestPhoneNumber('');
+        setTestUserName('');
+      } else {
+        alert(`Failed to send test notification: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('Error sending test notification:', error);
+      alert(`Failed to send test notification: ${error.message || 'Unknown error'}`);
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   useEffect(() => {
     fetchPaymentSettings();
     fetchCoupons();
+    checkWhatsAppStatus();
     setLoading(false);
+    
+    // Refresh WhatsApp status every 30 seconds
+    const statusInterval = setInterval(checkWhatsAppStatus, 30000);
+    
+    return () => clearInterval(statusInterval);
   }, []);
 
   const handleSavePaymentSettings = async () => {
@@ -363,6 +502,16 @@ export default function AdminSettingsPage() {
           }`}
         >
           Payment Settings
+        </button>
+        <button
+          onClick={() => setActiveTab('whatsapp')}
+          className={`px-6 py-3 font-semibold transition-colors ${
+            activeTab === 'whatsapp'
+              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
+              : 'text-gray-600 hover:text-purple-600'
+          }`}
+        >
+          WhatsApp
         </button>
       </div>
 
@@ -632,6 +781,231 @@ export default function AdminSettingsPage() {
                 </>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Settings Tab */}
+      {activeTab === 'whatsapp' && (
+        <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+            <MessageSquare className="h-6 w-6 mr-3 text-purple-600" />
+            WhatsApp Connection
+          </h2>
+
+          <div className="space-y-6">
+            {/* Connection Status */}
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border-2 border-purple-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Connection Status</h3>
+                <button
+                  onClick={checkWhatsAppStatus}
+                  disabled={whatsappStatus === 'checking'}
+                  className="p-2 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
+                  title="Refresh Status"
+                >
+                  <RefreshCw className={`h-5 w-5 text-purple-600 ${whatsappStatus === 'checking' ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              
+              {!whatsappInstalled ? (
+                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <XCircle className="h-6 w-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-yellow-800 mb-2">Package Not Installed</p>
+                      <p className="text-sm text-yellow-700 mb-3">
+                        WhatsApp packages are not installed. Install them to enable WhatsApp notifications.
+                      </p>
+                      <code className="block bg-yellow-100 text-yellow-900 px-3 py-2 rounded text-xs font-mono mb-2">
+                        npm install @whiskeysockets/baileys qrcode pino @hapi/boom
+                      </code>
+                      <p className="text-xs text-yellow-700 mt-2">
+                        This uses Baileys (no puppeteer) - works with Node.js v22!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  {whatsappStatus === 'ready' ? (
+                    <>
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                      <div>
+                        <p className="font-semibold text-green-700">Connected</p>
+                        <p className="text-sm text-gray-600">WhatsApp is ready to send notifications</p>
+                      </div>
+                    </>
+                  ) : whatsappStatus === 'initializing' ? (
+                    <>
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-600 border-t-transparent"></div>
+                      <div>
+                        <p className="font-semibold text-purple-700">Initializing...</p>
+                        <p className="text-sm text-gray-600">Setting up WhatsApp connection</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-6 w-6 text-red-600" />
+                      <div>
+                        <p className="font-semibold text-red-700">Not Connected</p>
+                        <p className="text-sm text-gray-600">WhatsApp client is not ready</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* QR Code Display */}
+            {whatsappQRCode && (
+              <div className="bg-white rounded-xl border-2 border-purple-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <QrCode className="h-5 w-5 mr-2 text-purple-600" />
+                  Scan QR Code
+                </h3>
+                <div className="bg-white p-4 rounded-lg border-2 border-gray-200 inline-block">
+                  {whatsappQRCode.startsWith('data:image') ? (
+                    <img
+                      src={whatsappQRCode}
+                      alt="WhatsApp QR Code"
+                      className="w-64 h-64"
+                    />
+                  ) : (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(whatsappQRCode)}`}
+                      alt="WhatsApp QR Code"
+                      className="w-64 h-64"
+                    />
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mt-4">
+                  1. Open WhatsApp on your phone<br />
+                  2. Go to Settings → Linked Devices<br />
+                  3. Tap "Link a Device"<br />
+                  4. Scan this QR code
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex space-x-4">
+              {whatsappStatus !== 'ready' && (
+                <button
+                  onClick={initializeWhatsApp}
+                  disabled={whatsappInitializing || whatsappStatus === 'initializing'}
+                  className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {whatsappInitializing || whatsappStatus === 'initializing' ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                      <span>Initializing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="h-5 w-5" />
+                      <span>Connect WhatsApp</span>
+                    </>
+                  )}
+                </button>
+              )}
+              
+              {whatsappStatus === 'ready' && (
+                <button
+                  onClick={checkWhatsAppStatus}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                  <span>Refresh Status</span>
+                </button>
+              )}
+            </div>
+
+            {/* Information */}
+            <div className="bg-blue-50 rounded-xl border-2 border-blue-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-3">How It Works</h3>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start">
+                  <span className="font-semibold mr-2">•</span>
+                  <span>Click "Connect WhatsApp" to initialize the connection</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="font-semibold mr-2">•</span>
+                  <span>Scan the QR code with your WhatsApp (one-time setup)</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="font-semibold mr-2">•</span>
+                  <span>Session is saved automatically - no need to scan again</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="font-semibold mr-2">•</span>
+                  <span>Users will receive WhatsApp notifications when bookings are confirmed</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="font-semibold mr-2">•</span>
+                  <span>Notifications include booking details and WhatsApp group links</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Test Notification */}
+            {whatsappStatus === 'ready' && (
+              <div className="bg-green-50 rounded-xl border-2 border-green-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3">Test Notification</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Send a test WhatsApp notification with mock booking details to verify the connection is working.
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={testPhoneNumber}
+                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                      placeholder="91XXXXXXXXXX or 10-digit number"
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter phone number with country code (e.g., 919876543210) or 10-digit number
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      value={testUserName}
+                      onChange={(e) => setTestUserName(e.target.value)}
+                      placeholder="Enter name"
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={sendTestNotification}
+                    disabled={testSending || !testPhoneNumber || !testUserName}
+                    className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {testSending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="h-5 w-5" />
+                        <span>Send Test Notification</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

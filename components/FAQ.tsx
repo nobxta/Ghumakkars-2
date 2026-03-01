@@ -151,7 +151,7 @@ export default function FAQ() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base rounded-lg transition-all"
+                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base text-gray-900 placeholder-gray-500 bg-white rounded-lg transition-all"
                     placeholder="Enter your full name"
                   />
                 </div>
@@ -169,7 +169,7 @@ export default function FAQ() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base rounded-lg transition-all"
+                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base text-gray-900 placeholder-gray-500 bg-white rounded-lg transition-all"
                     placeholder="your.email@example.com"
                   />
                 </div>
@@ -215,7 +215,7 @@ export default function FAQ() {
                       value={customReason}
                       onChange={(e) => setCustomReason(e.target.value)}
                       required={reason === 'custom'}
-                      className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base rounded-lg transition-all"
+                      className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base text-gray-900 placeholder-gray-500 bg-white rounded-lg transition-all"
                       placeholder="Please specify your reason"
                     />
                   </div>
@@ -234,7 +234,7 @@ export default function FAQ() {
                     onChange={(e) => setMessage(e.target.value)}
                     required
                     rows={5}
-                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base rounded-lg transition-all resize-none"
+                    className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base text-gray-900 placeholder-gray-500 bg-white rounded-lg transition-all resize-none"
                     placeholder="Tell us more about your inquiry..."
                   />
                 </div>

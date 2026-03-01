@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendPasswordResetEmail } from '@/lib/email';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { storeResetToken } from '@/lib/reset-token-store';
+import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
@@ -9,6 +10,13 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const limit = checkRateLimit(request, 'sendPasswordReset', AUTH_LIMITS.sendPasswordReset);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many password reset requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
     const { email } = await request.json();
 
     if (!email || !email.includes('@')) {
@@ -65,9 +73,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Only send email if account exists
-    // Generate reset token
+    // Generate reset token (stored in DB so all API workers can validate it)
     const resetToken = crypto.randomBytes(32).toString('hex');
-    storeResetToken(resetToken, normalizedEmail, 60); // 1 hour expiry
+    await storeResetToken(resetToken, normalizedEmail, 60); // 1 hour expiry
 
     // Create reset link
     const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin}/auth/reset-password?token=${resetToken}`;

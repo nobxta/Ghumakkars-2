@@ -18,6 +18,8 @@ interface Trip {
   end_date?: string;
   discounted_price?: number;
   seat_lock_price?: number;
+  included_features?: string[];
+  excluded_features?: string[];
 }
 
 interface Booking {
@@ -88,7 +90,9 @@ export default function BookingDetailsPage() {
             start_date,
             end_date,
             discounted_price,
-            seat_lock_price
+            seat_lock_price,
+            included_features,
+            excluded_features
           )
         `)
         .eq('id', params.id)
@@ -323,6 +327,43 @@ export default function BookingDetailsPage() {
               </span>
             </div>
           </div>
+
+          {((booking.trips?.included_features && booking.trips.included_features.length > 0) || (booking.trips?.excluded_features && booking.trips.excluded_features.length > 0)) && (
+            <div className="mt-6 pt-4 border-t border-purple-100 space-y-4">
+              {booking.trips?.included_features && booking.trips.included_features.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                    What&apos;s Included
+                  </p>
+                  <ul className="space-y-1">
+                    {booking.trips.included_features.map((feature: string, i: number) => (
+                      <li key={i} className="text-sm text-gray-700 flex items-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-2" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {booking.trips?.excluded_features && booking.trips.excluded_features.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mr-2" />
+                    What&apos;s Not Included
+                  </p>
+                  <ul className="space-y-1">
+                    {booking.trips.excluded_features.map((feature: string, i: number) => (
+                      <li key={i} className="text-sm text-gray-700 flex items-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-2" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Primary Passenger Card */}

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Save, Plus, X, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft, Clock, Send } from 'lucide-react';
 
 interface DayItinerary {
   day: number;
@@ -343,6 +343,7 @@ export default function CreateTripPage() {
         day_wise_itinerary: itinerary,
         whatsapp_group_link: whatsappGroupLink || null,
         included_features: includedItems.filter(item => item.trim()),
+        excluded_features: excludedItems.filter(item => item.trim()).length > 0 ? excludedItems.filter(item => item.trim()) : null,
         status: publishOption === 'draft' ? 'draft' : publishOption === 'schedule' ? 'scheduled' : 'active',
         is_active: publishOption === 'now',
         scheduled_publish_at: publishOption === 'schedule' && scheduledPublishDate && scheduledPublishTime
@@ -620,7 +621,7 @@ export default function CreateTripPage() {
                                   const dates = condition.value.split('|');
                                   updateEarlyBirdCondition(index, `${e.target.value}|${dates[1] || ''}`);
                                 }}
-                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm"
+                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
                               />
                               <span className="text-gray-400">to</span>
                               <input
@@ -630,7 +631,7 @@ export default function CreateTripPage() {
                                   const dates = condition.value.split('|');
                                   updateEarlyBirdCondition(index, `${dates[0] || ''}|${e.target.value}`);
                                 }}
-                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm"
+                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
                               />
                             </div>
                           ) : (
@@ -638,7 +639,7 @@ export default function CreateTripPage() {
                               type={condition.type === 'user_limit' || condition.type === 'first_bookings' ? 'number' : 'text'}
                               value={condition.value}
                               onChange={(e) => updateEarlyBirdCondition(index, e.target.value)}
-                              className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm flex-1"
+                              className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm flex-1 text-gray-900 placeholder-gray-500 bg-white"
                               placeholder={condition.type === 'discount_code' ? 'Enter code' : 'Enter number'}
                             />
                           )}
@@ -1020,9 +1021,9 @@ export default function CreateTripPage() {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   What&apos;s Included
                 </label>
-                <div className="space-y-2 mb-5">
+                <div className="space-y-2 mb-3">
                   {includedItems.map((item, index) => (
-                    <div key={index} className="flex space-x-2">
+                    <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
                         value={item}
@@ -1031,39 +1032,42 @@ export default function CreateTripPage() {
                           updated[index] = e.target.value;
                           setIncludedItems(updated);
                         }}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                         placeholder="e.g., Accommodation, Breakfast, Guide"
                       />
-                      {includedItems.length > 1 && (
+                      {includedItems.length > 1 ? (
                         <button
                           type="button"
                           onClick={() => removeIncludedItem(index)}
-                          className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+                          title="Remove this item"
+                          aria-label="Remove this item"
                         >
-                          <X className="h-5 w-5" />
+                          <Trash2 className="h-5 w-5" />
                         </button>
-                      )}
-                          {includedItems[includedItems.length - 1] && (
-                        <button
-                          type="button"
-                          onClick={addIncludedItem}
-                          className="p-3 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
-                        >
-                          <Plus className="h-5 w-5" />
-                        </button>
+                      ) : (
+                        <span className="w-11 shrink-0" aria-hidden />
                       )}
                     </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={addIncludedItem}
+                  className="flex items-center gap-2 px-4 py-2.5 text-purple-600 hover:bg-purple-50 border-2 border-dashed border-purple-200 rounded-xl transition-colors font-medium text-sm"
+                >
+                  <Plus className="h-5 w-5 shrink-0" />
+                  Add included item
+                </button>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   What&apos;s Not Included
                 </label>
-                <div className="space-y-2 mb-5">
+                <div className="space-y-2 mb-3">
                   {excludedItems.map((item, index) => (
-                    <div key={index} className="flex space-x-2">
+                    <div key={index} className="flex items-center gap-2">
                       <input
                         type="text"
                         value={item}
@@ -1072,30 +1076,33 @@ export default function CreateTripPage() {
                           updated[index] = e.target.value;
                           setExcludedItems(updated);
                         }}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                         placeholder="e.g., Lunch, Dinner, Personal expenses"
                       />
-                      {excludedItems.length > 1 && (
+                      {excludedItems.length > 1 ? (
                         <button
                           type="button"
                           onClick={() => removeExcludedItem(index)}
-                          className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+                          title="Remove this item"
+                          aria-label="Remove this item"
                         >
-                          <X className="h-5 w-5" />
+                          <Trash2 className="h-5 w-5" />
                         </button>
-                      )}
-                      {excludedItems[excludedItems.length - 1] && (
-                        <button
-                          type="button"
-                          onClick={addExcludedItem}
-                          className="p-3 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
-                        >
-                          <Plus className="h-5 w-5" />
-                        </button>
+                      ) : (
+                        <span className="w-11 shrink-0" aria-hidden />
                       )}
                     </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={addExcludedItem}
+                  className="flex items-center gap-2 px-4 py-2.5 text-purple-600 hover:bg-purple-50 border-2 border-dashed border-purple-200 rounded-xl transition-colors font-medium text-sm"
+                >
+                  <Plus className="h-5 w-5 shrink-0" />
+                  Add not included item
+                </button>
               </div>
 
               <div>
@@ -1214,13 +1221,13 @@ export default function CreateTripPage() {
                             value={scheduledPublishDate}
                             onChange={(e) => setScheduledPublishDate(e.target.value)}
                             min={new Date().toISOString().split('T')[0]}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
                           />
                           <input
                             type="time"
                             value={scheduledPublishTime}
                             onChange={(e) => setScheduledPublishTime(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
                           />
                         </div>
                       )}

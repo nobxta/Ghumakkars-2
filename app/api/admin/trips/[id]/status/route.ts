@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAdmin();
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = params;
     const { action, reason, date, price } = await request.json();
 
@@ -21,6 +25,7 @@ export async function POST(
           status: 'completed',
           completed_at: new Date().toISOString(),
           is_active: false,
+          booking_disabled: true, // completed trips are view-only, no new bookings
         };
         // Set actual participants to current participants
         const { data: trip } = await adminClient

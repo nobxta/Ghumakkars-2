@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { internalFetchHeaders } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 
 export const runtime = "nodejs";
@@ -190,7 +191,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     try {
       await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/bookings/send-notification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: internalFetchHeaders(),
         body: JSON.stringify({
           bookingId: booking.id,
           status: 'confirmed',
@@ -198,6 +199,20 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       });
     } catch (emailError) {
       console.error('Error sending confirmation email:', emailError);
+    }
+
+    // Send WhatsApp notification
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/send-booking-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+        }),
+      });
+    } catch (whatsappError) {
+      console.error('Error sending WhatsApp notification:', whatsappError);
+      // Don't fail the whole process if WhatsApp fails
     }
 
     console.log('Payment success processed for booking:', booking.id);

@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getResetTokenEmail, removeResetToken } from '@/lib/reset-token-store';
+import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    const limit = checkRateLimit(request, 'resetPassword', AUTH_LIMITS.resetPassword);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
     const { token, password } = await request.json();
 
     if (!token || !password) {
@@ -23,7 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const email = getResetTokenEmail(token);
+    const email = await getResetTokenEmail(token);
 
     if (!email) {
       return NextResponse.json(
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Remove the token
-    removeResetToken(token);
+    await removeResetToken(token);
 
     return NextResponse.json({ 
       success: true,
