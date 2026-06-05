@@ -73,14 +73,13 @@ export default function EditProfilePage() {
     lastName: '',
     email: '',
     phone: '',
-    collegeName: '',
+    aadhaarId: '',
     emergencyContact: '',
     emergencyContactName: '',
     emergencyContactRelation: '',
     gender: '',
     dateOfBirth: '',
-    studentId: '',
-    alternativeNumber: '',
+        alternativeNumber: '',
   });
 
   useEffect(() => {
@@ -118,13 +117,12 @@ export default function EditProfilePage() {
           lastName: profileData.last_name || '',
           email: profileData.email || user.email || '',
           phone: profileData.phone || profileData.phone_number || '',
-          collegeName: collegeName,
+          aadhaarId: profileData.aadhaar_id || '',
           emergencyContact: profileData.emergency_contact || '',
           emergencyContactName: profileData.emergency_contact_name || '',
           emergencyContactRelation: profileData.emergency_contact_relation || '',
           gender: profileData.gender || '',
           dateOfBirth: profileData.date_of_birth || '',
-          studentId: profileData.student_id || '',
           alternativeNumber: profileData.alternative_number || '',
         });
         setAvatarUrl(profileData.avatar_url || null);
@@ -134,14 +132,13 @@ export default function EditProfilePage() {
           lastName: user.user_metadata?.last_name || '',
           email: user.email || '',
           phone: user.user_metadata?.phone || '',
-          collegeName: '',
+          aadhaarId: '',
           emergencyContact: '',
           emergencyContactName: '',
           emergencyContactRelation: '',
           gender: '',
           dateOfBirth: '',
-          studentId: '',
-          alternativeNumber: '',
+                    alternativeNumber: '',
         });
       }
       setLoading(false);
@@ -366,9 +363,7 @@ export default function EditProfilePage() {
 
     try {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-      const finalCollegeName = collegeSelection === 'custom' ? customCollege : 
-                               collegeSelection === 'none' ? 'Not in College/University' : 
-                               selectedCollege;
+      const aadhaarClean = formData.aadhaarId.replace(/\s/g, '');
 
       // Update profile in database
       const { error: profileError } = await supabase
@@ -379,14 +374,12 @@ export default function EditProfilePage() {
           full_name: fullName,
           phone: formData.phone,
           phone_number: formData.phone,
-          college_name: finalCollegeName,
-          university: finalCollegeName,
+          aadhaar_id: aadhaarClean || null,
           emergency_contact: formData.emergencyContact,
           emergency_contact_name: formData.emergencyContactName,
           emergency_contact_relation: formData.emergencyContactRelation,
           gender: formData.gender,
           date_of_birth: formData.dateOfBirth || null,
-          student_id: formData.studentId,
           alternative_number: formData.alternativeNumber,
         })
         .eq('id', user.id);
@@ -729,71 +722,30 @@ export default function EditProfilePage() {
 
               {/* College/University Section */}
               <div className="space-y-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center space-x-2 pb-3 border-b-2 border-purple-200">
-                  <Building2 className="h-5 w-5 text-purple-600" />
-                  <h2 className="text-lg font-bold text-gray-900">College/University Information</h2>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    College/University Name
-                  </label>
-                  {collegeSelection === 'dropdown' || (!collegeSelection && !customCollege) ? (
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                      <select
-                        value={selectedCollege}
-                        onChange={(e) => handleCollegeChange(e.target.value)}
-                        className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none rounded-lg text-gray-900 appearance-none bg-white transition-all"
-                      >
-                        <option value="">Select College/University</option>
-                        {MATHURA_COLLEGES.map((college) => (
-                          <option key={college} value={college}>
-                            {college}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                    </div>
-                  ) : collegeSelection === 'custom' ? (
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={customCollege}
-                        onChange={(e) => handleCustomCollegeChange(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none rounded-lg text-gray-900 transition-all"
-                        placeholder="Enter your college/university name"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCollegeSelection('dropdown');
-                          setCustomCollege('');
-                          setSelectedCollege('');
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-purple-600 hover:text-purple-700 font-medium"
-                      >
-                        Back to List
-                      </button>
-                    </div>
-                  ) : null}
+                <div className="flex items-center space-x-2 pb-3 border-b border-purple-200">
+                  <CreditCard className="h-5 w-5 text-purple-600" />
+                  <h2 className="text-lg font-bold text-gray-900">ID Verification</h2>
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Student ID
+                    Aadhaar Card Number
                   </label>
                   <div className="relative">
                     <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="text"
-                      value={formData.studentId}
-                      onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none rounded-lg text-gray-900 transition-all"
-                      placeholder="Enter your student ID"
+                      value={formData.aadhaarId}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                        setFormData({ ...formData, aadhaarId: val.replace(/(\d{4})(?=\d)/g, '$1 ').trim() });
+                      }}
+                      maxLength={14}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none rounded-lg text-gray-900 transition-all font-mono tracking-wider"
+                      placeholder="XXXX XXXX XXXX"
                     />
                   </div>
+                  <p className="text-xs text-gray-500 mt-1.5">Used for trip verification only. Kept confidential.</p>
                 </div>
               </div>
 

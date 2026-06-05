@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface Passenger {
   name: string;
   phone: string;
   age: string;
   gender: string;
+  aadhaar_id: string;
 }
 
 interface Trip {
@@ -23,21 +24,7 @@ interface Trip {
   current_participants: number;
 }
 
-const MATHURA_COLLEGES = [
-  'GLA University',
-  'Sanskriti University',
-  'GL Bajaj Group of Institutions',
-  'Babu Shivnath Agrawal (PG) College',
-  'Aligarh Muslim University',
-  'Dayalbagh Educational Institute',
-  'IIT Kanpur',
-  'IIM Lucknow',
-  'Banaras Hindu University',
-  'MNNIT Allahabad',
-  'IIT (BHU) Varanasi',
-  'Other',
-  'Skip'
-];
+// Removed college list — no longer needed
 
 export default function BookTripPage() {
   const params = useParams();
@@ -62,7 +49,7 @@ export default function BookTripPage() {
   const [primaryAge, setPrimaryAge] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-  const [college, setCollege] = useState('');
+  const [aadhaarId, setAadhaarId] = useState('');
 
   // Additional Passengers
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -134,18 +121,8 @@ export default function BookTripPage() {
         }
       }
       
-      // Auto-fill college name
-      if (profile.college_name || profile.university) {
-        const collegeName = profile.college_name || profile.university;
-        // Check if it's in the dropdown list
-        if (MATHURA_COLLEGES.includes(collegeName)) {
-          setCollege(collegeName);
-        } else if (collegeName && collegeName !== 'Not in College/University') {
-          // If it's a custom college not in the list, set to "Other"
-          setCollege('Other');
-        } else if (collegeName === 'Not in College/University') {
-          setCollege('Skip');
-        }
+      if (profile.aadhaar_id) {
+        setAadhaarId(profile.aadhaar_id);
       }
       
       // Auto-fill emergency contact
@@ -374,7 +351,7 @@ export default function BookTripPage() {
         primary_passenger_age: parseInt(primaryAge),
         emergency_contact_name: emergencyContactName,
         emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-        college: college && college !== 'Skip' ? college : null,
+        aadhaar_id: aadhaarId || null,
         passengers: allPassengers,
         payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
         payment_mode: 'razorpay',
@@ -603,7 +580,7 @@ export default function BookTripPage() {
         primary_passenger_age: parseInt(primaryAge),
         emergency_contact_name: emergencyContactName,
         emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-        college: college && college !== 'Skip' ? college : null,
+        aadhaar_id: aadhaarId || null,
         passengers: allPassengers,
         payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
         payment_mode: 'cash',
@@ -871,7 +848,7 @@ export default function BookTripPage() {
             primary_passenger_age: parseInt(primaryAge),
             emergency_contact_name: emergencyContactName,
             emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-            college: college && college !== 'Skip' ? college : null,
+            aadhaar_id: aadhaarId || null,
             passengers: allPassengers,
             payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
             payment_mode: 'manual',
@@ -1344,31 +1321,30 @@ export default function BookTripPage() {
 
         {/* Step 2: College Info */}
         {currentStep === 2 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
-            <div className="flex items-center mb-6">
-              <GraduationCap className="h-6 w-6 text-purple-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">College Information (Optional)</h2>
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-4 sm:p-6 md:p-8">
+            <div className="flex items-center mb-4 sm:mb-6">
+              <User className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2 sm:mr-3" />
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">ID Verification</h2>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Select Your College
+                  Aadhaar Card Number <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={college}
-                  onChange={(e) => setCollege(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                >
-                  <option value="">Select College (Optional)</option>
-                  {MATHURA_COLLEGES.map((college) => (
-                    <option key={college} value={college}>
-                      {college}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-sm text-gray-500 mt-2">
-                  Selecting your college helps us provide better student discounts and organize group bookings
+                <input
+                  type="text"
+                  value={aadhaarId}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                    setAadhaarId(val.replace(/(\d{4})(?=\d)/g, '$1 ').trim());
+                  }}
+                  placeholder="XXXX XXXX XXXX"
+                  maxLength={14}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono tracking-wider"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Required for trip verification. Your Aadhaar is kept confidential and used only for identity verification.
                 </p>
               </div>
             </div>

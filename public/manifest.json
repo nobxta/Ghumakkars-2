@@ -1,7 +1,7 @@
 {
-  "name": "Ghumakkars - Student Travel",
+  "name": "Ghumakkars - Budget Group Travel",
   "short_name": "Ghumakkars",
-  "description": "Premium budget travel for university students across India",
+  "description": "Curated budget-friendly group trips across India",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

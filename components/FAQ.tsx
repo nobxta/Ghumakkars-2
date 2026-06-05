@@ -12,8 +12,8 @@ const faqs = [
   },
   {
     id: 2,
-    question: 'Are the trips really budget-friendly for students?',
-    answer: 'Absolutely! We specialize in creating affordable travel experiences specifically for university students. Our trips include group rates, transparent pricing with no hidden costs, and carefully planned itineraries that maximize value. We focus on authentic experiences that fit student budgets.',
+    question: 'Are the trips really budget-friendly?',
+    answer: 'Yes — that\'s the whole point. We negotiate group rates, cut out middlemen, and plan smart itineraries so you get incredible experiences at honest prices. No hidden costs, no surprise charges. What you see is what you pay.',
   },
   {
     id: 3,

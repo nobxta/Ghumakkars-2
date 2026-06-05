@@ -23,7 +23,7 @@ export default function Trips() {
             <div className="flex-1 h-px bg-purple-200 max-w-20"></div>
           </div>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Handpicked destinations and meticulously planned itineraries crafted specifically for adventurous students seeking authentic experiences
+            Handpicked destinations and thoughtfully planned itineraries for travellers who want real experiences, not tourist traps
           </p>
         </ScrollAnimation>
 

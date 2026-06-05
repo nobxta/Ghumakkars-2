@@ -10,9 +10,9 @@ import Newsletter from '@/components/Newsletter';
 import CTA from '@/components/CTA';
 
 export const metadata: Metadata = {
-  title: 'Ghumakkars - Premium Budget Travel for Students | Explore India',
+  title: 'Ghumakkars - Budget Group Travel Across India | Explore India',
   description:
-    'Book curated budget-friendly trips across India. Manali, Goa, Rishikesh, Kashmir & more. Exclusive student pricing, seat-lock booking, referral rewards. Start your adventure today!',
+    'Book curated budget-friendly group trips across India. Manali, Goa, Rishikesh, Kashmir & more. Seat-lock booking, referral rewards, honest prices. Start your adventure today!',
   alternates: { canonical: '/' },
 };
 
@@ -28,7 +28,7 @@ export default function Home() {
         name: 'What is Ghumakkars?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Ghumakkars is a premium budget travel platform designed exclusively for university students in India. We offer curated, affordable group trips to destinations like Manali, Goa, Rishikesh, Kashmir, and more.',
+          text: 'Ghumakkars is a budget travel platform that organises curated group trips across India. We take you to places like Manali, Goa, Rishikesh, Kashmir, and more — all at prices that actually make sense.',
         },
       },
       {
@@ -36,7 +36,7 @@ export default function Home() {
         name: 'How much do Ghumakkars trips cost?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Our trips are budget-friendly, starting from ₹2,999. We negotiate group rates and pass the savings to students. You can also lock your seat with a small deposit and pay the rest later.',
+          text: 'Our trips start from ₹2,999. We negotiate group rates and pass the savings directly to you. Lock your seat with a small deposit and pay the rest before departure.',
         },
       },
       {
@@ -52,7 +52,7 @@ export default function Home() {
         name: 'How does the referral program work?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Share your unique referral code with friends. When they sign up and complete their first booking, you earn ₹100 and your friend earns ₹50 as wallet credit. Use it on your next trip!',
+          text: 'Share your referral code with friends. When they sign up and complete their first booking, you earn ₹100 and your friend earns ₹50 as wallet credit — use it on your next trip!',
         },
       },
       {
@@ -65,10 +65,10 @@ export default function Home() {
       },
       {
         '@type': 'Question',
-        name: 'Is Ghumakkars only for students?',
+        name: 'Who can join Ghumakkars trips?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'While our trips are designed and priced for university students, anyone who loves budget travel and group adventures is welcome to join!',
+          text: 'Not at all! Our trips are open to everyone — solo travellers, couples, friend groups, families. If you love exploring new places without overpaying, you will fit right in.',
         },
       },
     ],

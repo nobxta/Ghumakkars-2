@@ -13,27 +13,27 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ghumakkars.in";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Ghumakkars - Premium Budget Travel for Students | Explore India",
+    default: "Ghumakkars - Budget Group Travel Across India | Explore India",
     template: "%s | Ghumakkars",
   },
   description:
-    "India's #1 student travel platform. Curated budget-friendly trips across India — Manali, Goa, Rishikesh, Kashmir & more. Book group trips with seat-lock, earn referral rewards, and travel with like-minded students.",
+    "Curated budget-friendly group trips across India — Manali, Goa, Rishikesh, Kashmir & more. Book with seat-lock, earn referral rewards, and travel with a crew that gets it.",
   keywords: [
-    "student travel India",
-    "budget trips for college students",
-    "group travel India",
+    "budget travel India",
+    "group trips India",
     "cheap trips Manali",
-    "student trips Goa",
+    "Goa group trip",
     "Rishikesh adventure trip",
     "Kashmir budget tour",
-    "university trip packages",
-    "backpacking India students",
+    "affordable travel packages India",
+    "backpacking India",
     "Ghumakkars",
     "seat lock booking",
-    "college trip organizer",
-    "youth travel India",
-    "affordable adventure trips",
-    "student tour packages 2025",
+    "group adventure India",
+    "budget adventure trips",
+    "best group travel company India",
+    "weekend getaway India",
+    "travel with friends India",
   ],
   authors: [{ name: "Ghumakkars", url: siteUrl }],
   creator: "Ghumakkars",
@@ -44,23 +44,23 @@ export const metadata: Metadata = {
     locale: "en_IN",
     url: siteUrl,
     siteName: "Ghumakkars",
-    title: "Ghumakkars - Premium Budget Travel for Students",
+    title: "Ghumakkars - Budget Group Travel Across India",
     description:
-      "Curated budget-friendly trips across India for university students. Manali, Goa, Rishikesh, Kashmir & more. Book now with seat-lock option!",
+      "Curated budget-friendly group trips across India. Manali, Goa, Rishikesh, Kashmir & more. Book now with seat-lock option!",
     images: [
       {
         url: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
-        alt: "Ghumakkars - Student Travel Platform",
+        alt: "Ghumakkars - Budget Group Travel India",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ghumakkars - Premium Budget Travel for Students",
+    title: "Ghumakkars - Budget Group Travel Across India",
     description:
-      "India's #1 student travel platform. Budget trips to Manali, Goa, Rishikesh & more.",
+      "Budget group trips to Manali, Goa, Rishikesh & more. Book with seat-lock!",
     images: [`${siteUrl}/og-image.png`],
     creator: "@ghumakkars",
   },
@@ -98,7 +98,7 @@ export default function RootLayout({
     url: siteUrl,
     logo: `${siteUrl}/logo.png`,
     description:
-      "India's #1 student travel platform offering curated budget-friendly trips across India for university students.",
+      "Curated budget-friendly group trips across India. Real adventures, honest prices, unforgettable experiences.",
     address: {
       "@type": "PostalAddress",
       addressCountry: "IN",
@@ -110,7 +110,7 @@ export default function RootLayout({
     areaServed: { "@type": "Country", name: "India" },
     audience: {
       "@type": "Audience",
-      audienceType: "University Students",
+      audienceType: "Budget Travellers",
     },
   };
 

@@ -18,9 +18,9 @@ export default function Footer() {
               <span>Ghumakkars</span>
             </h3>
             <p className="text-sm md:text-base text-gray-600 mb-6 md:mb-8 max-w-lg font-light leading-relaxed">
-              Empowering Indian university students to explore India&apos;s breathtaking destinations through 
-              thoughtfully curated, budget-friendly travel experiences. Join our community of passionate 
-              travelers creating unforgettable memories without compromising on adventure.
+              Making India&apos;s most breathtaking destinations accessible to everyone through
+              thoughtfully curated, budget-friendly group trips. Real adventures, honest prices,
+              and a community of travellers who love exploring together.
             </p>
             <div className="flex space-x-4">
               <a href="#" className="text-purple-400 hover:text-purple-600 transition-colors" aria-label="Facebook">
@@ -82,7 +82,7 @@ export default function Footer() {
 
         <div className="mt-10 md:mt-12 pt-6 md:pt-8 border-t border-purple-200 text-center">
           <p className="text-xs md:text-sm text-gray-500 tracking-wide uppercase font-light">
-            &copy; 2024 Ghumakkars. All rights reserved. Crafted for adventurous students.
+            &copy; 2025 Ghumakkars. All rights reserved. Made for explorers.
           </p>
         </div>
       </div>

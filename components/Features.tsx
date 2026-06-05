@@ -12,12 +12,12 @@ const features = [
   {
     icon: Clock,
     title: 'Flexible Scheduling',
-    description: 'Choose dates that fit your academic calendar with easy rescheduling options',
+    description: 'Multiple departure dates to choose from, with flexible rescheduling options',
   },
   {
     icon: Users,
     title: 'Group Adventures',
-    description: 'Meet like-minded students and create lasting friendships on group trips',
+    description: 'Travel with like-minded people and create lasting friendships on every trip',
   },
   {
     icon: MapPin,
@@ -26,8 +26,8 @@ const features = [
   },
   {
     icon: Heart,
-    title: 'Student-Focused',
-    description: 'Every detail designed with student budgets and preferences in mind',
+    title: 'Budget-Smart',
+    description: 'Every detail designed to give you the most value without cutting corners',
   },
   {
     icon: Award,

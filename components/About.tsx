@@ -23,9 +23,9 @@ export default function About() {
               <div className="h-px bg-purple-200 flex-1"></div>
             </div>
             <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-5 md:mb-6 font-light leading-relaxed">
-              We recognize that university life comes with limited funds but unlimited wanderlust. 
-              Ghumakkars was born from the vision of making extraordinary travel experiences accessible 
-              to every Indian student, transforming budget constraints into opportunities for authentic exploration.
+              Travel shouldn&apos;t burn a hole in your pocket, and planning shouldn&apos;t feel like a second job.
+              Ghumakkars was built for people who want to see India — the real India — without overpaying
+              or overthinking every detail.
             </p>
             <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 md:mb-12 font-light leading-relaxed">
               Our carefully curated journeys combine affordable pricing, thoughtfully designed itineraries, 
@@ -38,7 +38,7 @@ export default function About() {
                 <div className="absolute top-0 right-0 w-12 h-12 bg-purple-100 rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <Users className="h-6 w-6 md:h-7 md:w-7 text-purple-600 mx-auto mb-3 group-hover:scale-110 transition-transform" />
                 <div className="text-2xl md:text-3xl font-light text-gray-900 mb-1 tracking-tight">5K+</div>
-                <div className="text-xs md:text-sm text-gray-600 uppercase tracking-wide font-medium">Adventurous Students</div>
+                <div className="text-xs md:text-sm text-gray-600 uppercase tracking-wide font-medium">Happy Travellers</div>
               </div>
               <div className="text-center p-5 md:p-6 border-2 border-purple-100 bg-purple-50/50 rounded-xl hover:border-purple-200 transition-all duration-300 hover:shadow-lg group relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-12 h-12 bg-purple-100 rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity"></div>

@@ -8,7 +8,7 @@ const stats = [
     icon: Users,
     value: '5,000+',
     label: 'Happy Travelers',
-    description: 'Students who explored India with us',
+    description: 'Travellers who explored India with us',
   },
   {
     icon: MapPin,
@@ -32,7 +32,7 @@ const stats = [
     icon: Heart,
     value: '98%',
     label: 'Satisfaction Rate',
-    description: 'Students recommend us',
+    description: 'Travellers recommend us',
   },
   {
     icon: Award,
@@ -57,7 +57,7 @@ export default function Stats() {
             Our Impact in Numbers
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Building a community of adventurous students exploring India&apos;s diverse landscapes
+            Building a community of adventurous travellers exploring India&apos;s diverse landscapes
           </p>
         </ScrollAnimation>
 

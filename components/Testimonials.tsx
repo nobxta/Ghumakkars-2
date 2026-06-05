@@ -7,25 +7,25 @@ const testimonials = [
   {
     id: 1,
     name: 'Priya Sharma',
-    university: 'Delhi University',
+    location: 'Delhi',
     rating: 5,
-    text: 'Ghumakkars made my Goa trip absolutely incredible! The group was amazing, prices were unbeatable, and everything was perfectly organized. Best travel experience as a student!',
+    text: 'Ghumakkars made my Goa trip absolutely incredible! The group was amazing, prices were unbeatable, and everything was perfectly organized. Already planning my next one!',
     trip: 'Goa Adventure',
   },
   {
     id: 2,
     name: 'Rahul Patel',
-    university: 'Mumbai University',
+    location: 'Mumbai',
     rating: 5,
-    text: 'As a couple, we were looking for affordable travel options. Ghumakkars exceeded our expectations with their Kerala backwaters trip. Highly recommend!',
+    text: 'We were looking for affordable travel that doesn\'t feel cheap. Ghumakkars delivered — the Kerala backwaters trip was world-class at a fraction of what others charge.',
     trip: 'Kerala Backwaters',
   },
   {
     id: 3,
     name: 'Ananya Singh',
-    university: 'Bangalore University',
+    location: 'Bangalore',
     rating: 5,
-    text: 'The Rajasthan trip was a dream come true! Met amazing people, saw incredible places, and stayed within my student budget. Can\'t wait for the next adventure!',
+    text: 'The Rajasthan trip was a dream come true! Met amazing people, saw incredible places, and the whole thing cost less than I expected. Can\'t wait for the next one!',
     trip: 'Rajasthan Royalty',
   },
 ];
@@ -50,7 +50,7 @@ export default function Testimonials() {
             Stories from Our Travelers
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Real experiences from students who explored India with us
+            Real experiences from travellers who explored India with us
           </p>
         </ScrollAnimation>
 
@@ -77,7 +77,7 @@ export default function Testimonials() {
                   {testimonial.name}
                 </p>
                 <p className="text-xs md:text-sm text-gray-500 font-light mb-2">
-                  {testimonial.university}
+                  {testimonial.location}
                 </p>
                 <p className="text-xs text-purple-600 uppercase tracking-wide font-medium">
                   {testimonial.trip}

@@ -36,7 +36,7 @@ export default function Newsletter() {
             Stay Updated
           </h2>
           <p className="text-base md:text-lg text-gray-600 mb-6 md:mb-8 max-w-2xl mx-auto font-light leading-relaxed">
-            Get notified about new trips, exclusive deals, and special student discounts
+            Get notified about new trips, exclusive deals, and early-bird offers
           </p>
 
           {submitted ? (
@@ -53,7 +53,7 @@ export default function Newsletter() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="your.email@university.edu"
+                  placeholder="you@email.com"
                   className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-3.5 border-2 border-purple-200 rounded-lg focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none text-sm md:text-base text-gray-900 placeholder-gray-400"
                 />
               </div>

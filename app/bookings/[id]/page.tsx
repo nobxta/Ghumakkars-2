@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { 
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
-  GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
+  CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Save, Tag
 } from 'lucide-react';
 
@@ -44,7 +44,7 @@ interface Booking {
   primary_passenger_age?: number;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
-  college?: string;
+  aadhaar_id?: string;
   passengers?: any[];
   created_at: string;
   rejection_reason?: string;
@@ -429,12 +429,12 @@ export default function BookingDetailsPage() {
               <p className="text-xs sm:text-sm text-gray-600 mb-1">Age</p>
               <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.primary_passenger_age || 'N/A'}</p>
             </div>
-            {booking.college && (
+            {booking.aadhaar_id && (
               <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">College</p>
-                <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                  <GraduationCap className="h-4 w-4 mr-1 text-purple-600" />
-                  {booking.college}
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Aadhaar ID</p>
+                <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center font-mono">
+                  <CreditCard className="h-4 w-4 mr-1 text-purple-600" />
+                  {booking.aadhaar_id.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')}
                 </p>
               </div>
             )}

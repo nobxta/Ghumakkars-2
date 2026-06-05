@@ -25,10 +25,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: `${desc.substring(0, 140)}. ${trip.duration_days} days trip to ${trip.destination}. Starting ₹${trip.discounted_price?.toLocaleString()}. ${startDate ? `Departing ${startDate}.` : ''} Book now!`,
     keywords: [
       `${trip.destination} trip`,
-      `${trip.destination} student tour`,
+      `${trip.destination} budget trip`,
       `budget trip ${trip.destination}`,
       `${trip.title}`,
-      'student travel India',
+      'budget travel India',
       'Ghumakkars',
     ],
     alternates: { canonical: `/trips/${params.id}` },
