@@ -111,8 +111,40 @@ export default function TripDetailPage() {
   const isPostponed = trip.status === 'postponed';
   const isPastTrip = isCompleted || isCancelled || isPostponed;
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
+  const tripJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TouristTrip',
+    name: trip.title,
+    description: trip.short_description || trip.description,
+    touristType: 'University Students',
+    offers: {
+      '@type': 'Offer',
+      price: trip.discounted_price,
+      priceCurrency: 'INR',
+      availability: availableSpots > 0 ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+      validFrom: trip.start_date,
+      url: `${siteUrl}/trips/${trip.id}`,
+    },
+    itinerary: {
+      '@type': 'ItemList',
+      numberOfItems: trip.duration_days,
+      itemListElement: trip.highlights?.map((h: string, i: number) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: h,
+      })) || [],
+    },
+    provider: {
+      '@type': 'TravelAgency',
+      name: 'Ghumakkars',
+      url: siteUrl,
+    },
+  };
+
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero Section with Image */}
       <div className="relative h-[50vh] md:h-[60vh] lg:h-[70vh] overflow-hidden">
         {(trip.cover_image_url || trip.image_url) ? (

@@ -1,7 +1,12 @@
+import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import AdminPanelLayout from '@/components/admin/AdminPanelLayout';
 import './admin-styles.css';
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 /**
  * Server layout: only admins get the admin UI. Unauthenticated users
