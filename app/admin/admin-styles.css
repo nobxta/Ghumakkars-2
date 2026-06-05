@@ -1,3 +1,8 @@
+/* Disable pull-to-refresh on mobile for admin panel */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
 /* Neon CSS Animations for Admin Panel */
 
 @keyframes neon-glow {
@@ -156,5 +161,34 @@
 
 .pulse-glow {
   /* Removed pulsing glow effect */
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+/* Mobile-friendly admin tables */
+@media (max-width: 767px) {
+  .admin-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -0.75rem;
+    padding: 0 0.75rem;
+  }
+
+  .admin-responsive-card {
+    padding: 0.875rem;
+  }
 }
 

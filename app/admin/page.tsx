@@ -25,86 +25,70 @@ interface Trip {
 
 export default function AdminDashboard() {
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalTrips: 0, activeTrips: 0,
+    totalBookings: 0, confirmedBookings: 0, pendingBookings: 0,
+    totalUsers: 0, verifiedUsers: 0,
+    totalRevenue: 0,
+  });
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   useEffect(() => {
     fetchDashboardData();
-    // Refresh data every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
-    await Promise.all([fetchTrips(), fetchBookings(), fetchUsers()]);
+    try {
+      const [tripsRes, statsRes] = await Promise.all([
+        supabase.from('trips')
+          .select('id, title, destination, original_price, discounted_price, discount_percentage, duration_days, max_participants, current_participants, start_date, end_date, is_active, booking_disabled')
+          .order('created_at', { ascending: false })
+          .limit(6),
+        Promise.all([
+          supabase.from('trips').select('id, is_active', { count: 'exact', head: false }),
+          supabase.from('bookings').select('booking_status, total_price', { count: 'exact', head: false }),
+          supabase.from('profiles').select('email_verified', { count: 'exact', head: false }),
+        ]),
+      ]);
+
+      setTrips(tripsRes.data || []);
+
+      const [allTrips, allBookings, allUsers] = statsRes;
+      const bookingsData = allBookings.data || [];
+      const usersData = allUsers.data || [];
+      const tripsData = allTrips.data || [];
+
+      const confirmedBookings = bookingsData.filter((b: any) => b.booking_status === 'confirmed');
+      setStats({
+        totalTrips: tripsData.length,
+        activeTrips: tripsData.filter((t: any) => t.is_active).length,
+        totalBookings: bookingsData.length,
+        confirmedBookings: confirmedBookings.length,
+        pendingBookings: bookingsData.filter((b: any) => b.booking_status === 'pending').length,
+        totalUsers: usersData.length,
+        verifiedUsers: usersData.filter((u: any) => u.email_verified).length,
+        totalRevenue: confirmedBookings.reduce((sum: number, b: any) => sum + (parseFloat(b.total_price) || 0), 0),
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard:', error);
+    }
     setLoading(false);
-  };
-
-  const fetchTrips = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTrips(data || []);
-    } catch (error) {
-      console.error('Error fetching trips:', error);
-    }
-  };
-
-  const fetchBookings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setBookings(data || []);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this trip?')) return;
-
     try {
       const { error } = await supabase.from('trips').delete().eq('id', id);
       if (error) throw error;
-      fetchTrips();
+      fetchDashboardData();
     } catch (error: any) {
       alert('Error: ' + error.message);
     }
   };
 
-  // Calculate stats
-  const totalRevenue = bookings.reduce((sum, booking) => sum + (parseFloat(booking.total_price) || 0), 0);
-  const activeTrips = trips.filter(trip => trip.is_active).length;
-  const totalBookings = bookings.length;
-  const confirmedBookings = bookings.filter(b => b.booking_status === 'confirmed').length;
-  const pendingBookings = bookings.filter(b => b.booking_status === 'pending').length;
-  const totalUsers = users.length;
-  const verifiedUsers = users.filter(u => u.email_verified).length;
+  const { totalRevenue, activeTrips, totalBookings, confirmedBookings, pendingBookings, totalUsers, verifiedUsers } = stats;
   const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
   if (loading) {
@@ -121,150 +105,130 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Dashboard Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-slide-in">
+      <div className="flex justify-between items-center gap-3 animate-slide-in">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">
-            Dashboard Overview
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+            Dashboard
           </h1>
-          <p className="text-sm text-gray-600 font-light">Real-time insights into your travel platform</p>
+          <p className="text-[11px] sm:text-xs md:text-sm text-gray-500">Real-time insights</p>
         </div>
         <Link
           href="/admin/trips/create"
-          className="neon-button px-6 py-3 rounded-xl font-semibold flex items-center space-x-2 shadow-lg"
+          className="neon-button px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold flex items-center space-x-1.5 shadow-md whitespace-nowrap"
         >
-          <Plus className="h-5 w-5" />
-          <span>Create New Trip</span>
+          <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <span>New Trip</span>
         </Link>
       </div>
 
-      {/* Stats Cards with Neon Effects */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl animate-scale-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg">
-              <MapPin className="h-6 w-6 text-white" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-5">
+        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.1s' }}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg sm:rounded-xl">
+              <MapPin className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className={`text-sm font-semibold ${activeTrips > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-              {activeTrips > 0 ? <TrendingUp className="h-4 w-4 inline mr-1" /> : <Activity className="h-4 w-4 inline mr-1" />}
+            <span className={`text-[10px] sm:text-xs font-semibold ${activeTrips > 0 ? 'text-green-600' : 'text-gray-400'}`}>
               {activeTrips} Active
-            </div>
+            </span>
           </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1 font-medium">Total Trips</p>
-            <p className="text-3xl md:text-4xl font-bold text-gray-900">{trips.length}</p>
-            <p className="text-xs text-gray-500 mt-2">{trips.length - activeTrips} Inactive</p>
-          </div>
+          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Total Trips</p>
+          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{stats.totalTrips}</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl animate-scale-in" style={{ animationDelay: '0.2s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg">
-              <Calendar className="h-6 w-6 text-white" />
+        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.15s' }}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg sm:rounded-xl">
+              <Calendar className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">{confirmedBookings}</span>
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-semibold">{pendingBookings}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] sm:text-[10px] bg-green-100 text-green-700 px-1 sm:px-1.5 py-0.5 rounded-full font-bold">{confirmedBookings}</span>
+              <span className="text-[9px] sm:text-[10px] bg-yellow-100 text-yellow-700 px-1 sm:px-1.5 py-0.5 rounded-full font-bold">{pendingBookings}</span>
             </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1 font-medium">Total Bookings</p>
-            <p className="text-3xl md:text-4xl font-bold text-gray-900">{totalBookings}</p>
-            <p className="text-xs text-gray-500 mt-2">₹{avgBookingValue.toFixed(0)} avg value</p>
-          </div>
+          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Bookings</p>
+          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{totalBookings}</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl animate-scale-in" style={{ animationDelay: '0.3s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg">
-              <Users className="h-6 w-6 text-white" />
+        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.2s' }}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-green-500 to-green-600 rounded-lg sm:rounded-xl">
+              <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className="text-sm font-semibold text-green-600">
-              <TrendingUp className="h-4 w-4 inline mr-1" />
-              {verifiedUsers} Verified
-            </div>
+            <span className="text-[10px] sm:text-xs font-semibold text-green-600">{verifiedUsers} ✓</span>
           </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1 font-medium">Total Users</p>
-            <p className="text-3xl md:text-4xl font-bold text-gray-900">{totalUsers}</p>
-            <p className="text-xs text-gray-500 mt-2">{totalUsers - verifiedUsers} Pending verification</p>
-          </div>
+          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Users</p>
+          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{totalUsers}</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl animate-scale-in" style={{ animationDelay: '0.4s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg">
-              <DollarSign className="h-6 w-6 text-white" />
+        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.25s' }}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg sm:rounded-xl">
+              <DollarSign className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className={`text-sm font-semibold ${totalRevenue > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-              {totalRevenue > 0 ? <TrendingUp className="h-4 w-4 inline mr-1" /> : <TrendingDown className="h-4 w-4 inline mr-1" />}
-              Revenue
-            </div>
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-400">Revenue</span>
           </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1 font-medium">Total Revenue</p>
-            <p className="text-3xl md:text-4xl font-bold text-gray-900 flex items-center">
-              <IndianRupee className="h-6 w-6 mr-1" />
-              {totalRevenue.toLocaleString()}
-            </p>
-            <p className="text-xs text-gray-500 mt-2">From {confirmedBookings} confirmed bookings</p>
-          </div>
+          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Total</p>
+          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center">
+            <IndianRupee className="h-3.5 w-3.5 sm:h-5 sm:w-5 mr-0.5" />
+            {totalRevenue.toLocaleString()}
+          </p>
         </div>
       </div>
 
-
       {/* Recent Trips */}
-      <div className="neon-card rounded-2xl border-2 border-purple-200 shadow-xl p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Recent Trips</h2>
-          <Link href="/admin/trips" className="neon-button px-4 py-2 rounded-lg text-sm font-semibold">
+      <div className="neon-card rounded-xl sm:rounded-2xl border border-purple-200 shadow-md p-2.5 sm:p-4 md:p-6">
+        <div className="flex justify-between items-center mb-3 sm:mb-5">
+          <h2 className="text-sm sm:text-lg md:text-xl font-bold text-gray-900">Recent Trips</h2>
+          <Link href="/admin/trips" className="neon-button px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-sm font-semibold">
             View All
           </Link>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
           {trips.slice(0, 6).map((trip, index) => (
-            <div 
-              key={trip.id} 
-              className="bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 rounded-xl p-5 hover:border-purple-400 hover:shadow-lg transition-all animate-fade-in-up"
-              style={{ animationDelay: `${index * 0.1}s` }}
+            <div
+              key={trip.id}
+              className="bg-gradient-to-br from-purple-50 to-white border border-purple-200 rounded-lg sm:rounded-xl p-2.5 sm:p-4 hover:border-purple-400 hover:shadow-md transition-all animate-fade-in-up"
+              style={{ animationDelay: `${index * 0.05}s` }}
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-bold text-gray-900 pr-2 leading-tight">{trip.title}</h3>
-                <div className="flex space-x-2 flex-shrink-0">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <h3 className="text-sm sm:text-base font-bold text-gray-900 pr-2 leading-tight truncate">{trip.title}</h3>
+                <div className="flex space-x-1 flex-shrink-0">
                   <Link
                     href={`/admin/trips/edit/${trip.id}`}
-                    className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors inline-block"
+                    className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-md transition-colors inline-block"
                   >
-                    <Edit className="h-4 w-4" />
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Link>
                   <button
                     onClick={() => handleDelete(trip.id)}
-                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                    className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                   </button>
                 </div>
               </div>
-              <div className="space-y-2 text-sm text-gray-700">
+              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-700">
                 <div className="flex items-center">
-                  <MapPin className="h-4 w-4 mr-2 text-purple-500" />
-                  <span className="font-medium">{trip.destination}</span>
+                  <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
+                  <span className="font-medium truncate">{trip.destination}</span>
                 </div>
                 <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2 text-purple-500" />
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
                   <span className="font-medium">{trip.duration_days} Days</span>
                 </div>
                 <div className="flex items-center">
-                  <Users className="h-4 w-4 mr-2 text-purple-500" />
-                  <span className="font-medium">{trip.current_participants}/{trip.max_participants} Participants</span>
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
+                  <span className="font-medium">{trip.current_participants}/{trip.max_participants}</span>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-purple-100">
+                <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-purple-100">
                   <div className="flex items-center">
-                    <IndianRupee className="h-4 w-4 mr-1 text-purple-500" />
-                    <span className="font-bold text-lg text-gray-900">{trip.discounted_price.toLocaleString()}</span>
+                    <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 text-purple-500" />
+                    <span className="font-bold text-sm sm:text-base text-gray-900">{trip.discounted_price.toLocaleString()}</span>
                   </div>
                   {trip.discount_percentage > 0 && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
-                      {trip.discount_percentage}% OFF
+                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] sm:text-xs font-semibold">
+                      {trip.discount_percentage}%
                     </span>
                   )}
                 </div>
@@ -273,10 +237,10 @@ export default function AdminDashboard() {
           ))}
         </div>
         {trips.length === 0 && (
-          <div className="text-center py-12 bg-purple-50 border-2 border-purple-100 rounded-lg">
-            <MapPin className="h-12 w-12 text-purple-300 mx-auto mb-4" />
-            <p className="text-lg text-gray-700 font-medium mb-2">No trips created yet</p>
-            <p className="text-sm text-gray-600">Click &quot;Create New Trip&quot; to get started</p>
+          <div className="text-center py-8 sm:py-12 bg-purple-50 border border-purple-100 rounded-lg">
+            <MapPin className="h-8 w-8 sm:h-12 sm:w-12 text-purple-300 mx-auto mb-3" />
+            <p className="text-sm sm:text-lg text-gray-700 font-medium mb-1">No trips created yet</p>
+            <p className="text-xs sm:text-sm text-gray-600">Tap &quot;New Trip&quot; to get started</p>
           </div>
         )}
       </div>

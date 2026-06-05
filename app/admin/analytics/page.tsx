@@ -11,16 +11,14 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 60000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchAnalytics = async () => {
     try {
       const [tripsRes, bookingsRes, usersRes] = await Promise.all([
-        supabase.from('trips').select('*'),
-        supabase.from('bookings').select('*'),
-        supabase.from('profiles').select('*'),
+        supabase.from('trips').select('id, title, destination, discounted_price, is_active, status, current_participants, max_participants, start_date, end_date, created_at'),
+        supabase.from('bookings').select('id, trip_id, booking_status, total_price, final_amount, payment_status, payment_method, number_of_participants, created_at'),
+        supabase.from('profiles').select('id, email_verified, created_at, college_name'),
       ]);
 
       const trips = tripsRes.data || [];
@@ -51,8 +49,8 @@ export default function AdminAnalyticsPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-lg text-purple-600 tracking-wide font-medium">Loading analytics...</p>
+          <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
+          <p className="mt-4 text-base sm:text-lg text-purple-600 tracking-wide font-medium">Loading analytics...</p>
         </div>
       </div>
     );
@@ -63,64 +61,64 @@ export default function AdminAnalyticsPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">Analytics Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">Analytics</h1>
         <p className="text-sm text-gray-600">Comprehensive insights and metrics</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
+        <div className="stat-card neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
-              <DollarSign className="h-6 w-6 text-white" />
+            <div className="p-1.5 sm:p-2 md:p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-600" />
+            <TrendingUp className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-green-600" />
           </div>
           <p className="text-sm text-gray-600 mb-1 font-medium">Total Revenue</p>
-          <p className="text-3xl font-bold text-gray-900">₹{stats.totalRevenue.toLocaleString()}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900">₹{stats.totalRevenue.toLocaleString()}</p>
           <p className="text-xs text-gray-500 mt-2">From {stats.confirmedBookings} confirmed bookings</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
+        <div className="stat-card neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl">
-              <Calendar className="h-6 w-6 text-white" />
+            <div className="p-1.5 sm:p-2 md:p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-600" />
+            <TrendingUp className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-green-600" />
           </div>
           <p className="text-sm text-gray-600 mb-1 font-medium">Total Bookings</p>
-          <p className="text-3xl font-bold text-gray-900">{stats.totalBookings}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.totalBookings}</p>
           <p className="text-xs text-gray-500 mt-2">{stats.confirmedBookings} confirmed</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
+        <div className="stat-card neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl">
-              <Users className="h-6 w-6 text-white" />
+            <div className="p-1.5 sm:p-2 md:p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-600" />
+            <TrendingUp className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-green-600" />
           </div>
           <p className="text-sm text-gray-600 mb-1 font-medium">Total Users</p>
-          <p className="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
           <p className="text-xs text-gray-500 mt-2">{stats.verifiedUsers} verified</p>
         </div>
 
-        <div className="stat-card neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
+        <div className="stat-card neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl">
-              <MapPin className="h-6 w-6 text-white" />
+            <div className="p-1.5 sm:p-2 md:p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl">
+              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-600" />
+            <TrendingUp className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-green-600" />
           </div>
           <p className="text-sm text-gray-600 mb-1 font-medium">Active Trips</p>
-          <p className="text-3xl font-bold text-gray-900">{stats.activeTrips}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.activeTrips}</p>
           <p className="text-xs text-gray-500 mt-2">Out of {stats.totalTrips} total</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <BarChart3 className="h-5 w-5 mr-2 text-purple-600" />
+        <div className="neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
             Key Metrics
           </h3>
           <div className="space-y-4">
@@ -143,19 +141,19 @@ export default function AdminAnalyticsPage() {
           </div>
         </div>
 
-        <div className="neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <PieChart className="h-5 w-5 mr-2 text-purple-600" />
+        <div className="neon-card rounded-2xl border sm:border-2 border-purple-200 p-4 sm:p-6 shadow-xl">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
+            <PieChart className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
             Quick Stats
           </h3>
           <div className="space-y-4">
-            <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Total Trips Created</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalTrips}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats.totalTrips}</p>
             </div>
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Pending Bookings</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalBookings - stats.confirmedBookings}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{stats.totalBookings - stats.confirmedBookings}</p>
             </div>
           </div>
         </div>

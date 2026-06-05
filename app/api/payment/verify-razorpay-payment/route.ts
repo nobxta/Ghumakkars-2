@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
           razorpay_order_id: razorpay_order_id,
           razorpay_payment_id: razorpay_payment_id,
           razorpay_response: payment as any,
-          booking_status: 'confirmed',
+          booking_status: existingBooking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed',
         })
         .eq('id', bookingId);
 

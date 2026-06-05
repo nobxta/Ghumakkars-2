@@ -48,8 +48,6 @@ export default function AdminTripsPage() {
 
   useEffect(() => {
     syncTripStatusThenFetch();
-    const interval = setInterval(syncTripStatusThenFetch, 60000); // sync every minute
-    return () => clearInterval(interval);
   }, []);
 
   const syncTripStatusThenFetch = async () => {
@@ -413,51 +411,51 @@ export default function AdminTripsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex justify-between items-center gap-3">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">Manage Trips</h1>
-          <p className="text-sm text-gray-600">Create, edit, and manage all trips ({trips.length} total)</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Trips</h1>
+          <p className="text-[11px] sm:text-xs text-gray-500">{trips.length} total</p>
         </div>
         <Link
           href="/admin/trips/create"
-          className="neon-button px-6 py-3 rounded-xl font-semibold flex items-center space-x-2 shadow-lg"
+          className="neon-button px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold flex items-center space-x-1.5 shadow-md whitespace-nowrap"
         >
-          <Plus className="h-5 w-5" />
-          <span>Create Trip</span>
+          <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <span>New Trip</span>
         </Link>
       </div>
 
       {/* Stats - Compact */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <div className="bg-white rounded-xl border-2 border-purple-200 p-3 shadow-md">
+      <div className="grid grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-purple-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Total</p>
-          <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+          <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.total}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-emerald-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-emerald-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Ongoing</p>
           <p className="text-xl font-bold text-emerald-600">{stats.ongoing}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-green-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Active</p>
           <p className="text-xl font-bold text-green-600">{stats.active}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-yellow-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-yellow-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Scheduled</p>
           <p className="text-xl font-bold text-yellow-600">{stats.scheduled}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-gray-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-gray-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Drafts</p>
           <p className="text-xl font-bold text-gray-600">{stats.draft}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-blue-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-blue-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Completed</p>
           <p className="text-xl font-bold text-blue-600">{stats.completed}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-red-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-red-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Cancelled</p>
           <p className="text-xl font-bold text-red-600">{stats.cancelled}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-orange-200 p-3 shadow-md">
+        <div className="bg-white rounded-lg sm:rounded-xl border-2 border-orange-200 p-2 sm:p-3 shadow-md">
           <p className="text-xs text-gray-600 mb-1">Postponed</p>
           <p className="text-xl font-bold text-orange-600">{stats.postponed}</p>
         </div>

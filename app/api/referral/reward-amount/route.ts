@@ -10,20 +10,19 @@ export async function GET(request: NextRequest) {
     // Fetch referral reward amount from payment_settings
     const { data, error } = await supabase
       .from('payment_settings')
-      .select('referral_reward_amount')
+      .select('referral_reward_amount, referral_friend_reward_amount')
       .limit(1)
       .single();
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching referral reward amount:', error);
-      // Return default if error
-      return NextResponse.json({ rewardAmount: 100 });
+      return NextResponse.json({ rewardAmount: 100, friendRewardAmount: 50 });
     }
 
-    // Return configurable amount or default to 100
-    const rewardAmount = data?.referral_reward_amount || 100;
-    
-    return NextResponse.json({ rewardAmount });
+    return NextResponse.json({
+      rewardAmount: data?.referral_reward_amount || 100,
+      friendRewardAmount: data?.referral_friend_reward_amount || 50,
+    });
   } catch (error: any) {
     console.error('Error fetching referral reward amount:', error);
     return NextResponse.json({ rewardAmount: 100 }); // Default fallback

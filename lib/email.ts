@@ -1,18 +1,28 @@
 import nodemailer from 'nodemailer';
 
-// Create transporter - configured for Zoho Mail
+// Create transporter - configured for Hostinger Mail
+const smtpPort = parseInt(process.env.SMTP_PORT || '465');
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.zoho.in',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
+  host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+  port: smtpPort,
+  secure: smtpPort === 465, // true for 465 (SSL), false for 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
 
-const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_USER || 'contact@ghumakkars.in';
 const FROM_NAME = process.env.FROM_NAME || 'Ghumakkars';
+
+// Email aliases — all hosted on Hostinger under ghumakkars.in
+const EMAIL_ALIASES = {
+  noreply: 'no-reply@ghumakkars.in',    // OTP, signup, password reset
+  bookings: 'bookings@ghumakkars.in',   // booking confirmations, reminders
+  offers: 'offers@ghumakkars.in',       // coupons, promotions
+  support: 'support@ghumakkars.in',     // generic/support emails
+  hello: 'hello@ghumakkars.in',         // welcome emails
+};
+const FROM_EMAIL = process.env.FROM_EMAIL || EMAIL_ALIASES.noreply;
 
 // Send OTP for Login
 export async function sendLoginOTPEmail(email: string, otp: string) {
@@ -48,7 +58,7 @@ If you did not request this, you can safely ignore this email.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
     to: email,
     subject: 'Login Code',
     text: plainText,
@@ -98,7 +108,7 @@ If you did not request this, you can safely ignore this email.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
     to: email,
     subject: 'Account Verification Code',
     text: plainText,
@@ -152,7 +162,7 @@ If you did not request a password reset, you can safely ignore this email.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
     to: email,
     subject: 'Password Reset',
     text: plainText,
@@ -216,7 +226,7 @@ If you have questions, contact our support team.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
     subject: 'Booking Received',
     text: plainText,
@@ -305,7 +315,7 @@ You will receive additional trip details before the departure date.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
     subject: 'Booking Confirmed',
     text: plainText,
@@ -406,7 +416,7 @@ You will receive payment reminders before the due date. For questions, contact o
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
     subject: 'Seat Reserved - Payment Due',
     text: plainText,
@@ -477,7 +487,7 @@ You can view other available trips on our website.
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
     subject: 'Booking Not Confirmed',
     text: plainText,
@@ -566,7 +576,7 @@ If you have already made the payment, you can ignore this reminder. For assistan
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
     subject: 'Payment Reminder',
     text: plainText,
@@ -663,7 +673,7 @@ View trips: ${tripsUrl}
 </html>`;
 
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.offers}>`,
     to: email,
     subject: `Discount Coupon - ₹${couponDetails.discountAmount} Off`,
     text: plainText,
@@ -682,7 +692,7 @@ View trips: ${tripsUrl}
 // Generic sendEmail function for custom emails
 export async function sendEmail(options: { to: string; subject: string; html: string; text?: string }) {
   const mailOptions = {
-    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.support}>`,
     to: options.to,
     subject: options.subject,
     html: options.html,

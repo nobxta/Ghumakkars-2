@@ -5,9 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { 
-  ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart, 
-  GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle, 
-  AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Save
+  ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
+  GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
+  AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Save, Tag
 } from 'lucide-react';
 
 interface Trip {
@@ -28,11 +28,14 @@ interface Booking {
   payment_status?: string;
   payment_method?: string;
   transaction_id?: string;
+  reference_id?: string;
   payment_amount?: number;
   total_price?: number;
   final_amount?: number;
   coupon_code?: string;
   coupon_discount?: number;
+  wallet_amount_used?: number;
+  payment_mode?: string;
   number_of_participants: number;
   primary_passenger_name?: string;
   primary_passenger_email?: string;
@@ -194,6 +197,8 @@ export default function BookingDetailsPage() {
         return 'bg-orange-100 text-orange-700 border-orange-200';
       case 'pending':
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'remaining_submitted':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'cancelled':
       case 'rejected':
         return 'bg-red-100 text-red-700 border-red-200';
@@ -210,6 +215,8 @@ export default function BookingDetailsPage() {
         return <Lock className="h-5 w-5 text-orange-600" />;
       case 'pending':
         return <Clock className="h-5 w-5 text-yellow-600" />;
+      case 'remaining_submitted':
+        return <Clock className="h-5 w-5 text-blue-600" />;
       case 'cancelled':
       case 'rejected':
         return <XCircle className="h-5 w-5 text-red-600" />;
@@ -253,7 +260,7 @@ export default function BookingDetailsPage() {
   }
 
   const remainingAmount = calculateRemainingAmount();
-  const showRemainingPayment = booking.booking_status === 'seat_locked' && booking.payment_method === 'seat_lock' && remainingAmount > 0;
+  const showRemainingPayment = ['seat_locked', 'pending'].includes(booking.booking_status) && booking.payment_method === 'seat_lock' && remainingAmount > 0 && booking.booking_status !== 'remaining_submitted';
 
   return (
     <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
@@ -273,7 +280,7 @@ export default function BookingDetailsPage() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
             <div className="flex items-start space-x-3">
               <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-red-900">{error}</p>
@@ -281,8 +288,23 @@ export default function BookingDetailsPage() {
           </div>
         )}
 
+        {/* Cancelled / Payment failed notice */}
+        {booking.booking_status === 'cancelled' && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start space-x-3">
+              <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-900">Payment failed</p>
+                <p className="text-sm text-red-800 mt-1">
+                  {booking.rejection_reason || 'Payment was not completed. This booking is cancelled and will not appear in your active bookings.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Trip Information Card */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
             <MapPin className="h-5 w-5 text-purple-600 mr-2" />
             Trip Information
@@ -322,7 +344,15 @@ export default function BookingDetailsPage() {
               <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(booking.booking_status)}`}>
                 {getStatusIcon(booking.booking_status)}
                 <span className="ml-1.5">
-                  {booking.booking_status === 'seat_locked' ? 'Seat Locked' : booking.booking_status}
+                  {booking.booking_status === 'seat_locked'
+                    ? 'Seat Locked'
+                    : booking.booking_status === 'cancelled'
+                    ? 'Cancelled'
+                    : booking.booking_status === 'remaining_submitted'
+                    ? 'Payment Submitted'
+                    : booking.booking_status === 'rejected'
+                    ? 'Rejected'
+                    : booking.booking_status}
                 </span>
               </span>
             </div>
@@ -367,7 +397,7 @@ export default function BookingDetailsPage() {
         </div>
 
         {/* Primary Passenger Card */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
             <User className="h-5 w-5 text-purple-600 mr-2" />
             Primary Passenger
@@ -413,7 +443,7 @@ export default function BookingDetailsPage() {
 
         {/* Additional Passengers Card */}
         {booking.passengers && booking.passengers.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
               <Users className="h-5 w-5 text-purple-600 mr-2" />
               Additional Passengers ({booking.passengers.length})
@@ -448,7 +478,7 @@ export default function BookingDetailsPage() {
 
         {/* Emergency Contact Card */}
         {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
               <Heart className="h-5 w-5 text-purple-600 mr-2" />
               Emergency Contact
@@ -470,7 +500,7 @@ export default function BookingDetailsPage() {
         )}
 
         {/* Payment Details Card */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-md border border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
             <CreditCard className="h-5 w-5 text-purple-600 mr-2" />
             Payment Details
@@ -498,7 +528,7 @@ export default function BookingDetailsPage() {
               <div>
                 <p className="text-xs sm:text-sm text-gray-600 mb-1">Transaction ID</p>
                 <p className="font-semibold text-gray-900 font-mono text-xs sm:text-sm break-all">
-                  {booking.transaction_id || 'N/A'}
+                  {booking.reference_id || booking.transaction_id || 'N/A'}
                 </p>
               </div>
               <div>
@@ -520,19 +550,37 @@ export default function BookingDetailsPage() {
               {booking.coupon_code && (
                 <div>
                   <p className="text-xs sm:text-sm text-gray-600 mb-1">Coupon Applied</p>
-                  <p className="font-semibold text-green-600 text-sm sm:text-base">{booking.coupon_code}</p>
+                  <p className="font-semibold text-green-600 text-sm sm:text-base flex items-center">
+                    <Tag className="h-3.5 w-3.5 mr-1" />
+                    {booking.coupon_code}
+                  </p>
                   {booking.coupon_discount && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Discount: ₹{parseFloat(String(booking.coupon_discount)).toLocaleString()}
+                    <p className="text-xs text-green-500 mt-0.5">
+                      Saved ₹{parseFloat(String(booking.coupon_discount)).toLocaleString()}
                     </p>
                   )}
+                </div>
+              )}
+              {booking.wallet_amount_used && booking.wallet_amount_used > 0 ? (
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Wallet Used</p>
+                  <p className="font-semibold text-purple-600 text-sm sm:text-base flex items-center">
+                    <IndianRupee className="h-3.5 w-3.5" />
+                    {parseFloat(String(booking.wallet_amount_used)).toLocaleString()}
+                  </p>
+                </div>
+              ) : null}
+              {booking.payment_mode && (
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Payment Mode</p>
+                  <p className="font-semibold text-gray-900 text-sm sm:text-base capitalize">{booking.payment_mode}</p>
                 </div>
               )}
             </div>
 
             {/* Remaining Payment Section */}
             {showRemainingPayment && (
-              <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 sm:p-6 mt-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6 mt-4">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-sm sm:text-base font-semibold text-orange-900 mb-1">Remaining Payment Required</p>
@@ -565,7 +613,7 @@ export default function BookingDetailsPage() {
                       {paymentSettings.qrUrl && (
                         <div className="mb-4">
                           <p className="text-xs text-gray-600 mb-2">Scan QR Code:</p>
-                          <div className="bg-white p-3 rounded-lg border-2 border-gray-200 inline-block">
+                          <div className="bg-white p-3 rounded-lg border border-gray-200 inline-block">
                             <img 
                               src={paymentSettings.qrUrl} 
                               alt="Payment QR Code" 
@@ -578,7 +626,7 @@ export default function BookingDetailsPage() {
                       {paymentSettings.upiId && (
                         <div className="mb-4">
                           <p className="text-xs text-gray-600 mb-2">UPI ID:</p>
-                          <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-3">
+                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
                             <p className="font-mono font-semibold text-purple-900 text-sm sm:text-base break-all">
                               {paymentSettings.upiId}
                             </p>
@@ -595,7 +643,7 @@ export default function BookingDetailsPage() {
                           value={transactionId}
                           onChange={(e) => setTransactionId(e.target.value)}
                           placeholder="Enter your transaction ID"
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none text-sm sm:text-base"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none text-sm sm:text-base"
                         />
                         <p className="text-xs text-gray-500 mt-2">
                           Enter the transaction ID from your payment confirmation
@@ -640,7 +688,7 @@ export default function BookingDetailsPage() {
 
             {/* Rejection Reason */}
             {booking.payment_status === 'rejected' && booking.rejection_reason && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mt-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
                 <p className="text-sm font-semibold text-red-900 mb-1">Rejection Reason</p>
                 <p className="text-sm text-red-700">{booking.rejection_reason}</p>
               </div>

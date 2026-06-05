@@ -14,7 +14,8 @@ export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [rewardAmount, setRewardAmount] = useState(100); // Default to 100, will be fetched
+  const [rewardAmount, setRewardAmount] = useState(100);
+  const [friendRewardAmount, setFriendRewardAmount] = useState(50);
   const router = useRouter();
   const supabase = createClient();
 
@@ -26,6 +27,7 @@ export default function ReferralPage() {
         if (rewardResponse.ok) {
           const rewardData = await rewardResponse.json();
           setRewardAmount(rewardData.rewardAmount || 100);
+          setFriendRewardAmount(rewardData.friendRewardAmount || 50);
         }
       } catch (error) {
         console.error('Error fetching reward amount:', error);
@@ -390,7 +392,7 @@ export default function ReferralPage() {
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">No Referrals Yet</h3>
             <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4">Start sharing your referral code to earn rewards!</p>
-            <p className="text-xs sm:text-sm text-gray-500">You&apos;ll earn ₹{rewardAmount} for each friend who makes their first booking.</p>
+            <p className="text-xs sm:text-sm text-gray-500">You&apos;ll earn ₹{rewardAmount} for each friend who makes their first booking. Your friend gets ₹{friendRewardAmount} too!</p>
           </div>
         )}
 
@@ -430,14 +432,14 @@ export default function ReferralPage() {
                 </div>
                 <Award className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
               </div>
-              <h3 className="font-bold text-gray-900 mb-2 text-base sm:text-lg">You Earn Rewards</h3>
-              <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">When they make their first booking, you automatically receive <span className="font-bold text-green-600">₹{rewardAmount}</span> credited to your wallet!</p>
+              <h3 className="font-bold text-gray-900 mb-2 text-base sm:text-lg">Both Earn Rewards</h3>
+              <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">When they make their first booking, you get <span className="font-bold text-green-600">₹{rewardAmount}</span> and your friend gets <span className="font-bold text-blue-600">₹{friendRewardAmount}</span> — both credited to wallets!</p>
             </div>
           </div>
           <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gradient-to-r from-purple-100 to-indigo-100 rounded-lg sm:rounded-xl border-2 border-purple-200">
             <p className="text-xs sm:text-sm text-gray-700 flex items-start sm:items-center space-x-2">
               <Gift className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5 sm:mt-0" />
-              <span><span className="font-bold">Reward Amount:</span> ₹{rewardAmount} per successful referral (credited when referred user makes their first booking)</span>
+              <span><span className="font-bold">Rewards:</span> You get ₹{rewardAmount} + your friend gets ₹{friendRewardAmount} per referral (credited after first booking)</span>
             </p>
           </div>
         </div>

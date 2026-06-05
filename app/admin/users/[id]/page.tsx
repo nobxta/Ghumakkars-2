@@ -350,12 +350,12 @@ export default function AdminUserDetailsPage() {
           </Link>
           
           {/* User Header Card - Compact */}
-          <div className="bg-white rounded-xl border-2 border-purple-200 shadow-lg p-4 sm:p-6 mb-4">
+          <div className="bg-white rounded-xl border border-purple-200 shadow-lg p-4 sm:p-6 mb-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-center gap-4">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md ring-2 ring-white">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md ring-2 ring-white">
                     {user.avatar_url ? (
                       <img src={user.avatar_url} alt="Avatar" className="w-full h-full rounded-xl object-cover" />
                     ) : (
@@ -387,7 +387,7 @@ export default function AdminUserDetailsPage() {
                     }`}>
                       {user.email_verified ? (
                         <>
-                          <CheckCircle className="h-3 w-3 inline mr-1" />
+                          <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 inline mr-1" />
                           Verified
                         </>
                       ) : (
@@ -400,17 +400,17 @@ export default function AdminUserDetailsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-600">
                     <div className="flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                      <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
                       <span className="truncate max-w-[200px] sm:max-w-none">{user.email || 'N/A'}</span>
                     </div>
                     {user.phone && (
                       <div className="flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                        <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
                         <span>{user.phone}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-1.5">
-                      <Hash className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                      <Hash className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
                       <span className="font-mono text-xs">{user.id.substring(0, 8)}...</span>
                     </div>
                   </div>
@@ -426,21 +426,21 @@ export default function AdminUserDetailsPage() {
                   }}
                   className="inline-flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-all shadow-sm hover:shadow"
                 >
-                  <Edit className="h-3.5 w-3.5 mr-1.5" />
+                  <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
                   Edit
                 </button>
                 <button
                   onClick={() => setShowWalletModal(true)}
                   className="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-green-700 transition-all shadow-sm hover:shadow"
                 >
-                  <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                  <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
                   Wallet
                 </button>
                 <button
                   onClick={() => setShowCouponModal(true)}
                   className="inline-flex items-center px-3 py-2 bg-orange-500 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-orange-600 transition-all shadow-sm hover:shadow"
                 >
-                  <Gift className="h-3.5 w-3.5 mr-1.5" />
+                  <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
                   Coupon
                 </button>
                 {getBookingsWithRemainingPayment().length > 0 && (
@@ -448,7 +448,7 @@ export default function AdminUserDetailsPage() {
                     onClick={() => setShowReminderModal(true)}
                     className="inline-flex items-center px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-red-700 transition-all shadow-sm hover:shadow"
                   >
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
                     Reminder ({getBookingsWithRemainingPayment().length})
                   </button>
                 )}
@@ -459,9 +459,9 @@ export default function AdminUserDetailsPage() {
 
         {/* Stats Cards - Compact */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          <div className="bg-white rounded-xl border-2 border-purple-200 p-3 shadow-md">
+          <div className="bg-white rounded-xl border border-purple-200 p-3 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <Package className="h-4 w-4 text-purple-600" />
+              <Package className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
             </div>
             <p className="text-xs text-gray-600 mb-1">Total Bookings</p>
             <p className="text-xl font-bold text-gray-900">{bookingStats.total}</p>
@@ -469,7 +469,7 @@ export default function AdminUserDetailsPage() {
           
           <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
+              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
             </div>
             <p className="text-xs text-gray-600 mb-1">Confirmed</p>
             <p className="text-xl font-bold text-green-600">{bookingStats.confirmed}</p>
@@ -477,7 +477,7 @@ export default function AdminUserDetailsPage() {
           
           <div className="bg-white rounded-xl border-2 border-yellow-200 p-3 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <Clock className="h-4 w-4 text-yellow-600" />
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-600" />
             </div>
             <p className="text-xs text-gray-600 mb-1">Pending</p>
             <p className="text-xl font-bold text-yellow-600">{bookingStats.pending}</p>
@@ -485,7 +485,7 @@ export default function AdminUserDetailsPage() {
           
           <div className="bg-white rounded-xl border-2 border-pink-200 p-3 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <IndianRupee className="h-4 w-4 text-pink-600" />
+              <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 text-pink-600" />
             </div>
             <p className="text-xs text-gray-600 mb-1">Total Paid</p>
             <p className="text-lg font-bold text-pink-600 flex items-center">
@@ -497,7 +497,7 @@ export default function AdminUserDetailsPage() {
           {user.wallet_balance !== undefined && (
             <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
               <div className="flex items-center justify-between mb-2">
-                <Wallet className="h-4 w-4 text-green-600" />
+                <Wallet className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
               </div>
               <p className="text-xs text-gray-600 mb-1">Wallet</p>
               <p className="text-lg font-bold text-green-600 flex items-center">
@@ -509,7 +509,7 @@ export default function AdminUserDetailsPage() {
           
           <div className="bg-white rounded-xl border-2 border-blue-200 p-3 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <Calendar className="h-4 w-4 text-blue-600" />
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
             </div>
             <p className="text-xs text-gray-600 mb-1">Member Since</p>
             <p className="text-sm font-bold text-gray-900">
@@ -520,7 +520,7 @@ export default function AdminUserDetailsPage() {
 
         {/* Tabs Navigation - Compact */}
         <div className="mb-4">
-          <div className="flex space-x-1 bg-white rounded-xl p-1 border-2 border-purple-200 shadow-sm">
+          <div className="flex space-x-1 bg-white rounded-xl p-1 border border-purple-200 shadow-sm">
             <button
               onClick={() => setActiveTab('overview')}
               className={`flex-1 px-3 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
@@ -530,7 +530,7 @@ export default function AdminUserDetailsPage() {
               }`}
             >
               <div className="flex items-center justify-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
+                <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 <span>Overview</span>
               </div>
             </button>
@@ -543,7 +543,7 @@ export default function AdminUserDetailsPage() {
               }`}
             >
               <div className="flex items-center justify-center gap-1.5">
-                <Package className="h-3.5 w-3.5" />
+                <Package className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 <span>Bookings</span>
                 {bookings.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full bg-white/30 text-xs font-bold">
@@ -561,7 +561,7 @@ export default function AdminUserDetailsPage() {
               }`}
             >
               <div className="flex items-center justify-center gap-1.5">
-                <Activity className="h-3.5 w-3.5" />
+                <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 <span>Activity</span>
                 {activities.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full bg-white/30 text-xs font-bold">
@@ -577,7 +577,7 @@ export default function AdminUserDetailsPage() {
         {activeTab === 'overview' && (
           <>
             {/* User Information - Compact */}
-            <div className="bg-white rounded-xl border-2 border-purple-200 shadow-md p-4 sm:p-6 mb-4">
+            <div className="bg-white rounded-xl border border-purple-200 shadow-md p-4 sm:p-6 mb-4">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-purple-100">
                 <User className="h-5 w-5 text-purple-600" />
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900">
@@ -593,7 +593,7 @@ export default function AdminUserDetailsPage() {
                     <img 
                       src={user.avatar_url} 
                       alt="Profile" 
-                      className="w-20 h-20 rounded-xl object-cover border-2 border-white shadow-md ring-2 ring-purple-100"
+                      className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white shadow-md ring-2 ring-purple-100"
                     />
                     {user.email_verified && (
                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow-md flex items-center justify-center">
@@ -605,82 +605,82 @@ export default function AdminUserDetailsPage() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</p>
                   <p className="font-bold text-gray-900 text-sm">
                     {user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : 'N/A')}
                   </p>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</p>
                   <p className="font-bold text-gray-900 text-sm flex items-center truncate">
-                    <Mail className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                    <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                     <span className="truncate">{user.email || 'N/A'}</span>
                   </p>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</p>
                   <p className="font-bold text-gray-900 text-sm flex items-center">
-                    <Phone className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                    <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                     {user.phone || user.phone_number || 'N/A'}
                   </p>
                 </div>
                 {user.alternative_number && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Alt. Phone</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <PhoneCall className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <PhoneCall className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       {user.alternative_number}
                     </p>
                   </div>
                 )}
                 {(user.college || user.college_name || user.university) && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">College</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <GraduationCap className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <GraduationCap className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       <span className="truncate">{user.college_name || user.college || user.university}</span>
                     </p>
                   </div>
                 )}
                 {user.student_id && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Student ID</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <Hash className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <Hash className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       {user.student_id}
                     </p>
                   </div>
                 )}
                 {user.gender && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Gender</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <UserCircle className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <UserCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       {user.gender}
                     </p>
                   </div>
                 )}
                 {user.date_of_birth && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Date of Birth</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <CalendarIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       {new Date(user.date_of_birth).toLocaleDateString()}
                     </p>
                   </div>
                 )}
                 {authUser?.last_sign_in_at && (
-                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Login</p>
                     <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <Clock className="h-3.5 w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
+                      <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
                       {new Date(authUser.last_sign_in_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 )}
                 {user.bio && (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <div className="sm:col-span-2 lg:col-span-3 bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Bio</p>
                     <p className="font-semibold text-gray-900 text-sm">{user.bio}</p>
                   </div>
@@ -699,7 +699,7 @@ export default function AdminUserDetailsPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {user.emergency_contact_name && (
-                    <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                    <div className="bg-red-50 rounded-lg p-2 sm:p-3 border border-red-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Name</p>
                       <p className="font-bold text-gray-900 text-sm">
                         {user.emergency_contact_name}
@@ -707,16 +707,16 @@ export default function AdminUserDetailsPage() {
                     </div>
                   )}
                   {user.emergency_contact && (
-                    <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                    <div className="bg-red-50 rounded-lg p-2 sm:p-3 border border-red-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Number</p>
                       <p className="font-bold text-gray-900 text-sm flex items-center">
-                        <Phone className="h-3.5 w-3.5 mr-1.5 text-red-600 flex-shrink-0" />
+                        <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-red-600 flex-shrink-0" />
                         {user.emergency_contact}
                       </p>
                     </div>
                   )}
                   {user.emergency_contact_relation && (
-                    <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                    <div className="bg-red-50 rounded-lg p-2 sm:p-3 border border-red-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Relation</p>
                       <p className="font-bold text-gray-900 text-sm">
                         {user.emergency_contact_relation}
@@ -738,7 +738,7 @@ export default function AdminUserDetailsPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {user.wallet_balance !== undefined && (
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Wallet Balance</p>
                       <p className="font-bold text-green-600 text-lg flex items-center">
                         <IndianRupee className="h-4 w-4" />
@@ -747,13 +747,13 @@ export default function AdminUserDetailsPage() {
                     </div>
                   )}
                   {user.referral_code && (
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referral Code</p>
                       <p className="font-mono font-bold text-green-600 text-sm">{user.referral_code}</p>
                     </div>
                   )}
                   {user.referred_by && (
-                    <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referred By</p>
                       <p className="font-bold text-gray-900 text-xs">
                         <span className="font-mono">{user.referred_by.substring(0, 8)}...</span>
@@ -897,7 +897,7 @@ export default function AdminUserDetailsPage() {
                             className="text-xs text-purple-600 hover:text-purple-700 font-semibold flex items-center"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                             View Details →
                           </Link>
                         </div>
@@ -916,7 +916,7 @@ export default function AdminUserDetailsPage() {
         )}
 
         {activeTab === 'activity' && (
-          <div className="bg-white rounded-xl border-2 border-purple-200 shadow-md p-4 sm:p-6 mb-4">
+          <div className="bg-white rounded-xl border border-purple-200 shadow-md p-4 sm:p-6 mb-4">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-purple-100">
               <div className="flex items-center gap-2">
                 <History className="h-5 w-5 text-purple-600" />
@@ -1078,7 +1078,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.first_name || ''}
                     onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all bg-white/80"
+                    className="w-full px-4 py-3 border border-purple-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all bg-white/80"
                   />
                 </div>
                 <div>
@@ -1087,7 +1087,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.last_name || ''}
                     onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1096,7 +1096,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.full_name || ''}
                     onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1105,7 +1105,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.phone || editForm?.phone_number || ''}
                     onChange={(e) => setEditForm({ ...editForm, phone: e.target.value, phone_number: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1114,7 +1114,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.college_name || editForm?.college || editForm?.university || ''}
                     onChange={(e) => setEditForm({ ...editForm, college_name: e.target.value, college: e.target.value, university: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1123,7 +1123,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.student_id || ''}
                     onChange={(e) => setEditForm({ ...editForm, student_id: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1131,7 +1131,7 @@ export default function AdminUserDetailsPage() {
                   <select
                     value={editForm?.gender || ''}
                     onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   >
                     <option value="">Select</option>
                     <option value="male">Male</option>
@@ -1145,7 +1145,7 @@ export default function AdminUserDetailsPage() {
                     type="date"
                     value={editForm?.date_of_birth ? editForm.date_of_birth.split('T')[0] : ''}
                     onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1154,7 +1154,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.emergency_contact || ''}
                     onChange={(e) => setEditForm({ ...editForm, emergency_contact: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1163,7 +1163,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.emergency_contact_name || ''}
                     onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
@@ -1172,7 +1172,7 @@ export default function AdminUserDetailsPage() {
                     type="text"
                     value={editForm?.emergency_contact_relation || ''}
                     onChange={(e) => setEditForm({ ...editForm, emergency_contact_relation: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                     placeholder="e.g., Father, Mother, Friend"
                   />
                 </div>
@@ -1182,7 +1182,7 @@ export default function AdminUserDetailsPage() {
                     value={editForm?.bio || ''}
                     onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                     rows={3}
-                    className="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 outline-none"
+                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
                   />
                 </div>
               </div>
@@ -1264,7 +1264,7 @@ export default function AdminUserDetailsPage() {
                   value={walletAmount}
                   onChange={(e) => setWalletAmount(e.target.value)}
                   placeholder="Enter amount"
-                  className="w-full px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition-all bg-white/80 text-lg font-semibold"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-green-200 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none transition-all bg-white/80 text-lg font-semibold"
                 />
               </div>
               {walletAmount && !isNaN(parseFloat(walletAmount)) && (
@@ -1318,7 +1318,7 @@ export default function AdminUserDetailsPage() {
                   value={couponAmount}
                   onChange={(e) => setCouponAmount(e.target.value)}
                   placeholder="e.g., 500"
-                  className="w-full px-4 py-3 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 outline-none transition-all bg-white/80 text-lg font-semibold"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-orange-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-100 outline-none transition-all bg-white/80 text-lg font-semibold"
                 />
               </div>
               <div>
@@ -1327,7 +1327,7 @@ export default function AdminUserDetailsPage() {
                   type="date"
                   value={couponExpiry}
                   onChange={(e) => setCouponExpiry(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 outline-none transition-all bg-white/80"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-orange-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-100 outline-none transition-all bg-white/80"
                 />
               </div>
               <div>
@@ -1336,7 +1336,7 @@ export default function AdminUserDetailsPage() {
                   value={couponDescription}
                   onChange={(e) => setCouponDescription(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-3 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 outline-none transition-all bg-white/80 resize-none"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-orange-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-100 outline-none transition-all bg-white/80 resize-none"
                   placeholder="Get ₹500 Discount on next booking"
                 />
               </div>
@@ -1388,7 +1388,7 @@ export default function AdminUserDetailsPage() {
                     const booking = bookings.find(b => b.id === e.target.value);
                     setSelectedBooking(booking);
                   }}
-                  className="w-full px-4 py-3 border-2 border-red-200 rounded-xl focus:border-red-500 focus:ring-4 focus:ring-red-100 outline-none transition-all bg-white/80 font-semibold"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-red-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition-all bg-white/80 font-semibold"
                 >
                   <option value="">Select a booking...</option>
                   {getBookingsWithRemainingPayment().map((booking) => {

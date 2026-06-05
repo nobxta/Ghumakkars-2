@@ -515,13 +515,13 @@ export default function EditTripPage() {
 
         {/* Step 1: Basic Information - Same as create page */}
         {currentStep === 1 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <FileText className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Basic Information</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Basic Information</h2>
                 <p className="text-gray-600 text-sm">Tell us about your trip</p>
               </div>
             </div>
@@ -536,7 +536,7 @@ export default function EditTripPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="e.g., Amazing Goa Adventure"
                 />
               </div>
@@ -550,7 +550,7 @@ export default function EditTripPage() {
                   onChange={(e) => setShortDescription(e.target.value)}
                   required
                   rows={3}
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="Brief description that appears in trip listings..."
                 />
               </div>
@@ -564,7 +564,7 @@ export default function EditTripPage() {
                   onChange={(e) => setFullDescription(e.target.value)}
                   required
                   rows={8}
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="Detailed description of the trip experience, what travelers can expect, special moments, etc."
                 />
               </div>
@@ -578,7 +578,7 @@ export default function EditTripPage() {
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
                   required
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="e.g., Goa, India"
                 />
               </div>
@@ -588,13 +588,13 @@ export default function EditTripPage() {
 
         {/* Step 2: Pricing */}
         {currentStep === 2 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <DollarSign className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Pricing Information</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Pricing Information</h2>
                 <p className="text-gray-600 text-sm">Set your trip pricing and payment options</p>
               </div>
             </div>
@@ -612,7 +612,7 @@ export default function EditTripPage() {
                     onChange={(e) => setPrice(e.target.value)}
                     required
                     min="0"
-                    className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                    className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
                 </div>
 
@@ -627,7 +627,7 @@ export default function EditTripPage() {
                     onChange={(e) => setDiscountedPrice(e.target.value)}
                     required
                     min="0"
-                    className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                    className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
                   {price && discountedPrice && calculateDiscount() > 0 && (
                     <p className="text-sm text-green-600 font-medium mt-2">
@@ -637,7 +637,7 @@ export default function EditTripPage() {
                 </div>
               </div>
 
-              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-5">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Seat Lock Price (₹) <span className="text-red-500">*</span>
                 </label>
@@ -648,7 +648,7 @@ export default function EditTripPage() {
                   onChange={(e) => setSeatLockPrice(e.target.value)}
                   required
                   min="0"
-                  className="w-full px-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-600 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 bg-white"
+                  className="w-full px-4 py-3.5 border border-purple-200 rounded-xl focus:border-purple-600 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 bg-white"
                   placeholder="Partial payment amount"
                 />
                 <div className="mt-3 space-y-1 text-sm text-gray-600">
@@ -658,7 +658,7 @@ export default function EditTripPage() {
                 </div>
               </div>
 
-              <div className="border-2 border-gray-200 rounded-xl p-5">
+              <div className="border border-gray-200 rounded-xl p-5">
                 <label className="flex items-center space-x-3 mb-4 cursor-pointer">
                   <input
                     type="checkbox"
@@ -681,7 +681,7 @@ export default function EditTripPage() {
                         value={earlyBirdPrice}
                         onChange={(e) => setEarlyBirdPrice(e.target.value)}
                         min="0"
-                        className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                       />
                     </div>
 
@@ -732,7 +732,7 @@ export default function EditTripPage() {
                                   const dates = condition.value.split('|');
                                   updateEarlyBirdCondition(index, `${e.target.value}|${dates[1] || ''}`);
                                 }}
-                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
                               />
                               <span className="text-gray-400">to</span>
                               <input
@@ -742,7 +742,7 @@ export default function EditTripPage() {
                                   const dates = condition.value.split('|');
                                   updateEarlyBirdCondition(index, `${dates[0] || ''}|${e.target.value}`);
                                 }}
-                                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white"
                               />
                             </div>
                           ) : (
@@ -750,7 +750,7 @@ export default function EditTripPage() {
                               type={condition.type === 'user_limit' || condition.type === 'first_bookings' ? 'number' : 'text'}
                               value={condition.value}
                               onChange={(e) => updateEarlyBirdCondition(index, e.target.value)}
-                              className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm flex-1 text-gray-900 placeholder-gray-500 bg-white"
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 text-gray-900 placeholder-gray-500 bg-white"
                               placeholder={condition.type === 'discount_code' ? 'Enter code' : 'Enter number'}
                             />
                           )}
@@ -773,13 +773,13 @@ export default function EditTripPage() {
 
         {/* Step 3: Dates & Seats */}
         {currentStep === 3 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <Calendar className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Dates & Capacity</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Dates & Capacity</h2>
                 <p className="text-gray-600 text-sm">Set trip dates and available seats</p>
               </div>
             </div>
@@ -795,7 +795,7 @@ export default function EditTripPage() {
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     required
-                    className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                    className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
                 </div>
 
@@ -809,7 +809,7 @@ export default function EditTripPage() {
                     onChange={(e) => setEndDate(e.target.value)}
                     required
                     min={startDate}
-                    className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                    className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
                   {startDate && endDate && (
                     <p className="text-sm text-gray-600 mt-2">
@@ -829,7 +829,7 @@ export default function EditTripPage() {
                   onChange={(e) => setBookingDeadline(e.target.value)}
                   required
                   max={startDate}
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                 />
                 <p className="text-sm text-gray-600 mt-2">
                   Last date users can book this trip (must be before trip start)
@@ -846,7 +846,7 @@ export default function EditTripPage() {
                   onChange={(e) => setMaxSeats(e.target.value)}
                   required
                   min="1"
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                 />
                 <p className="text-sm text-gray-600 mt-2">
                   Total number of seats available for this trip (Current: {currentParticipants} booked)
@@ -858,13 +858,13 @@ export default function EditTripPage() {
 
         {/* Step 4: Images */}
         {currentStep === 4 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <ImageIcon className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <ImageIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Images</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Images</h2>
                 <p className="text-gray-600 text-sm">Add cover and gallery images</p>
               </div>
             </div>
@@ -879,12 +879,12 @@ export default function EditTripPage() {
                   value={coverImage}
                   onChange={(e) => setCoverImage(e.target.value)}
                   required
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="https://example.com/cover-image.jpg"
                 />
                 {coverImage && (
                   <div className="mt-3">
-                    <img src={coverImage} alt="Cover preview" className="w-full h-48 object-cover rounded-xl border-2 border-gray-200" />
+                    <img src={coverImage} alt="Cover preview" className="w-full h-48 object-cover rounded-xl border border-gray-200" />
                   </div>
                 )}
               </div>
@@ -914,7 +914,7 @@ export default function EditTripPage() {
                           updated[index] = e.target.value;
                           setGalleryImages(updated);
                         }}
-                        className="flex-1 px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                        className="flex-1 px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                         placeholder="https://example.com/image.jpg"
                       />
                       {galleryImages.length > 1 && (
@@ -928,7 +928,7 @@ export default function EditTripPage() {
                       )}
                       {image && (
                         <div className="w-20 h-20 flex-shrink-0">
-                          <img src={image} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover rounded-lg border-2 border-gray-200" />
+                          <img src={image} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover rounded-lg border border-gray-200" />
                         </div>
                       )}
                     </div>
@@ -941,13 +941,13 @@ export default function EditTripPage() {
 
         {/* Step 5: Content */}
         {currentStep === 5 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <Sparkles className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Content & Itinerary</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Content & Itinerary</h2>
                 <p className="text-gray-600 text-sm">Add highlights and day-wise itinerary</p>
               </div>
             </div>
@@ -978,7 +978,7 @@ export default function EditTripPage() {
                           updated[index] = e.target.value;
                           setHighlights(updated);
                         }}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                        className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                         placeholder="e.g., Beach hopping, Water sports, Nightlife"
                       />
                       {highlights.length > 1 && (
@@ -1011,7 +1011,7 @@ export default function EditTripPage() {
                 </div>
                 <div className="space-y-4">
                   {itinerary.map((day, dayIndex) => (
-                    <div key={dayIndex} className="border-2 border-gray-200 rounded-xl p-5 bg-gray-50">
+                    <div key={dayIndex} className="border border-gray-200 rounded-xl p-5 bg-gray-50">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold text-gray-900">Day {day.day}</h3>
                         {itinerary.length > 1 && (
@@ -1034,7 +1034,7 @@ export default function EditTripPage() {
                             value={day.title}
                             onChange={(e) => updateItineraryDay(dayIndex, 'title', e.target.value)}
                             required
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                             placeholder="e.g., Arrival & Beach Exploration"
                           />
                         </div>
@@ -1047,7 +1047,7 @@ export default function EditTripPage() {
                             onChange={(e) => updateItineraryDay(dayIndex, 'description', e.target.value)}
                             required
                             rows={3}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400 bg-white"
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none resize-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                             placeholder="What happens on this day..."
                           />
                         </div>
@@ -1071,7 +1071,7 @@ export default function EditTripPage() {
                                   type="text"
                                   value={activity}
                                   onChange={(e) => updateActivity(dayIndex, activityIndex, e.target.value)}
-                                  className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900 placeholder-gray-400 bg-white"
+                                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900 placeholder-gray-400 bg-white"
                                   placeholder="Activity description"
                                 />
                                 {day.activities.length > 1 && (
@@ -1098,13 +1098,13 @@ export default function EditTripPage() {
 
         {/* Step 6: Additional */}
         {currentStep === 6 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-8 animate-fade-in-up">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-8 animate-fade-in-up">
             <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4">
-                <Check className="h-6 w-6 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg sm:rounded-xl flex items-center justify-center mr-2 sm:mr-3 md:mr-4">
+                <Check className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Final Details</h2>
+                <h2 className="text-base sm:text-lg md:text-2xl font-bold text-gray-900">Final Details</h2>
                 <p className="text-gray-600 text-sm">Complete your trip setup</p>
               </div>
             </div>
@@ -1118,7 +1118,7 @@ export default function EditTripPage() {
                   type="url"
                   value={whatsappGroupLink}
                   onChange={(e) => setWhatsappGroupLink(e.target.value)}
-                  className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
                   placeholder="https://chat.whatsapp.com/..."
                 />
                 <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
@@ -1143,7 +1143,7 @@ export default function EditTripPage() {
                           updated[index] = e.target.value;
                           setIncludedItems(updated);
                         }}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
+                        className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                         placeholder="e.g., Accommodation, Breakfast, Guide"
                       />
                       {includedItems.length > 1 ? (
@@ -1187,7 +1187,7 @@ export default function EditTripPage() {
                           updated[index] = e.target.value;
                           setExcludedItems(updated);
                         }}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
+                        className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 bg-white"
                         placeholder="e.g., Lunch, Dinner, Personal expenses"
                       />
                       {excludedItems.length > 1 ? (

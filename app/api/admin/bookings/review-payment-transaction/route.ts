@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Fetch payment transaction
     const { data: paymentTransaction, error: fetchError } = await adminClient
       .from('payment_transactions')
-      .select('*, bookings(trip_id, number_of_participants, payment_method)')
+      .select('*, bookings(trip_id, user_id, number_of_participants, payment_method)')
       .eq('id', transactionId)
       .single();
 
@@ -111,9 +111,8 @@ export async function POST(request: NextRequest) {
         .eq('id', bookingId);
 
       // If all payments verified and booking is confirmed, increment trip participants
-      if (allVerified && bookingStatus === 'confirmed' && booking.trip_id) {
+      if (allVerified && (bookingStatus === 'confirmed' || bookingStatus === 'seat_locked') && booking.trip_id) {
         try {
-          // Check if already incremented (to avoid double counting)
           const { data: trip } = await adminClient
             .from('trips')
             .select('current_participants')
@@ -121,8 +120,6 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (trip) {
-            // Only increment if not already done for this booking
-            // We'll use a flag or check if needed, for now just increment
             await adminClient
               .from('trips')
               .update({
@@ -133,6 +130,22 @@ export async function POST(request: NextRequest) {
           }
         } catch (tripError) {
           console.error('Error incrementing trip participants:', tripError);
+        }
+
+        // Process referral reward on first confirmed/seat_locked booking
+        try {
+          const { count: previousBookings } = await adminClient
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', (paymentTransaction as any).bookings?.user_id)
+            .in('booking_status', ['confirmed', 'seat_locked'])
+            .neq('id', bookingId);
+
+          if (previousBookings === 0) {
+            await adminClient.rpc('process_referral_reward', { p_booking_id: bookingId });
+          }
+        } catch (referralError) {
+          console.error('Error processing referral reward:', referralError);
         }
       }
     }

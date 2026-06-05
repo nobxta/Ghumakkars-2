@@ -36,7 +36,8 @@ export default function AdminSettingsPage() {
     razorpayKeyId: '',
     razorpayKeySecret: '',
     razorpayWebhookSecret: '',
-    referralRewardAmount: '100', // Configurable referral reward amount
+    referralRewardAmount: '100',
+    referralFriendRewardAmount: '50',
   });
 
   // Coupons
@@ -102,6 +103,7 @@ export default function AdminSettingsPage() {
           razorpayKeySecret: data.razorpay_key_secret || '',
           razorpayWebhookSecret: data.razorpay_webhook_secret || '',
           referralRewardAmount: data.referral_reward_amount?.toString() || '100',
+          referralFriendRewardAmount: data.referral_friend_reward_amount?.toString() || '50',
         });
       }
     } catch (error) {
@@ -239,11 +241,6 @@ export default function AdminSettingsPage() {
     fetchCoupons();
     checkWhatsAppStatus();
     setLoading(false);
-    
-    // Refresh WhatsApp status every 30 seconds
-    const statusInterval = setInterval(checkWhatsAppStatus, 30000);
-    
-    return () => clearInterval(statusInterval);
   }, []);
 
   const handleSavePaymentSettings = async () => {
@@ -291,6 +288,7 @@ export default function AdminSettingsPage() {
               razorpay_key_secret: paymentSettings.razorpayKeySecret || null,
               razorpay_webhook_secret: paymentSettings.razorpayWebhookSecret || null,
               referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
+              referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
               updated_by: user?.id,
             })
             .eq('id', existing.id);
@@ -309,6 +307,7 @@ export default function AdminSettingsPage() {
                 razorpay_key_secret: paymentSettings.razorpayKeySecret || null,
                 razorpay_webhook_secret: paymentSettings.razorpayWebhookSecret || null,
                 referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
+                referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
                 updated_by: user?.id,
               },
             ]);
@@ -477,15 +476,15 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">Settings</h1>
         <p className="text-sm text-gray-600">Manage admin settings and preferences</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-2 border-b-2 border-purple-200">
+      <div className="flex space-x-1 sm:space-x-2 border-b sm:border-b-2 border-purple-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('general')}
-          className={`px-6 py-3 font-semibold transition-colors ${
+          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
             activeTab === 'general'
               ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
               : 'text-gray-600 hover:text-purple-600'
@@ -495,17 +494,17 @@ export default function AdminSettingsPage() {
         </button>
         <button
           onClick={() => setActiveTab('payment')}
-          className={`px-6 py-3 font-semibold transition-colors ${
+          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
             activeTab === 'payment'
               ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
               : 'text-gray-600 hover:text-purple-600'
           }`}
         >
-          Payment Settings
+          Payment
         </button>
         <button
           onClick={() => setActiveTab('whatsapp')}
-          className={`px-6 py-3 font-semibold transition-colors ${
+          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
             activeTab === 'whatsapp'
               ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
               : 'text-gray-600 hover:text-purple-600'
@@ -518,9 +517,9 @@ export default function AdminSettingsPage() {
       {/* General Settings Tab */}
       {activeTab === 'general' && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <Bell className="h-5 w-5 mr-2 text-purple-600" />
+        <div className="neon-card rounded-2xl border sm:border border-purple-200 p-4 sm:p-6 shadow-xl">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
+            <Bell className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
             Notifications
           </h3>
           <div className="space-y-4">
@@ -554,9 +553,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        <div className="neon-card rounded-2xl border-2 border-purple-200 p-6 shadow-xl">
-          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <Shield className="h-5 w-5 mr-2 text-purple-600" />
+        <div className="neon-card rounded-2xl border sm:border border-purple-200 p-4 sm:p-6 shadow-xl">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
+            <Shield className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
             System Settings
           </h3>
           <div className="space-y-4">
@@ -571,7 +570,7 @@ export default function AdminSettingsPage() {
             </label>
             <div className="pt-4">
               <button onClick={handleSave} className="neon-button w-full px-4 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2">
-                <Save className="h-5 w-5" />
+                <Save className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span>Save Settings</span>
               </button>
             </div>
@@ -582,9 +581,9 @@ export default function AdminSettingsPage() {
 
       {/* Payment Settings Tab */}
       {activeTab === 'payment' && (
-        <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <CreditCard className="h-6 w-6 mr-3 text-purple-600" />
+        <div className="bg-white rounded-2xl border sm:border border-purple-200 shadow-xl p-4 sm:p-6 md:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6 flex items-center">
+            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-purple-600" />
             Payment Configuration
           </h2>
 
@@ -595,11 +594,11 @@ export default function AdminSettingsPage() {
                 Payment QR Code
               </label>
               {paymentSettings.qrPreview && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
+                <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <img
                     src={paymentSettings.qrPreview}
                     alt="QR Code Preview"
-                    className="w-48 h-48 object-contain mx-auto rounded-lg"
+                    className="w-36 h-36 sm:w-48 sm:h-48 object-contain mx-auto rounded-lg"
                   />
                 </div>
               )}
@@ -684,7 +683,7 @@ export default function AdminSettingsPage() {
                       value={paymentSettings.upiId}
                       onChange={(e) => setPaymentSettings({ ...paymentSettings, upiId: e.target.value })}
                       placeholder="your-upi-id@paytm"
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
+                      className="flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-2">Enter the UPI ID for receiving payments</p>
@@ -704,7 +703,7 @@ export default function AdminSettingsPage() {
                     value={paymentSettings.razorpayKeyId}
                     onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayKeyId: e.target.value })}
                     placeholder="rzp_test_..."
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
                   />
                   <p className="text-xs text-gray-500 mt-2">Enter your Razorpay Key ID from dashboard</p>
                 </div>
@@ -717,7 +716,7 @@ export default function AdminSettingsPage() {
                     value={paymentSettings.razorpayKeySecret}
                     onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayKeySecret: e.target.value })}
                     placeholder="Enter secret key"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
                   />
                   <p className="text-xs text-gray-500 mt-2">Enter your Razorpay Key Secret (keep it secure)</p>
                 </div>
@@ -730,7 +729,7 @@ export default function AdminSettingsPage() {
                     value={paymentSettings.razorpayWebhookSecret}
                     onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayWebhookSecret: e.target.value })}
                     placeholder="whsec_..."
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
                   />
                   <p className="text-xs text-gray-500 mt-2">
                     Enter your Razorpay Webhook Secret (from Razorpay Dashboard → Settings → Webhooks)
@@ -742,25 +741,49 @@ export default function AdminSettingsPage() {
               </div>
             )}
 
-            {/* Referral Reward Amount */}
-            <div className="mb-6 pb-6 border-b-2 border-purple-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Referral Reward Amount (₹) <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center space-x-2">
-                <span className="text-2xl font-bold text-purple-600">₹</span>
-                <input
-                  type="number"
-                  value={paymentSettings.referralRewardAmount}
-                  onChange={(e) => setPaymentSettings({ ...paymentSettings, referralRewardAmount: e.target.value })}
-                  placeholder="100"
-                  min="0"
-                  step="1"
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-semibold text-lg"
-                />
+            {/* Referral Rewards */}
+            <div className="mb-6 pb-6 border-b border-purple-200">
+              <h3 className="text-sm font-bold text-gray-900 mb-4">Referral Rewards</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Referrer Reward (₹)
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg font-bold text-purple-600">₹</span>
+                    <input
+                      type="number"
+                      value={paymentSettings.referralRewardAmount}
+                      onChange={(e) => setPaymentSettings({ ...paymentSettings, referralRewardAmount: e.target.value })}
+                      placeholder="100"
+                      min="0"
+                      step="1"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-semibold"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Person who shares the code</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Friend Bonus (₹)
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg font-bold text-green-600">₹</span>
+                    <input
+                      type="number"
+                      value={paymentSettings.referralFriendRewardAmount}
+                      onChange={(e) => setPaymentSettings({ ...paymentSettings, referralFriendRewardAmount: e.target.value })}
+                      placeholder="50"
+                      min="0"
+                      step="1"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none transition-all text-gray-900 font-semibold"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Friend who signs up &amp; books</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Amount credited to referrer&apos;s wallet when a referred user makes their first booking
+              <p className="text-xs text-gray-500 mt-3">
+                Both rewards are credited after the referred friend completes their first booking
               </p>
             </div>
 
@@ -787,7 +810,7 @@ export default function AdminSettingsPage() {
 
       {/* WhatsApp Settings Tab */}
       {activeTab === 'whatsapp' && (
-        <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
+        <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-6 md:p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
             <MessageSquare className="h-6 w-6 mr-3 text-purple-600" />
             WhatsApp Connection
@@ -795,7 +818,7 @@ export default function AdminSettingsPage() {
 
           <div className="space-y-6">
             {/* Connection Status */}
-            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border-2 border-purple-200 p-6">
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Connection Status</h3>
                 <button
@@ -838,7 +861,7 @@ export default function AdminSettingsPage() {
                     </>
                   ) : whatsappStatus === 'initializing' ? (
                     <>
-                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-600 border-t-transparent"></div>
+                      <div className="animate-spin rounded-full h-6 w-6 border border-purple-600 border-t-transparent"></div>
                       <div>
                         <p className="font-semibold text-purple-700">Initializing...</p>
                         <p className="text-sm text-gray-600">Setting up WhatsApp connection</p>
@@ -859,23 +882,23 @@ export default function AdminSettingsPage() {
 
             {/* QR Code Display */}
             {whatsappQRCode && (
-              <div className="bg-white rounded-xl border-2 border-purple-200 p-6">
+              <div className="bg-white rounded-xl border border-purple-200 p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
                   <QrCode className="h-5 w-5 mr-2 text-purple-600" />
                   Scan QR Code
                 </h3>
-                <div className="bg-white p-4 rounded-lg border-2 border-gray-200 inline-block">
+                <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block">
                   {whatsappQRCode.startsWith('data:image') ? (
                     <img
                       src={whatsappQRCode}
                       alt="WhatsApp QR Code"
-                      className="w-64 h-64"
+                      className="w-48 h-48 sm:w-64 sm:h-64"
                     />
                   ) : (
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(whatsappQRCode)}`}
                       alt="WhatsApp QR Code"
-                      className="w-64 h-64"
+                      className="w-48 h-48 sm:w-64 sm:h-64"
                     />
                   )}
                 </div>
@@ -966,7 +989,7 @@ export default function AdminSettingsPage() {
                       value={testPhoneNumber}
                       onChange={(e) => setTestPhoneNumber(e.target.value)}
                       placeholder="91XXXXXXXXXX or 10-digit number"
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Enter phone number with country code (e.g., 919876543210) or 10-digit number
@@ -982,7 +1005,7 @@ export default function AdminSettingsPage() {
                       value={testUserName}
                       onChange={(e) => setTestUserName(e.target.value)}
                       placeholder="Enter name"
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-purple-600 focus:outline-none text-gray-900 placeholder-gray-500 bg-white"
                     />
                   </div>
                   
@@ -1033,7 +1056,7 @@ export default function AdminSettingsPage() {
 
           {/* Coupon Form Modal */}
           {showCouponForm && (
-            <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">
                   {editingCoupon ? 'Edit Coupon' : 'Create New Coupon'}
@@ -1066,7 +1089,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.code}
                       onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
                       placeholder="SAVE20"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 font-mono"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 font-mono"
                     />
                   </div>
                   <div>
@@ -1076,7 +1099,7 @@ export default function AdminSettingsPage() {
                     <select
                       value={couponForm.discount_type}
                       onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     >
                       <option value="percentage">Percentage (%)</option>
                       <option value="fixed">Fixed Amount (₹)</option>
@@ -1097,7 +1120,7 @@ export default function AdminSettingsPage() {
                         value={couponForm.discount_value}
                         onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
                         placeholder={couponForm.discount_type === 'percentage' ? '20' : '500'}
-                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                       />
                     </div>
                   </div>
@@ -1111,7 +1134,7 @@ export default function AdminSettingsPage() {
                         value={couponForm.max_discount}
                         onChange={(e) => setCouponForm({ ...couponForm, max_discount: e.target.value })}
                         placeholder="1000"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                       />
                     </div>
                   )}
@@ -1124,7 +1147,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.min_amount}
                       onChange={(e) => setCouponForm({ ...couponForm, min_amount: e.target.value })}
                       placeholder="1000"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1135,7 +1158,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.description}
                       onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })}
                       rows={2}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                       placeholder="Describe this coupon..."
                     />
                   </div>
@@ -1143,7 +1166,7 @@ export default function AdminSettingsPage() {
               </div>
 
               {/* Date Range Section */}
-              <div className="mb-8 p-4 bg-purple-50 rounded-xl border-2 border-purple-100">
+              <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
                 <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
                   <Calendar className="h-5 w-5 mr-2 text-purple-600" />
                   Validity Period
@@ -1157,7 +1180,7 @@ export default function AdminSettingsPage() {
                       type="date"
                       value={couponForm.start_date}
                       onChange={(e) => setCouponForm({ ...couponForm, start_date: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                   </div>
                   <div>
@@ -1168,7 +1191,7 @@ export default function AdminSettingsPage() {
                       type="date"
                       value={couponForm.expiry_date}
                       onChange={(e) => setCouponForm({ ...couponForm, expiry_date: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                   </div>
                 </div>
@@ -1196,7 +1219,7 @@ export default function AdminSettingsPage() {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Select Specific Trips
                     </label>
-                    <div className="max-h-48 overflow-y-auto border-2 border-gray-200 rounded-xl p-3 space-y-2 bg-white">
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
                       {trips.map((trip) => (
                         <label key={trip.id} className="flex items-center space-x-2 cursor-pointer hover:bg-purple-50 p-2 rounded">
                           <input
@@ -1244,10 +1267,10 @@ export default function AdminSettingsPage() {
                     <input
                       type="text"
                       placeholder="Search users by name or email..."
-                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 mb-2"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 mb-2"
                       id="user-search"
                     />
-                    <div className="max-h-48 overflow-y-auto border-2 border-gray-200 rounded-xl p-3 space-y-2 bg-white">
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
                       {allUsers.map((user) => (
                         <label key={user.id} className="flex items-center space-x-2 cursor-pointer hover:bg-purple-50 p-2 rounded">
                           <input
@@ -1299,7 +1322,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.early_bird_days_before}
                       onChange={(e) => setCouponForm({ ...couponForm, early_bird_days_before: e.target.value })}
                       placeholder="e.g., 30 (for 30 days before trip)"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">Coupon will only be valid if booking is made X days before trip start date</p>
                   </div>
@@ -1322,7 +1345,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.usage_limit}
                       onChange={(e) => setCouponForm({ ...couponForm, usage_limit: e.target.value })}
                       placeholder="Leave empty for unlimited"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">Total times this coupon can be used</p>
                   </div>
@@ -1335,7 +1358,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.per_user_limit}
                       onChange={(e) => setCouponForm({ ...couponForm, per_user_limit: e.target.value })}
                       placeholder="Leave empty for unlimited"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">How many times one user can use this</p>
                   </div>
@@ -1348,7 +1371,7 @@ export default function AdminSettingsPage() {
                       value={couponForm.max_total_discount}
                       onChange={(e) => setCouponForm({ ...couponForm, max_total_discount: e.target.value })}
                       placeholder="Leave empty for unlimited"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">Maximum total discount amount across all uses (e.g., ₹50,000 total)</p>
                   </div>
@@ -1393,7 +1416,7 @@ export default function AdminSettingsPage() {
           )}
 
           {/* Coupons List */}
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl overflow-hidden">
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-200">

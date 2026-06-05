@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -77,7 +77,13 @@ export default function BookTripPage() {
     paymentMode?: 'manual' | 'razorpay';
   }>({});
   const [processingRazorpay, setProcessingRazorpay] = useState(false);
-  
+  const [paymentOverlay, setPaymentOverlay] = useState<'idle' | 'preparing' | 'processing'>('idle');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const razorpayPaymentCompletedRef = useRef(false);
+  const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
   // Coupon
   const [couponCode, setCouponCode] = useState('');
   const [couponApplied, setCouponApplied] = useState<any>(null);
@@ -153,6 +159,30 @@ export default function BookTripPage() {
       setPrimaryEmail(user.email);
     }
   }, [profile, user]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4500);
+  };
+
+  const clearPaymentTimeout = () => {
+    if (paymentTimeoutRef.current) {
+      clearTimeout(paymentTimeoutRef.current);
+      paymentTimeoutRef.current = null;
+    }
+  };
+
+  const abandonRazorpayBooking = async (bookingId: string) => {
+    try {
+      await fetch('/api/bookings/abandon-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId }),
+      });
+    } catch (e) {
+      console.error('Abandon payment API error:', e);
+    }
+  };
 
   const checkUser = async () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -267,6 +297,7 @@ export default function BookTripPage() {
     if (!trip || !user) return;
     
     setProcessingRazorpay(true);
+    setPaymentOverlay('preparing');
     setError('');
 
     try {
@@ -298,12 +329,14 @@ export default function BookTripPage() {
             const errorData = await walletResponse.json();
             setError(errorData.error || 'Failed to use wallet balance');
             setProcessingRazorpay(false);
+            setPaymentOverlay('idle');
             return;
           }
         } catch (walletError: any) {
           console.error('Error using wallet:', walletError);
           setError('Failed to process wallet payment. Please try again.');
           setProcessingRazorpay(false);
+          setPaymentOverlay('idle');
           return;
         }
       }
@@ -378,6 +411,9 @@ export default function BookTripPage() {
       }
 
       // Load Razorpay script dynamically
+      razorpayPaymentCompletedRef.current = false;
+      clearPaymentTimeout();
+
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => {
@@ -389,8 +425,9 @@ export default function BookTripPage() {
           description: `Booking for ${trip.title}`,
           order_id: orderData.orderId,
           handler: async function (response: any) {
+            clearPaymentTimeout();
+            razorpayPaymentCompletedRef.current = true;
             try {
-              // Verify payment
               const verifyResponse = await fetch('/api/payment/verify-razorpay-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -408,7 +445,6 @@ export default function BookTripPage() {
                 throw new Error(verifyData.error || 'Payment verification failed');
               }
 
-              // Send notification email
               await fetch('/api/bookings/send-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -418,12 +454,15 @@ export default function BookTripPage() {
                 }),
               });
 
-              alert('Payment successful! Your booking is confirmed.');
+              setPaymentOverlay('idle');
+              setProcessingRazorpay(false);
+              showToast('Payment successful! Your booking is confirmed.', 'success');
               router.push(`/bookings/${bookingData.id}`);
             } catch (error: any) {
               console.error('Payment verification error:', error);
-              alert('Payment verification failed: ' + error.message);
+              setPaymentOverlay('idle');
               setProcessingRazorpay(false);
+              showToast(error?.message || 'Payment verification failed. Please try again.', 'error');
             }
           },
           prefill: {
@@ -435,38 +474,53 @@ export default function BookTripPage() {
             color: '#7c3aed',
           },
           modal: {
-            ondismiss: function() {
+            ondismiss: function () {
+              clearPaymentTimeout();
               setProcessingRazorpay(false);
-            }
-          }
+              setPaymentOverlay('idle');
+              if (!razorpayPaymentCompletedRef.current) {
+                abandonRazorpayBooking(bookingData.id);
+                showToast('Payment not completed. Booking cancelled.', 'error');
+              }
+            },
+          },
         };
 
         const razorpay = new (window as any).Razorpay(options);
         razorpay.open();
-        razorpay.on('payment.failed', function(response: any) {
-          alert('Payment failed. Please try again.');
+        setPaymentOverlay('processing');
+
+        // 5-minute timeout: if user doesn't pay, mark booking as abandoned so it doesn't stay pending
+        paymentTimeoutRef.current = setTimeout(() => {
+          paymentTimeoutRef.current = null;
+          if (razorpayPaymentCompletedRef.current) return;
+          abandonRazorpayBooking(bookingData.id);
+          setPaymentOverlay('idle');
           setProcessingRazorpay(false);
+          showToast('Payment window expired. Booking cancelled.', 'error');
+        }, PAYMENT_TIMEOUT_MS);
+
+        razorpay.on('payment.failed', function (response: any) {
+          clearPaymentTimeout();
+          setPaymentOverlay('idle');
+          setProcessingRazorpay(false);
+          abandonRazorpayBooking(bookingData.id);
+          showToast('Payment failed. Booking cancelled.', 'error');
         });
       };
       document.body.appendChild(script);
     } catch (error: any) {
       console.error('Razorpay payment error:', error);
+      setPaymentOverlay('idle');
       setError(error.message || 'Failed to initiate payment');
       setProcessingRazorpay(false);
+      showToast(error?.message || 'Failed to initiate payment.', 'error');
     }
   };
 
-  const handleCashPayment = async () => {
+  const handleCashPaymentConfirm = async () => {
+    setShowCashConfirm(false);
     if (!trip || !user) return;
-
-    // Validate steps 1 and 2, but skip step 3 validation for cash (no transaction ID needed)
-    if (currentStep === 1 && !validateStep(1)) return;
-    if (currentStep === 2 && !validateStep(2)) return;
-    // Step 3 validation is skipped for cash payments
-
-    if (!confirm('Are you sure you want to pay cash? You will need to meet and pay the amount. Admin will contact you to collect payment and confirm your booking.')) {
-      return;
-    }
 
     setSubmitting(true);
     setError('');
@@ -579,14 +633,22 @@ export default function BookTripPage() {
         }),
       });
 
-      alert('Cash payment booking created! Admin will contact you to collect payment and confirm your booking.');
+      showToast('Booking created! Admin will contact you to collect payment and confirm.', 'success');
       router.push(`/bookings/${bookingData.id}`);
     } catch (error: any) {
       console.error('Error creating cash payment booking:', error);
       setError(error.message || 'Failed to create booking');
+      showToast(error?.message || 'Failed to create booking.', 'error');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCashPayment = () => {
+    if (!trip || !user) return;
+    if (currentStep === 1 && !validateStep(1)) return;
+    if (currentStep === 2 && !validateStep(2)) return;
+    setShowCashConfirm(true);
   };
 
   const addPassenger = () => {
@@ -899,6 +961,7 @@ export default function BookTripPage() {
     } catch (err: any) {
       console.error('Error creating booking:', err);
       setError(err.message || 'Failed to create booking. Please try again.');
+      showToast(err?.message || 'Failed to create booking. Please try again.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -970,6 +1033,73 @@ export default function BookTripPage() {
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-br from-purple-50/30 via-white to-purple-50/30 pb-16 md:pb-0">
+      {/* Toast notifications — replaces native alert() */}
+      {toast && (
+        <div
+          role="alert"
+          className={`fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-sm z-[100] rounded-xl shadow-2xl border-2 px-4 py-3 flex items-center justify-between gap-3 transition-all duration-300 ${
+            toast.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : toast.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-sky-50 border-sky-200 text-sky-800'
+          }`}
+        >
+          <p className="text-sm font-medium flex-1">{toast.message}</p>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+            aria-label="Dismiss"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Payment overlay — professional loading when Razorpay is preparing or open */}
+      {paymentOverlay !== 'idle' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-purple-200 p-8 max-w-sm mx-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4" />
+            <p className="text-gray-800 font-semibold text-lg">
+              {paymentOverlay === 'preparing' ? 'Preparing payment…' : 'Complete payment in the window'}
+            </p>
+            <p className="text-gray-500 text-sm mt-1">
+              {paymentOverlay === 'preparing' ? 'Do not close this page.' : 'You can close this overlay after paying.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Pay in Person confirmation modal */}
+      {showCashConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="cash-confirm-title">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-green-200 max-w-md w-full p-6 md:p-8">
+            <h3 id="cash-confirm-title" className="text-xl font-bold text-gray-900 mb-2">Pay in Person</h3>
+            <p className="text-gray-600 text-sm md:text-base mb-6">
+              You will need to meet and pay the amount in person. Our team will contact you to collect payment and confirm your booking.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCashConfirm(false)}
+                className="flex-1 px-4 py-3 rounded-xl font-semibold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCashPaymentConfirm}
+                className="flex-1 px-4 py-3 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         <Link
           href={`/trips/${params.id}`}
@@ -1490,57 +1620,53 @@ export default function BookTripPage() {
               </div>
             </div>
 
-            {/* Payment Buttons Based on Mode */}
-            <div className="space-y-2 md:space-y-3">
-              {paymentMode === 'manual' ? (
+            {/* Payment methods: Pay Now (Razorpay or QR) + Pay in Person (Cash) */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-600 mb-2">Choose payment method</p>
+              <div className="space-y-2 md:space-y-3">
+                {/* Pay Now — primary: Razorpay or QR based on settings */}
+                {paymentMode === 'manual' ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentDetails(true)}
+                    disabled={paymentOverlay !== 'idle'}
+                    className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
+                    <span>Pay Now</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRazorpayPayment}
+                    disabled={processingRazorpay || paymentOverlay !== 'idle'}
+                    className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
+                    <span>Pay Now</span>
+                  </button>
+                )}
+
+                {/* Pay in Person — offline/cash */}
                 <button
                   type="button"
-                  onClick={() => setShowPaymentDetails(true)}
-                  className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                  onClick={handleCashPayment}
+                  disabled={submitting || paymentOverlay !== 'idle'}
+                  className="w-full px-4 md:px-8 py-3 md:py-4 bg-white border-2 border-green-600 text-green-700 rounded-xl font-bold text-sm md:text-lg hover:bg-green-50 transition-all shadow-sm hover:shadow flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <QrCode className="h-4 w-4 md:h-6 md:w-6" />
-                  <span>Pay via UPI / QR Code</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleRazorpayPayment}
-                  disabled={processingRazorpay}
-                  className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50"
-                >
-                  {processingRazorpay ? (
+                  {submitting ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-white border-t-transparent"></div>
-                      <span>Processing...</span>
+                      <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-green-600 border-t-transparent"></div>
+                      <span>Creating booking…</span>
                     </>
                   ) : (
                     <>
-                      <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
-                      <span>Pay with Razorpay</span>
+                      <IndianRupee className="h-4 w-4 md:h-6 md:w-6" />
+                      <span>Pay in Person</span>
                     </>
                   )}
                 </button>
-              )}
-              
-              {/* Pay Cash Button - Always visible */}
-              <button
-                type="button"
-                onClick={handleCashPayment}
-                disabled={submitting || processingRazorpay}
-                className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-white border-t-transparent"></div>
-                    <span>Creating Booking...</span>
-                  </>
-                ) : (
-                  <>
-                    <IndianRupee className="h-4 w-4 md:h-6 md:w-6" />
-                    <span>Pay Cash (Meet & Pay)</span>
-                  </>
-                )}
-              </button>
+              </div>
               {error && (
                 <div className="mt-3 md:mt-4 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">
                   <p className="text-red-700 text-xs md:text-sm font-medium break-words">{error}</p>
@@ -1626,7 +1752,7 @@ export default function BookTripPage() {
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(paymentSettings.upiId || '');
-                        alert('UPI ID copied to clipboard!');
+                        showToast('UPI ID copied to clipboard!', 'success');
                       }}
                       className="w-full px-3 md:px-4 py-2 bg-purple-600 text-white rounded-lg text-xs md:text-sm font-semibold hover:bg-purple-700 transition-colors"
                     >

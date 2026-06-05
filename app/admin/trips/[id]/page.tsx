@@ -510,7 +510,7 @@ export default function AdminTripDetailsPage() {
       <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30 px-4">
         <div className="text-center max-w-md">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <Link
             href="/admin/trips"
@@ -567,7 +567,7 @@ export default function AdminTripDetailsPage() {
               <p className="text-xs text-gray-600">Total Revenue</p>
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
-            <p className="text-2xl font-bold text-green-600 flex items-center">
+            <p className="text-lg sm:text-2xl font-bold text-green-600 flex items-center">
               <IndianRupee className="h-6 w-6" />
               {metrics?.totalRevenue?.toLocaleString() || '0'}
             </p>
@@ -578,7 +578,7 @@ export default function AdminTripDetailsPage() {
               <p className="text-xs text-gray-600">Total Bookings</p>
               <Package className="h-5 w-5 text-purple-600" />
             </div>
-            <p className="text-2xl font-bold text-purple-600">{metrics?.totalBookings || 0}</p>
+            <p className="text-lg sm:text-2xl font-bold text-purple-600">{metrics?.totalBookings || 0}</p>
             <p className="text-xs text-gray-500 mt-1">
               {metrics?.confirmedBookings || 0} confirmed, {metrics?.pendingBookings || 0} pending
             </p>
@@ -588,7 +588,7 @@ export default function AdminTripDetailsPage() {
               <p className="text-xs text-gray-600">Total Participants</p>
               <Users className="h-5 w-5 text-blue-600" />
             </div>
-            <p className="text-2xl font-bold text-blue-600">{metrics?.totalParticipants || 0}</p>
+            <p className="text-lg sm:text-2xl font-bold text-blue-600">{metrics?.totalParticipants || 0}</p>
             <p className="text-xs text-gray-500 mt-1">
               {trip.current_participants || 0}/{trip.max_participants || 0} capacity
             </p>
@@ -598,7 +598,7 @@ export default function AdminTripDetailsPage() {
               <p className="text-xs text-gray-600">Avg Booking Value</p>
               <DollarSign className="h-5 w-5 text-orange-600" />
             </div>
-            <p className="text-2xl font-bold text-orange-600 flex items-center">
+            <p className="text-lg sm:text-2xl font-bold text-orange-600 flex items-center">
               <IndianRupee className="h-6 w-6" />
               {metrics?.averageBookingValue?.toFixed(0) || '0'}
             </p>

@@ -36,8 +36,6 @@ export default function AdminBookingsPage() {
   useEffect(() => {
     fetchBookings();
     fetchTrips();
-    const interval = setInterval(fetchBookings, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchTrips = async () => {
@@ -352,90 +350,83 @@ export default function AdminBookingsPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Header Section - Compact */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+      <div className="flex justify-between items-center gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight mb-1">All Bookings</h1>
-          <p className="text-xs text-gray-600">View and manage all trip bookings</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">All Bookings</h1>
+          <p className="text-[11px] sm:text-xs text-gray-500">Manage all trip bookings</p>
         </div>
         <button
           onClick={fetchBookings}
-          className="px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center space-x-2"
+          className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center space-x-1.5"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
           <span>Refresh</span>
         </button>
       </div>
 
       {/* Key Stats Cards - Compact */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {/* Total Revenue */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 p-4 shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm">
-              <DollarSign className="h-5 w-5 text-white" />
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg sm:rounded-xl border border-green-200 p-2.5 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
             </div>
-            <TrendingUp className="h-4 w-4 text-green-400" />
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
           </div>
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-gray-900 flex items-center">
-            <IndianRupee className="h-5 w-5 mr-1" />
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Revenue</p>
+          <p className="text-base sm:text-xl font-bold text-gray-900 flex items-center">
+            <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5" />
             {totalRevenue.toLocaleString()}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Confirmed bookings</p>
         </div>
 
         {/* Pending Revenue */}
-        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl border-2 border-yellow-200 p-4 shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center shadow-sm">
-              <Clock className="h-5 w-5 text-white" />
+        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg sm:rounded-xl border border-yellow-200 p-2.5 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
             </div>
-            <AlertTriangle className="h-4 w-4 text-yellow-400" />
+            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
           </div>
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Pending Revenue</p>
-          <p className="text-2xl font-bold text-gray-900 flex items-center">
-            <IndianRupee className="h-5 w-5 mr-1" />
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Pending</p>
+          <p className="text-base sm:text-xl font-bold text-gray-900 flex items-center">
+            <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5" />
             {pendingRevenue.toLocaleString()}
           </p>
-          <p className="text-xs text-gray-500 mt-1">{stats.pendingPayments} pending</p>
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{stats.pendingPayments} pending</p>
         </div>
 
         {/* Urgent Actions */}
-        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border-2 border-orange-200 p-4 shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-sm">
-              <AlertCircle className="h-5 w-5 text-white" />
+        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg sm:rounded-xl border border-orange-200 p-2.5 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
+              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
             </div>
-            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200">
+            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] sm:text-xs font-bold">
               {stats.cashPending + stats.manualPending + stats.razorpayPending}
             </span>
           </div>
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Requires Action</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.cashPending + stats.manualPending + stats.razorpayPending}</p>
-          <div className="flex flex-wrap gap-1.5 mt-1 text-xs">
-            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded border border-orange-200">
-              {stats.cashPending} Cash
-            </span>
-            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded border border-purple-200">
-              {stats.manualPending} Manual
-            </span>
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded border border-blue-200">
-              {stats.razorpayPending} Razorpay
-            </span>
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Action</p>
+          <p className="text-base sm:text-xl font-bold text-gray-900">{stats.cashPending + stats.manualPending + stats.razorpayPending}</p>
+          <div className="flex flex-wrap gap-1 mt-1">
+            <span className="px-1 sm:px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] sm:text-[10px]">{stats.cashPending}C</span>
+            <span className="px-1 sm:px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] sm:text-[10px]">{stats.manualPending}M</span>
+            <span className="px-1 sm:px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] sm:text-[10px]">{stats.razorpayPending}R</span>
           </div>
         </div>
 
         {/* Total Bookings */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-4 shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
-              <Calendar className="h-5 w-5 text-white" />
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl border border-blue-200 p-2.5 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
             </div>
-            <Users className="h-4 w-4 text-blue-400" />
+            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
           </div>
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Total Bookings</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-          <p className="text-xs text-gray-500 mt-1">{stats.confirmed} confirmed</p>
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Bookings</p>
+          <p className="text-base sm:text-xl font-bold text-gray-900">{stats.total}</p>
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{stats.confirmed} confirmed</p>
         </div>
       </div>
 
@@ -453,8 +444,8 @@ export default function AdminBookingsPage() {
       )}
 
       {/* Search and Filters Section - Compact */}
-      <div className="bg-white rounded-xl border-2 border-purple-200 shadow-md p-4">
-        <div className="flex flex-col lg:flex-row gap-3">
+      <div className="bg-white rounded-lg sm:rounded-xl border border-purple-200 shadow-sm p-2.5 sm:p-4">
+        <div className="flex flex-col lg:flex-row gap-2 sm:gap-3">
           {/* Trip Filter */}
           <div className="lg:w-64">
             <select
@@ -463,7 +454,7 @@ export default function AdminBookingsPage() {
                 setSelectedTripId(e.target.value);
                 setFilter('all'); // Reset status filter when trip changes
               }}
-              className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm text-gray-900 font-medium"
+              className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium"
             >
               <option value="all">All Trips</option>
               {trips.map((trip) => (
@@ -483,7 +474,7 @@ export default function AdminBookingsPage() {
                 placeholder="Search by customer, email, or booking ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm text-gray-900"
+                className="w-full pl-8 sm:pl-10 pr-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900"
               />
             </div>
           </div>
@@ -493,7 +484,7 @@ export default function AdminBookingsPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
-              className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm text-gray-900 font-medium"
+              className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium"
             >
               <option value="date">Sort by Date</option>
               <option value="amount">Sort by Amount</option>
@@ -503,30 +494,30 @@ export default function AdminBookingsPage() {
         </div>
 
         {/* Quick Filter Pills - Compact */}
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
           <button
             onClick={() => {
               setFilter('all');
               setSearchTerm('');
             }}
-            className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
               filter === 'all'
                 ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
             }`}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>All ({tripStats.total})</span>
           </button>
           <button
             onClick={() => setFilter('pending')}
-            className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
               filter === 'pending'
                 ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
-                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-2 border-yellow-200'
+                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
             }`}
           >
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>Pending ({tripStats.pending})</span>
             {stats.pendingPayments > 0 && (
               <span className="px-2 py-0.5 bg-white/30 rounded-full text-xs font-bold">
@@ -536,51 +527,51 @@ export default function AdminBookingsPage() {
           </button>
           <button
             onClick={() => setFilter('confirmed')}
-            className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
               filter === 'confirmed'
                 ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
-                : 'bg-green-50 text-green-700 hover:bg-green-100 border-2 border-green-200'
+                : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
             }`}
           >
-            <CheckCircle className="h-4 w-4" />
+            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>Confirmed ({tripStats.confirmed})</span>
           </button>
           <button
             onClick={() => setFilter('seat_locked')}
-            className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
               filter === 'seat_locked'
                 ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-                : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-2 border-orange-200'
+                : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
             }`}
           >
-            <Clock className="h-4 w-4" />
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>Seat Locked ({tripStats.seatLocked})</span>
           </button>
           <button
             onClick={() => setFilter('cancelled')}
-            className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
               filter === 'cancelled'
                 ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
-                : 'bg-red-50 text-red-700 hover:bg-red-100 border-2 border-red-200'
+                : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
             }`}
           >
-            <XCircle className="h-4 w-4" />
+            <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>Cancelled ({tripStats.cancelled})</span>
           </button>
         </div>
       </div>
 
       {/* Bookings Table - Compact Design */}
-      <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl overflow-hidden">
+      <div className="bg-white rounded-xl sm:rounded-2xl border sm:border-2 border-purple-200 shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-xs sm:text-sm">
             <thead className="bg-gradient-to-r from-purple-50 via-purple-100 to-purple-50 border-b-2 border-purple-200">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Booking</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Amount & Details</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Booking</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Amount & Details</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -599,13 +590,13 @@ export default function AdminBookingsPage() {
                     }`}
                   >
                     {/* Booking Info - Compact */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <Link 
                         href={`/admin/bookings/${booking.id}`}
                         className="block group"
                       >
                         <div className="flex items-start space-x-2">
-                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm">
+                          <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm">
                             <MapPin className="h-5 w-5 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -636,7 +627,7 @@ export default function AdminBookingsPage() {
                     </td>
 
                     {/* Amount & Details - Compact */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center space-x-1">
                           <IndianRupee className="h-3.5 w-3.5 text-purple-600" />
@@ -660,10 +651,10 @@ export default function AdminBookingsPage() {
                     </td>
 
                     {/* Payment Info - Compact */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="space-y-1.5">
                         <div>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold border ${
+                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${
                             booking.payment_status === 'paid' || booking.payment_status === 'verified'
                               ? 'bg-green-100 text-green-700 border-green-300'
                               : booking.payment_status === 'rejected'
@@ -715,8 +706,8 @@ export default function AdminBookingsPage() {
                     </td>
 
                     {/* Booking Status - Compact */}
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold border ${getStatusColor(booking.booking_status || 'pending')}`}>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
+                      <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${getStatusColor(booking.booking_status || 'pending')}`}>
                         {getStatusIcon(booking.booking_status || 'pending')}
                         <span className="ml-1">
                           {(booking.booking_status || 'pending') === 'seat_locked' 
@@ -728,7 +719,7 @@ export default function AdminBookingsPage() {
                     </td>
 
                     {/* Actions - Compact */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="flex flex-col gap-1.5 min-w-[120px]">
                         {/* Cash Payment Approval */}
                         {booking.payment_mode === 'cash' && booking.payment_status === 'cash_pending' && (
@@ -808,12 +799,12 @@ export default function AdminBookingsPage() {
       {/* Payment Review Modal */}
       {showPaymentModal && selectedBooking && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border-2 border-purple-200 shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-purple-200 shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
             {/* Enhanced Header */}
-            <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-600 p-6 flex items-center justify-between sticky top-0 z-10">
+            <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-600 p-3 sm:p-4 md:p-6 flex items-center justify-between sticky top-0 z-10">
               <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30">
-                  <CreditCard className="h-6 w-6 text-white" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30">
+                  <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white">Review Payment</h2>
@@ -835,9 +826,9 @@ export default function AdminBookingsPage() {
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 p-6 space-y-6">
+            <div className="overflow-y-auto flex-1 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
               {/* Booking Overview Card */}
-              <div className="bg-gradient-to-br from-purple-50 via-purple-50 to-indigo-50 rounded-2xl border-2 border-purple-200 p-6 shadow-lg">
+              <div className="bg-gradient-to-br from-purple-50 via-purple-50 to-indigo-50 rounded-xl sm:rounded-2xl border border-purple-200 p-3 sm:p-4 md:p-6 shadow-md">
                 <div className="flex items-center space-x-2 mb-4">
                   <Calendar className="h-5 w-5 text-purple-600" />
                   <h3 className="text-lg font-bold text-gray-900">Booking Overview</h3>
@@ -880,7 +871,7 @@ export default function AdminBookingsPage() {
                       <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</p>
                     </div>
                     <p className="font-bold text-gray-900 text-2xl flex items-center">
-                      <IndianRupee className="h-5 w-5 mr-1" />
+                      <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
                       {parseFloat(selectedBooking.final_amount || selectedBooking.total_price || 0).toLocaleString()}
                   </p>
                     {selectedBooking.wallet_amount_used > 0 && (
@@ -920,12 +911,12 @@ export default function AdminBookingsPage() {
                     <div className="flex items-center space-x-2">
                       <CreditCard className="h-5 w-5 text-purple-600" />
                       <h3 className="text-lg font-bold text-gray-900">Payment Transactions</h3>
-                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold border-2 border-purple-200">
+                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold border border-purple-200">
                         {selectedBooking.payment_transactions.length} {selectedBooking.payment_transactions.length === 1 ? 'transaction' : 'transactions'}
                       </span>
                     </div>
                     {selectedBooking.payment_transactions.some((p: any) => p.payment_status === 'pending') && (
-                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold border-2 border-orange-200 flex items-center space-x-1">
+                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold border border-orange-200 flex items-center space-x-1">
                         <AlertTriangle className="h-3 w-3" />
                         <span>{selectedBooking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length} Pending</span>
                       </span>
@@ -952,7 +943,7 @@ export default function AdminBookingsPage() {
                             <div className="flex items-start justify-between mb-4">
                           <div className="flex-1">
                                 <div className="flex items-center space-x-2 mb-3">
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 flex items-center space-x-1 ${
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center space-x-1 ${
                                     transaction.payment_type === 'seat_lock' 
                                       ? 'bg-purple-100 text-purple-700 border-purple-300'
                                       : transaction.payment_type === 'remaining'
@@ -976,7 +967,7 @@ export default function AdminBookingsPage() {
                                       </>
                                     )}
                               </span>
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 ${
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
                                     isVerified
                                       ? 'bg-green-100 text-green-700 border-green-300' 
                                       : isRejected
@@ -1001,7 +992,7 @@ export default function AdminBookingsPage() {
                                     )}
                                   </span>
                                   {transaction.payment_mode && (
-                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 flex items-center space-x-1 ${
+                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center space-x-1 ${
                                       transaction.payment_mode === 'cash'
                                         ? 'bg-green-100 text-green-700 border-green-300'
                                         : transaction.payment_mode === 'razorpay'
@@ -1052,7 +1043,7 @@ export default function AdminBookingsPage() {
                                   <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border-2 border-white/50">
                                     <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Amount</p>
                                     <p className="text-2xl font-bold text-gray-900 flex items-center">
-                                      <IndianRupee className="h-6 w-6 mr-1" />
+                                      <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
                                       {parseFloat(String(transaction.amount || 0)).toLocaleString()}
                                     </p>
                                   </div>
@@ -1202,7 +1193,7 @@ export default function AdminBookingsPage() {
                   <button
                     onClick={() => handleReviewPayment(selectedTransaction, 'verified')}
                     disabled={reviewing}
-                      className="flex-1 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold text-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 transform hover:scale-105"
+                      className="flex-1 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base hover:from-green-700 hover:to-emerald-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                   >
                       <CheckCircle className="h-6 w-6" />
                       <span>✓ Verify Payment</span>
@@ -1210,7 +1201,7 @@ export default function AdminBookingsPage() {
                   <button
                     onClick={() => handleReviewPayment(selectedTransaction, 'rejected')}
                     disabled={reviewing || !rejectionReason}
-                      className="flex-1 px-6 py-4 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold text-lg hover:from-red-700 hover:to-rose-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 transform hover:scale-105"
+                      className="flex-1 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base hover:from-red-700 hover:to-rose-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                   >
                       <XCircle className="h-6 w-6" />
                       <span>✗ Reject Payment</span>
@@ -1307,7 +1298,7 @@ export default function AdminBookingsPage() {
               <div>
                 <p className="text-sm text-gray-600 mb-2">Total Amount</p>
                 <p className="font-semibold text-purple-600 text-lg flex items-center">
-                  <IndianRupee className="h-5 w-5" />
+                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />
                   {parseFloat(selectedBooking.final_amount || selectedBooking.total_price || 0).toLocaleString()}
                 </p>
               </div>

@@ -40,8 +40,6 @@ export default function AdminReferralsPage() {
     
     fetchRewardAmount();
     fetchReferrals();
-    const interval = setInterval(fetchReferrals, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchReferrals = async () => {
@@ -201,7 +199,7 @@ export default function AdminReferralsPage() {
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">Referral System</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">Referrals</h1>
           <p className="text-sm text-gray-600">Manage and monitor referral program ({referrals.length} total)</p>
         </div>
         <div className="flex gap-2">
@@ -226,37 +224,37 @@ export default function AdminReferralsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border-2 border-purple-200 p-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg sm:rounded-xl border border-purple-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-2">
-            <Users className="h-8 w-8 text-purple-600" />
+            <Users className="h-5 w-5 sm:h-7 sm:w-7 text-purple-600" />
             <TrendingUp className="h-5 w-5 text-purple-400" />
           </div>
           <p className="text-xs text-gray-600 mb-1">Total Referrals</p>
           <p className="text-2xl font-bold text-gray-900">{stats.totalReferrals}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl border-2 border-green-200 p-6">
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg sm:rounded-xl border border-green-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-2">
-            <Award className="h-8 w-8 text-green-600" />
+            <Award className="h-5 w-5 sm:h-7 sm:w-7 text-green-600" />
             <CheckCircle className="h-5 w-5 text-green-400" />
           </div>
           <p className="text-xs text-gray-600 mb-1">Rewards Paid</p>
           <p className="text-2xl font-bold text-gray-900">₹{stats.totalRewardsPaid}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl border-2 border-yellow-200 p-6">
+        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg sm:rounded-xl border border-yellow-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-2">
-            <Clock className="h-8 w-8 text-yellow-600" />
+            <Clock className="h-5 w-5 sm:h-7 sm:w-7 text-yellow-600" />
             <Gift className="h-5 w-5 text-yellow-400" />
           </div>
           <p className="text-xs text-gray-600 mb-1">Pending Rewards</p>
           <p className="text-2xl font-bold text-gray-900">₹{stats.pendingRewards}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-2 border-blue-200 p-6">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg sm:rounded-xl border border-blue-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-2">
-            <Users className="h-8 w-8 text-blue-600" />
+            <Users className="h-5 w-5 sm:h-7 sm:w-7 text-blue-600" />
             <TrendingUp className="h-5 w-5 text-blue-400" />
           </div>
           <p className="text-xs text-gray-600 mb-1">Active Referrers</p>
@@ -271,12 +269,12 @@ export default function AdminReferralsPage() {
           placeholder="Search by referrer, referred user, or code..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-4 py-3 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all"
+          className="flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
         />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-3 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all"
+          className="px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
@@ -286,7 +284,7 @@ export default function AdminReferralsPage() {
       </div>
 
       {/* Referrals Table */}
-      <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl overflow-hidden">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-purple-200 shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-200">
@@ -362,7 +360,7 @@ export default function AdminReferralsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border-2 ${
+                    <span className={`inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold border ${
                       referral.reward_status === 'credited'
                         ? 'bg-green-100 text-green-700 border-green-200'
                         : referral.reward_status === 'pending'
@@ -442,7 +440,7 @@ export default function AdminReferralsPage() {
 
             <div className="mb-6">
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
                   <User className="h-8 w-8 text-white" />
                 </div>
                 <div>

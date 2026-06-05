@@ -52,11 +52,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate remaining amount
+    // Calculate remaining amount using the booking's final_amount (already includes coupon/wallet discounts)
     const trip = booking.trips as any;
-    const fullPrice = (trip?.discounted_price || 0) * (booking.number_of_participants || 1);
-    const paidAmount = parseFloat(String(booking.payment_amount || booking.final_amount || 0));
-    const remainingAmount = Math.max(0, fullPrice - paidAmount);
+    const bookingTotal = parseFloat(String(booking.final_amount || booking.total_price || ((trip?.discounted_price || 0) * (booking.number_of_participants || 1))));
+    const paidAmount = parseFloat(String(booking.payment_amount || 0));
+    const remainingAmount = Math.max(0, bookingTotal - paidAmount);
 
     if (remainingAmount <= 0) {
       return NextResponse.json(
@@ -100,10 +100,9 @@ export async function POST(request: NextRequest) {
       .from('bookings')
       .update({
         payment_amount: newTotalPaid,
-        final_amount: newTotalPaid,
-        total_price: fullPrice,
+        final_amount: bookingTotal,
         payment_status: 'pending',
-        booking_status: 'pending',
+        booking_status: 'remaining_submitted',
       })
       .eq('id', bookingId);
 

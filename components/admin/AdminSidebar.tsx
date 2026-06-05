@@ -42,7 +42,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-16 md:top-20 left-0 h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)] w-64 bg-white/95 backdrop-blur-md border-r-2 border-purple-300 shadow-xl z-40 transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-12 sm:top-14 md:top-16 left-0 h-[calc(100vh-3rem)] sm:h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] w-56 md:w-60 bg-white/95 backdrop-blur-md border-r border-purple-200 shadow-md z-40 transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
         style={{ boxShadow: '4px 0 20px rgba(168, 85, 247, 0.15)' }}
@@ -66,10 +66,10 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm ${
                   active
-                    ? 'neon-button bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border-2 border-purple-400 shadow-lg'
-                    : 'text-gray-700 hover:bg-purple-50 hover:text-purple-600 border-2 border-transparent hover:border-purple-200'
+                    ? 'neon-button bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border border-purple-300 shadow-sm'
+                    : 'text-gray-600 hover:bg-purple-50 hover:text-purple-600 border border-transparent hover:border-purple-200'
                 }`}
               >
                 <Icon className={`h-5 w-5 ${active ? 'text-purple-600' : ''}`} />

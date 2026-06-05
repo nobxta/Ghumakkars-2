@@ -13,8 +13,6 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchUsers();
-    const interval = setInterval(fetchUsers, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const fetchUsers = async () => {
@@ -57,15 +55,15 @@ export default function AdminUsersPage() {
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-2">All Users</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">All Users</h1>
           <p className="text-sm text-gray-600">Manage registered users ({users.length} total)</p>
         </div>
         <div className="flex gap-3">
-          <div className="stat-card neon-card rounded-xl border-2 border-purple-200 p-3">
+          <div className="stat-card neon-card rounded-xl border border-purple-200 p-3">
             <p className="text-xs text-gray-600 mb-1">Verified</p>
             <p className="text-xl font-bold text-green-600">{verifiedCount}</p>
           </div>
-          <div className="stat-card neon-card rounded-xl border-2 border-purple-200 p-3">
+          <div className="stat-card neon-card rounded-xl border border-purple-200 p-3">
             <p className="text-xs text-gray-600 mb-1">Admins</p>
             <p className="text-xl font-bold text-purple-600">{adminCount}</p>
           </div>
@@ -73,28 +71,28 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Search */}
-      <div className="neon-card rounded-xl border-2 border-purple-200 p-4">
+      <div className="neon-card rounded-xl border border-purple-200 p-4">
         <input
           type="text"
           placeholder="Search by name, email, or phone..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-3 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all"
+          className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm"
         />
       </div>
 
       {/* Users Table */}
-      <div className="neon-card rounded-2xl border-2 border-purple-200 shadow-xl overflow-hidden">
+      <div className="neon-card rounded-2xl border border-purple-200 shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-200">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">User</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Joined</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">User</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Phone</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Role</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="px-2 sm:px-4 py-1.5 sm:py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Joined</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-purple-100">
@@ -105,13 +103,13 @@ export default function AdminUsersPage() {
                   style={{ animationDelay: `${index * 0.05}s` }}
                   onClick={() => router.push(`/admin/users/${user.id}`)}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3">
                     <Link 
                       href={`/admin/users/${user.id}`}
                       className="flex items-center hover:text-purple-600 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mr-3">
+                      <div className="w-7 h-7 sm:w-10 sm:h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mr-3">
                         <User className="h-5 w-5 text-white" />
                       </div>
                       <div>
@@ -124,47 +122,47 @@ export default function AdminUsersPage() {
                       </div>
                     </Link>
                   </td>
-                  <td className="px-6 py-4" onClick={() => router.push(`/admin/users/${user.id}`)}>
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3" onClick={() => router.push(`/admin/users/${user.id}`)}>
                     <div className="flex items-center text-gray-700">
-                      <Mail className="h-4 w-4 mr-2 text-purple-600" />
+                      <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-2 text-purple-600" />
                       {user.email || 'N/A'}
                     </div>
                   </td>
-                  <td className="px-6 py-4" onClick={() => router.push(`/admin/users/${user.id}`)}>
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3" onClick={() => router.push(`/admin/users/${user.id}`)}>
                     {user.phone ? (
                       <div className="flex items-center text-gray-700">
-                        <Phone className="h-4 w-4 mr-2 text-purple-600" />
+                        <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-2 text-purple-600" />
                         {user.phone}
                       </div>
                     ) : (
                       <span className="text-gray-400">N/A</span>
                     )}
                   </td>
-                  <td className="px-6 py-4" onClick={() => router.push(`/admin/users/${user.id}`)}>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border-2 ${
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3" onClick={() => router.push(`/admin/users/${user.id}`)}>
+                    <span className={`inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold border sm:border-2 ${
                       user.role === 'admin'
                         ? 'bg-purple-100 text-purple-700 border-purple-200'
                         : 'bg-gray-100 text-gray-700 border-gray-200'
                     }`}>
-                      {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
+                      {user.role === 'admin' && <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />}
                       {user.role || 'user'}
                     </span>
                   </td>
-                  <td className="px-6 py-4" onClick={() => router.push(`/admin/users/${user.id}`)}>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border-2 ${
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3" onClick={() => router.push(`/admin/users/${user.id}`)}>
+                    <span className={`inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold border sm:border-2 ${
                       user.email_verified
                         ? 'bg-green-100 text-green-700 border-green-200'
                         : 'bg-yellow-100 text-yellow-700 border-yellow-200'
                     }`}>
                       {user.email_verified ? (
-                        <CheckCircle className="h-3 w-3 mr-1" />
+                        <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                       ) : (
-                        <XCircle className="h-3 w-3 mr-1" />
+                        <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                       )}
                       {user.email_verified ? 'Verified' : 'Pending'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600" onClick={() => router.push(`/admin/users/${user.id}`)}>
+                  <td className="px-2 sm:px-4 py-1.5 sm:py-3 text-sm text-gray-600" onClick={() => router.push(`/admin/users/${user.id}`)}>
                     {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', {
                       day: 'numeric',
                       month: 'short',

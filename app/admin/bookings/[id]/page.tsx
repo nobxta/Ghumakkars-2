@@ -535,7 +535,7 @@ export default function AdminBookingDetailsPage() {
       {/* Payment Review Modal */}
       {showPaymentModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentModal(false)}>
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-2xl max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl border border-purple-200 shadow-2xl max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-purple-200 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Review Payment Transaction</h2>
               <button
