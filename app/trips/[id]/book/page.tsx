@@ -722,27 +722,50 @@ export default function BookTripPage() {
     }
   };
 
+  const getEffectivePrice = (): number => {
+    if (!trip) return 0;
+    const earlyBird: any = (trip as any).early_bird_conditions;
+    const earlyBirdPrice = (trip as any).early_bird_price;
+    if (!earlyBird?.enabled || !earlyBirdPrice || earlyBirdPrice <= 0) {
+      return trip.discounted_price;
+    }
+    const conditions = earlyBird.conditions || [];
+    if (conditions.length === 0) return trip.discounted_price;
+
+    const now = new Date();
+    const allMet = conditions.every((c: any) => {
+      if (c.type === 'date_range' && c.value) {
+        const [start, end] = String(c.value).split('|');
+        if (!start || !end) return false;
+        return now >= new Date(start) && now <= new Date(end);
+      }
+      if (c.type === 'first_bookings' && c.value) {
+        return ((trip as any).current_participants || 0) < parseInt(c.value);
+      }
+      // user_limit & discount_code not enforced client-side
+      return true;
+    });
+    return allMet ? earlyBirdPrice : trip.discounted_price;
+  };
+
   const calculateTotalPrice = () => {
     if (!trip) return 0;
-    const totalPassengers = 1 + passengers.length; // Primary + additional
+    const totalPassengers = 1 + passengers.length;
+    const perPersonPrice = getEffectivePrice();
     let basePrice = 0;
     if (paymentMethod === 'seat_lock' && trip.seat_lock_price) {
       basePrice = trip.seat_lock_price * totalPassengers;
     } else {
-      basePrice = trip.discounted_price * totalPassengers;
+      basePrice = perPersonPrice * totalPassengers;
     }
-    
-    // Apply coupon discount if any
+
     let finalAmount = basePrice;
     if (couponApplied) {
       finalAmount = couponApplied.final_amount;
     }
-    
-    // Apply wallet discount if using wallet
     if (useWallet && walletAmount > 0) {
       finalAmount = Math.max(0, finalAmount - walletAmount);
     }
-    
     return finalAmount;
   };
 
@@ -752,7 +775,7 @@ export default function BookTripPage() {
     if (paymentMethod === 'seat_lock' && trip.seat_lock_price) {
       return trip.seat_lock_price * totalPassengers;
     }
-    return trip.discounted_price * totalPassengers;
+    return getEffectivePrice() * totalPassengers;
   };
 
   const handleSubmit = async () => {

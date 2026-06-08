@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft, Clock, Send, Upload, Loader2 } from 'lucide-react';
 
 interface DayItinerary {
   day: number;
@@ -50,6 +50,8 @@ export default function CreateTripPage() {
 
   // Step 4: Images
   const [coverImage, setCoverImage] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState<number | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>(['']);
 
   // Step 5: Content
@@ -243,6 +245,53 @@ export default function CreateTripPage() {
     setGalleryImages(galleryImages.filter((_, i) => i !== index));
   };
 
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('folder', 'trips');
+    const res = await fetch('/api/upload/cloudinary', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Upload failed');
+    }
+    const { url } = await res.json();
+    return url;
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    setError('');
+    try {
+      const url = await uploadToCloudinary(file);
+      setCoverImage(url);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload cover image');
+    } finally {
+      setUploadingCover(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleGalleryUpload = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingGallery(idx);
+    setError('');
+    try {
+      const url = await uploadToCloudinary(file);
+      const updated = [...galleryImages];
+      updated[idx] = url;
+      setGalleryImages(updated);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload image');
+    } finally {
+      setUploadingGallery(null);
+      e.target.value = '';
+    }
+  };
+
   const addEarlyBirdCondition = (type: EarlyBirdCondition['type']) => {
     const labels = {
       date_range: 'Available for bookings between dates',
@@ -291,7 +340,14 @@ export default function CreateTripPage() {
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) return;
+    // Validate every step before submission
+    for (let step = 1; step <= 5; step++) {
+      if (!validateStep(step)) {
+        setCurrentStep(step);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+    }
 
     setLoading(true);
     setError('');
@@ -761,16 +817,22 @@ export default function CreateTripPage() {
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Cover Image URL <span className="text-red-500">*</span>
+                  Cover Image <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="url"
-                  value={coverImage}
-                  onChange={(e) => setCoverImage(e.target.value)}
-                  required
-                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
-                  placeholder="https://example.com/cover-image.jpg"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={coverImage}
+                    onChange={(e) => setCoverImage(e.target.value)}
+                    className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 text-sm"
+                    placeholder="Paste image URL or click upload"
+                  />
+                  <label className={`px-3 sm:px-4 py-2.5 sm:py-3 border border-purple-300 bg-purple-50 hover:bg-purple-100 rounded-xl cursor-pointer flex items-center gap-1.5 text-sm font-semibold text-purple-700 whitespace-nowrap ${uploadingCover ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    <span>Upload</span>
+                    <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={uploadingCover} />
+                  </label>
+                </div>
                 {coverImage && (
                   <div className="mt-3">
                     <img src={coverImage} alt="Cover preview" className="w-full h-48 object-cover rounded-xl border border-gray-200" />
@@ -794,7 +856,7 @@ export default function CreateTripPage() {
                 </div>
                 <div className="space-y-3">
                   {galleryImages.map((image, index) => (
-                    <div key={index} className="flex space-x-3">
+                    <div key={index} className="flex gap-2">
                       <input
                         type="url"
                         value={image}
@@ -803,9 +865,13 @@ export default function CreateTripPage() {
                           updated[index] = e.target.value;
                           setGalleryImages(updated);
                         }}
-                        className="flex-1 px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
-                        placeholder="https://example.com/image.jpg"
+                        className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 text-sm"
+                        placeholder="Paste URL or upload"
                       />
+                      <label className={`px-3 py-2.5 sm:py-3 border border-purple-300 bg-purple-50 hover:bg-purple-100 rounded-xl cursor-pointer flex items-center text-sm text-purple-700 ${uploadingGallery === index ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {uploadingGallery === index ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        <input type="file" accept="image/*" onChange={(e) => handleGalleryUpload(index, e)} className="hidden" />
+                      </label>
                       {galleryImages.length > 1 && (
                         <button
                           type="button"
