@@ -17,16 +17,16 @@ export default function CTA() {
         <ScrollAnimation className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center space-x-2 bg-white/20 backdrop-blur-sm border border-white/30 px-4 md:px-6 py-2 md:py-2.5 mb-6 md:mb-8 rounded-full">
             <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-white" />
-            <span className="text-xs md:text-sm font-semibold text-white uppercase tracking-wider">Ready to Explore?</span>
+            <span className="text-xs md:text-sm font-semibold text-white uppercase tracking-wider">Trips filling up fast</span>
           </div>
 
           <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light text-white mb-6 md:mb-8 tracking-tight leading-tight">
-            Start Your Adventure
-            <span className="block mt-2 md:mt-3 font-medium">Today</span>
+            Where to
+            <span className="block mt-2 md:mt-3 font-medium">next?</span>
           </h2>
 
           <p className="text-lg md:text-xl lg:text-2xl text-white/90 mb-8 md:mb-12 max-w-2xl mx-auto font-light leading-relaxed">
-            Thousands of travellers have already explored India with us. Your next unforgettable journey awaits.
+            Creating an account takes 30 seconds. Picking your first trip takes about 2 minutes. The memories? Those stick around.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center items-center mb-8 md:mb-12">

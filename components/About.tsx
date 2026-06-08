@@ -23,14 +23,10 @@ export default function About() {
               <div className="h-px bg-purple-200 flex-1"></div>
             </div>
             <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-5 md:mb-6 font-light leading-relaxed">
-              Travel shouldn&apos;t burn a hole in your pocket, and planning shouldn&apos;t feel like a second job.
-              Ghumakkars was built for people who want to see India — the real India — without overpaying
-              or overthinking every detail.
+              We started Ghumakkars because we were tired of two things: overpriced tour packages that nickel-and-dime you, and the headache of planning a group trip where everyone has opinions but nobody wants to do the work.
             </p>
             <p className="text-base sm:text-lg md:text-xl text-gray-600 mb-8 md:mb-12 font-light leading-relaxed">
-              Our carefully curated journeys combine affordable pricing, thoughtfully designed itineraries, 
-              and authentic local experiences. We handle every detail—from accommodation to activities—so you can focus 
-              on creating memories that last a lifetime with friends and fellow travelers.
+              So we handle everything. The stays, the transport, the itinerary, the local contacts. You pick a trip, pay, and show up. That&apos;s it. We&apos;ve been doing this for a while now and honestly, the part we didn&apos;t expect was how many people come back for a second and third trip.
             </p>
             
             <div className="grid grid-cols-2 gap-4 md:gap-6">

@@ -54,10 +54,10 @@ export default function Stats() {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <ScrollAnimation className="text-center mb-12 md:mb-16 lg:mb-20 px-4">
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 mb-4 md:mb-6 tracking-tight">
-            Our Impact in Numbers
+            The numbers so far
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Building a community of adventurous travellers exploring India&apos;s diverse landscapes
+            We&apos;ve been at this for a while. Here&apos;s where we stand.
           </p>
         </ScrollAnimation>
 

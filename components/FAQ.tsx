@@ -7,43 +7,43 @@ import ScrollAnimation from './ScrollAnimation';
 const faqs = [
   {
     id: 1,
-    question: 'How do I book a trip?',
-    answer: 'Booking a trip is simple! Browse our curated journeys, select your preferred destination and dates, and click "Book Now". You\'ll need to create an account first if you haven\'t already. Once booked, you\'ll receive a confirmation email with all trip details.',
+    question: 'How do I book?',
+    answer: 'Pick a trip, fill in your details, pay — that\'s it. Takes about 3 minutes. You can pay the full amount or just lock your seat with a deposit and pay the rest later. You\'ll get a confirmation email right after.',
   },
   {
     id: 2,
-    question: 'Are the trips really budget-friendly?',
-    answer: 'Yes — that\'s the whole point. We negotiate group rates, cut out middlemen, and plan smart itineraries so you get incredible experiences at honest prices. No hidden costs, no surprise charges. What you see is what you pay.',
+    question: 'How cheap are we talking?',
+    answer: 'A 4-day Manali trip runs about ₹4,999 — that covers your stay, transport, and meals. Goa starts around ₹3,499. We buy in bulk, skip the agents, and pass the savings to you. The price on the trip page is the final price. No "convenience fees" or whatever.',
   },
   {
     id: 3,
-    question: 'What is included in the trip price?',
-    answer: 'Our trip prices typically include accommodation, transportation, guided tours, and some meals as specified in each trip\'s details. All inclusions are clearly listed on each trip page. Additional expenses like personal shopping, optional activities, or extra meals are not included.',
+    question: 'What\'s included and what\'s not?',
+    answer: 'Every trip page lists exactly what you get — usually it\'s accommodation, transport between cities, sightseeing, and some meals. What\'s NOT included: your travel to the pickup point, personal shopping, alcohol, and any optional activities. It\'s all listed clearly before you book.',
   },
   {
     id: 4,
-    question: 'Can I cancel or reschedule my booking?',
-    answer: 'Yes! We understand that plans can change. You can cancel or reschedule your booking up to 7 days before the trip start date. Cancellation fees may apply depending on the timing. Check our cancellation policy on the trip details page for specific terms.',
+    question: 'What if I need to cancel?',
+    answer: 'Cancel 7+ days before the trip and you can reschedule for free or get a refund minus a small processing fee. Cancel within 7 days — it depends on the trip, but we try to be fair about it. Seat lock deposits are non-refundable though. Check the specific trip page for exact terms.',
   },
   {
     id: 5,
-    question: 'Do I need travel insurance?',
-    answer: 'While travel insurance is not mandatory, we highly recommend it for your safety and peace of mind. It covers medical emergencies, trip cancellations, and lost belongings. You can purchase travel insurance through our partners or your preferred provider.',
+    question: 'What\'s this "seat lock" thing?',
+    answer: 'Can\'t pay the full amount right now? No problem. Pay 20-30% to lock your seat, then pay the rest before the trip. Your spot is guaranteed once you lock it. If you don\'t pay the balance in time, the seat gets released and the deposit isn\'t refunded.',
   },
   {
     id: 6,
-    question: 'What if a trip gets cancelled?',
-    answer: 'In the rare event that we need to cancel a trip due to unforeseen circumstances, you\'ll receive a full refund or the option to transfer your booking to another available trip. We always prioritize your safety and will communicate any changes as early as possible.',
+    question: 'What if Ghumakkars cancels a trip?',
+    answer: 'It happens rarely — usually weather or safety reasons. If we cancel, you get a full refund. No questions, no processing fees. Or you can move your booking to another trip if you prefer. We\'ll let you know as early as we can.',
   },
   {
     id: 7,
-    question: 'Are the trips safe for solo travelers?',
-    answer: 'Yes! Our trips are designed to be safe and welcoming for all travelers, including solo adventurers. You\'ll be part of a group with experienced guides, and we ensure all accommodations and activities meet safety standards. Many solo travelers join our trips and make lasting friendships.',
+    question: 'Can I come alone?',
+    answer: 'Honestly, about half our travellers come solo. That\'s kind of the point — you join a group of 10-25 people, and by day two you\'ve got a whole new friend circle. We\'ve seen people meet their best friends and even partners on our trips. It\'s not weird to come alone. It\'s normal here.',
   },
   {
     id: 8,
-    question: 'How do I become an admin to create trips?',
-    answer: 'Admin access is granted by our team. If you\'re interested in becoming an admin to help manage trips, please contact us at Contact@ghumakkars.in with your request. We review applications based on experience and commitment to providing quality travel experiences.',
+    question: 'Is it safe?',
+    answer: 'We\'ve done 200+ trips without a serious incident. Every stay is personally checked by our team. We have local contacts at every destination. Trip leaders carry first-aid kits and know the nearest hospitals. That said, adventure travel has inherent risks — we don\'t sugarcoat that. We just make sure the controllable stuff is handled.',
   },
 ];
 
@@ -83,11 +83,11 @@ export default function FAQ() {
           <div className="inline-flex items-center justify-center mb-4 md:mb-6">
             <HelpCircle className="h-8 w-8 md:h-10 md:w-10 text-purple-600 mr-3" />
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 tracking-tight">
-              Frequently Asked Questions
+              Got questions?
             </h2>
           </div>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Find answers to common questions about booking, pricing, and our travel experiences
+            Here&apos;s what people usually ask before their first trip with us.
           </p>
         </ScrollAnimation>
 

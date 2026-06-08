@@ -35,44 +35,44 @@ export default function Hero() {
         {/* Badge */}
         <div className="inline-flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-md px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 mb-5 sm:mb-6 md:mb-8 animate-fade-in rounded-full shadow-md hover:shadow-lg transition-shadow">
           <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 text-purple-600" />
-          <span className="text-xs sm:text-sm md:text-sm font-semibold tracking-wider text-purple-700 uppercase">Handpicked Group Adventures</span>
+          <span className="text-xs sm:text-sm md:text-sm font-semibold tracking-wider text-purple-700 uppercase">Trips from ₹2,999 &bull; Groups of 10-25</span>
         </div>
-        
+
         {/* Main Heading */}
         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold mb-4 sm:mb-5 md:mb-6 lg:mb-8 text-gray-900 tracking-tight animate-fade-in leading-[1.1] sm:leading-tight px-2">
-          Discover India&apos;s Hidden
+          Go somewhere new
           <span className="block mt-1 sm:mt-2 md:mt-3 font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
-            Gems & Wonders
+            this weekend.
           </span>
         </h1>
-        
+
         {/* Primary Description */}
         <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-gray-700 mb-3 sm:mb-4 md:mb-5 lg:mb-6 max-w-3xl mx-auto px-2 sm:px-4 animate-fade-in-delay font-medium leading-relaxed">
-          Curated journeys across India — real adventures, honest prices, and memories that actually last
+          We plan group trips to Manali, Goa, Rishikesh, Kashmir and 50+ places across India. You just show up.
         </p>
-        
+
         {/* Secondary Description */}
         <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-600 mb-6 sm:mb-8 md:mb-10 lg:mb-12 max-w-2xl mx-auto px-2 sm:px-4 animate-fade-in-delay leading-relaxed">
-          We handle the planning, you bring the excitement. Small groups, big experiences, and prices that won&apos;t make you think twice
+          Stays, transport, itinerary — all sorted. Pay upfront or lock your seat with a deposit. No hidden charges, we promise.
         </p>
-        
+
         {/* Feature Pills */}
         <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3 md:gap-4 mb-6 sm:mb-8 md:mb-10 lg:mb-12 px-2 sm:px-4 animate-fade-in-delay-2">
           <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
             <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Group Adventures</span>
+            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Small Groups</span>
           </div>
           <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
             <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Flexible Scheduling</span>
+            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Multiple Dates</span>
           </div>
           <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
             <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Best Prices</span>
+            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">No Hidden Costs</span>
           </div>
           <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
             <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Safe Travel</span>
+            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Vetted Stays</span>
           </div>
         </div>
 
@@ -83,13 +83,13 @@ export default function Hero() {
             className="group w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-700 text-white px-7 sm:px-8 md:px-10 py-3 sm:py-3.5 md:py-4 text-sm sm:text-base md:text-base font-semibold tracking-wide uppercase hover:from-purple-700 hover:to-purple-800 transition-all duration-200 inline-flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-100"
           >
             <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-2 group-hover:animate-pulse" />
-            Explore Destinations
+            See Upcoming Trips
           </a>
           <a
             href="/auth/signup"
             className="w-full sm:w-auto border-2 border-purple-600 text-purple-700 bg-white/90 backdrop-blur-sm px-7 sm:px-8 md:px-10 py-3 sm:py-3.5 md:py-4 text-sm sm:text-base md:text-base font-semibold tracking-wide uppercase hover:bg-purple-50 hover:border-purple-700 transition-all duration-200 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 active:scale-100"
           >
-            Start Your Journey
+            Create Free Account
           </a>
         </div>
       </div>

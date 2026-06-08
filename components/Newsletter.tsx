@@ -33,10 +33,10 @@ export default function Newsletter() {
           </div>
           
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-gray-900 mb-3 md:mb-4 tracking-tight">
-            Stay Updated
+            Don&apos;t miss the good ones
           </h2>
           <p className="text-base md:text-lg text-gray-600 mb-6 md:mb-8 max-w-2xl mx-auto font-light leading-relaxed">
-            Get notified about new trips, exclusive deals, and early-bird offers
+            We&apos;ll email you when we drop new trips. No spam, just trip alerts. Unsubscribe whenever.
           </p>
 
           {submitted ? (

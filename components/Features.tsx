@@ -6,33 +6,33 @@ import ScrollAnimation from './ScrollAnimation';
 const features = [
   {
     icon: Shield,
-    title: 'Safe & Secure',
-    description: 'Verified accommodations and trusted local partners ensure your safety throughout the journey',
+    title: 'We check every stay',
+    description: 'Our team personally vets hotels and homestays before adding them. If we wouldn\'t sleep there, you won\'t either.',
   },
   {
     icon: Clock,
-    title: 'Flexible Scheduling',
-    description: 'Multiple departure dates to choose from, with flexible rescheduling options',
+    title: 'Pick your dates',
+    description: 'Most trips run on multiple dates. Can\'t make one? Reschedule to the next batch — no extra charge.',
   },
   {
     icon: Users,
-    title: 'Group Adventures',
-    description: 'Travel with like-minded people and create lasting friendships on every trip',
+    title: '10-25 people per trip',
+    description: 'Big enough to have a good time, small enough that you actually get to know people. Not a 50-person tourist bus.',
   },
   {
     icon: MapPin,
-    title: 'Curated Routes',
-    description: 'Expertly planned itineraries covering hidden gems and must-see destinations',
+    title: 'Off the beaten path',
+    description: 'We skip the overcrowded tourist spots. Think hidden waterfalls in Meghalaya, not the same old Mall Road walk.',
   },
   {
     icon: Heart,
-    title: 'Budget-Smart',
-    description: 'Every detail designed to give you the most value without cutting corners',
+    title: 'Actually affordable',
+    description: 'A 4-day Manali trip for ₹4,999 including stays, transport, and meals. That\'s not a typo.',
   },
   {
     icon: Award,
-    title: 'Best Value',
-    description: 'Unbeatable prices with transparent pricing - no hidden costs or surprises',
+    title: 'No surprise costs',
+    description: 'The price on the page is the price you pay. We list everything that\'s included and what\'s not. Simple.',
   },
 ];
 
@@ -49,14 +49,14 @@ export default function Features() {
         <ScrollAnimation className="text-center mb-12 md:mb-16 lg:mb-20 px-4">
           <div className="inline-flex items-center space-x-2 mb-4 md:mb-6">
             <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />
-            <span className="text-xs md:text-sm font-semibold text-purple-600 uppercase tracking-wider">Why Choose Us</span>
+            <span className="text-xs md:text-sm font-semibold text-purple-600 uppercase tracking-wider">How it works</span>
             <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 mb-4 md:mb-6 tracking-tight">
-            Everything You Need
+            What you get with us
           </h2>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Comprehensive travel solutions designed to make your journey seamless, affordable, and unforgettable
+            We&apos;ve done over 200 trips. Here&apos;s what we&apos;ve figured out matters most.
           </p>
         </ScrollAnimation>
 

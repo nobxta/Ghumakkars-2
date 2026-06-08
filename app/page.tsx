@@ -10,9 +10,9 @@ import Newsletter from '@/components/Newsletter';
 import CTA from '@/components/CTA';
 
 export const metadata: Metadata = {
-  title: 'Ghumakkars - Budget Group Travel Across India | Explore India',
+  title: 'Ghumakkars — Group Trips Across India | From ₹2,999',
   description:
-    'Book curated budget-friendly group trips across India. Manali, Goa, Rishikesh, Kashmir & more. Seat-lock booking, referral rewards, honest prices. Start your adventure today!',
+    'We organise group trips to Manali, Goa, Rishikesh, Kashmir and 50+ places across India. Small groups, honest prices, everything planned. Just show up.',
   alternates: { canonical: '/' },
 };
 

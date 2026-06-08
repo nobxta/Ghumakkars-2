@@ -18,12 +18,12 @@ export default function Trips() {
           <div className="flex items-center justify-center mb-4 md:mb-6">
             <div className="flex-1 h-px bg-purple-200 max-w-20"></div>
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 mx-4 md:mx-8 tracking-tight">
-              Curated Journeys
+              Upcoming Trips
             </h2>
             <div className="flex-1 h-px bg-purple-200 max-w-20"></div>
           </div>
           <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-3xl mx-auto font-light leading-relaxed">
-            Handpicked destinations and thoughtfully planned itineraries for travellers who want real experiences, not tourist traps
+            These are running soon. Spots fill up quick on the popular ones — Manali and Goa usually sell out first.
           </p>
         </ScrollAnimation>
 
