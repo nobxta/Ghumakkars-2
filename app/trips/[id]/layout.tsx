@@ -21,29 +21,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
   const startDate = trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
+  // Use short_description as the primary share preview text
+  const shareText = desc.length > 0 ? desc.substring(0, 200) : `${trip.duration_days} days in ${trip.destination}. From ₹${trip.discounted_price?.toLocaleString()} per person.`;
+
   return {
-    title: `${trip.title} - ${trip.destination} | ₹${trip.discounted_price?.toLocaleString()}`,
-    description: `${desc.substring(0, 140)}. ${trip.duration_days} days trip to ${trip.destination}. Starting ₹${trip.discounted_price?.toLocaleString()}. ${startDate ? `Departing ${startDate}.` : ''} Book now!`,
+    title: `${trip.title} | ₹${trip.discounted_price?.toLocaleString()} · ${trip.duration_days} days`,
+    description: shareText,
     keywords: [
       `${trip.destination} trip`,
       `${trip.destination} budget trip`,
-      `budget trip ${trip.destination}`,
       `${trip.title}`,
       'budget travel India',
       'Ghumakkars',
     ],
     alternates: { canonical: `/trips/${params.id}` },
     openGraph: {
-      title: `${trip.title} - ${trip.destination} Trip`,
-      description: `${trip.duration_days} days in ${trip.destination}. ₹${trip.discounted_price?.toLocaleString()}. Book with seat-lock!`,
+      title: trip.title,
+      description: shareText,
       url: `${siteUrl}/trips/${params.id}`,
       images: image ? [{ url: image, width: 1200, height: 630, alt: trip.title }] : [],
       type: 'website',
+      siteName: 'Ghumakkars',
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${trip.title} | Ghumakkars`,
-      description: `₹${trip.discounted_price?.toLocaleString()} • ${trip.duration_days} days • ${trip.destination}`,
+      title: trip.title,
+      description: shareText,
       images: image ? [image] : [],
     },
   };

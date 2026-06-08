@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy } from 'lucide-react';
+import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon } from 'lucide-react';
 
 interface ItineraryDay {
   day?: number;
@@ -202,10 +202,10 @@ export default function TripDetailPage() {
   };
 
   return (
-    <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-20 lg:pb-0 bg-gray-50/30">
+    <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-24 sm:pb-28 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero — Swipeable Carousel (Amazon style) */}
-      <div className="relative h-[45vh] sm:h-[55vh] md:h-[60vh] lg:h-[65vh] overflow-hidden bg-gray-200">
+      <div className="relative h-[50vh] sm:h-[55vh] md:h-[60vh] max-h-[640px] overflow-hidden bg-gray-200">
         {heroImages.length > 0 ? (
           <div
             className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
@@ -223,7 +223,7 @@ export default function TripDetailPage() {
                 className="relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
               >
                 <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img})` }}></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
               </button>
             ))}
           </div>
@@ -233,28 +233,27 @@ export default function TripDetailPage() {
           </div>
         )}
 
-        {/* Carousel Dots */}
+        {/* Carousel Dots + Counter */}
         {heroImages.length > 1 && (
-          <div className="absolute bottom-24 sm:bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
-            {heroImages.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setGalleryIndex(i);
-                  const scroller = document.getElementById('hero-scroller');
-                  if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
-                }}
-                className={`h-1.5 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-6' : 'bg-white/50 w-1.5'}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Photo Counter */}
-        {heroImages.length > 1 && (
-          <div className="absolute top-20 sm:top-24 right-4 z-20 bg-black/60 backdrop-blur-sm text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-medium">
-            {galleryIndex + 1} / {heroImages.length}
-          </div>
+          <>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full">
+              {heroImages.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setGalleryIndex(i);
+                    const scroller = document.getElementById('hero-scroller');
+                    if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
+                  }}
+                  className={`h-2 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-8' : 'bg-white/50 w-2 hover:bg-white/80'}`}
+                />
+              ))}
+            </div>
+            <div className="absolute bottom-4 right-4 z-20 bg-black/60 backdrop-blur-md text-white text-sm px-3 py-1.5 rounded-full font-semibold flex items-center gap-1.5">
+              <ImageIcon className="h-4 w-4" />
+              {galleryIndex + 1} / {heroImages.length}
+            </div>
+          </>
         )}
 
         {/* Status badge over carousel */}
@@ -299,21 +298,34 @@ export default function TripDetailPage() {
           </button>
         </div>
 
-        {/* Trip Title Overlay - minimal, just title + destination */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12 pointer-events-none z-10">
+        {/* Trip Title Overlay - bottom-left, above dots */}
+        <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12 pointer-events-none z-10">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 leading-tight drop-shadow-md">
+            {trip.discount_percentage > 0 && (
+              <div className="inline-flex items-center bg-purple-600 text-white px-3 py-1 rounded-md text-xs sm:text-sm font-bold mb-2 sm:mb-3 shadow-lg">
+                <Tag className="h-3 w-3 mr-1" />
+                {trip.discount_percentage}% OFF
+              </div>
+            )}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-2 leading-tight drop-shadow-lg">
               {trip.title}
             </h1>
-            <div className="flex items-center text-white/95 text-sm sm:text-base md:text-lg drop-shadow">
-              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" />
+            <div className="flex items-center text-white/95 text-base sm:text-lg md:text-xl drop-shadow font-medium">
+              <MapPin className="h-5 w-5 sm:h-6 sm:w-6 mr-2" />
               {trip.destination}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+        {/* Short description tagline */}
+        {trip.short_description && (
+          <p className="text-lg sm:text-xl md:text-2xl text-gray-700 mb-6 md:mb-8 leading-relaxed max-w-4xl">
+            {trip.short_description}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           <div className="lg:col-span-2">
 
@@ -507,7 +519,7 @@ export default function TripDetailPage() {
           </div>
 
           <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-md p-5 sm:p-6 md:p-7 lg:sticky lg:top-24">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-md p-5 sm:p-6 md:p-7 lg:sticky lg:top-20">
               {isPastTrip ? (
                 /* Completed / Cancelled / Postponed — view only, no booking */
                 <>
@@ -778,39 +790,48 @@ export default function TripDetailPage() {
         </div>
       )}
 
-      {/* Sticky mobile Book Now bar */}
+      {/* Sticky Book Now bar — all screens */}
       {!isPastTrip && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-purple-200 shadow-[0_-4px_20px_rgba(168,85,247,0.15)] px-4 py-3 flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 leading-tight">From</p>
-            <p className="text-xl font-bold text-gray-900 flex items-center leading-tight">
-              <IndianRupee className="h-5 w-5" />
-              {(trip.seat_lock_price || trip.discounted_price).toLocaleString()}
-              <span className="text-xs text-gray-500 ml-1 font-normal">
-                {trip.seat_lock_price ? '/seat lock' : '/person'}
-              </span>
-            </p>
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-purple-200 shadow-[0_-4px_20px_rgba(168,85,247,0.15)]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-500 leading-tight">{trip.seat_lock_price ? 'Lock your seat from' : 'From'}</p>
+              <div className="flex items-baseline gap-2 leading-tight">
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-baseline">
+                  <IndianRupee className="h-5 w-5 sm:h-6 sm:w-6" />
+                  {(trip.seat_lock_price || trip.discounted_price).toLocaleString()}
+                </p>
+                <span className="text-sm text-gray-500 hidden sm:inline">
+                  {trip.seat_lock_price ? '/ seat lock' : '/ person'}
+                </span>
+                {trip.original_price > trip.discounted_price && (
+                  <span className="hidden md:inline text-sm text-gray-400 line-through">
+                    ₹{trip.original_price.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleBookNow}
+              disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
+              className={`flex-shrink-0 px-6 sm:px-8 md:px-10 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg shadow-lg flex items-center gap-2 transition-all ${
+                !trip.is_active || availableSpots === 0 || trip.booking_disabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 active:scale-95 hover:shadow-xl'
+              }`}
+            >
+              {trip.booking_disabled
+                ? 'Bookings Closed'
+                : availableSpots === 0
+                ? 'Sold Out'
+                : (
+                  <>
+                    Book Now
+                    <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 rotate-180" />
+                  </>
+                )}
+            </button>
           </div>
-          <button
-            onClick={handleBookNow}
-            disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
-            className={`flex-shrink-0 px-6 py-3.5 rounded-xl font-bold text-base shadow-lg flex items-center gap-1.5 ${
-              !trip.is_active || availableSpots === 0 || trip.booking_disabled
-                ? 'bg-gray-300 text-gray-500'
-                : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white active:scale-95'
-            }`}
-          >
-            {trip.booking_disabled
-              ? 'Closed'
-              : availableSpots === 0
-              ? 'Sold Out'
-              : (
-                <>
-                  Book Now
-                  <ArrowLeft className="h-4 w-4 rotate-180" />
-                </>
-              )}
-          </button>
         </div>
       )}
     </div>
