@@ -248,7 +248,7 @@ export default function TripsPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Available Trips</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
               {availableToShow.map((trip) => {
-                const availableSpots = trip.max_participants - trip.current_participants;
+                const availableSpots = trip.max_participants ? (trip.max_participants - trip.current_participants) : Infinity;
                 const displayImage = trip.cover_image_url || trip.image_url;
                 const displayDescription = trip.short_description || trip.description;
 
@@ -297,12 +297,12 @@ export default function TripsPage() {
                       <div className="flex items-center gap-3 mb-4 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
                         <div className="flex items-center">
                           <Clock className="h-3.5 w-3.5 mr-1.5" />
-                          <span className="font-medium">{trip.duration_days} Days</span>
+                          <span className="font-medium">{(trip as any).duration_text || `${trip.duration_days} Days`}</span>
                         </div>
                         <div className="h-4 w-px bg-gray-300"></div>
                         <div className="flex items-center">
                           <Users className="h-3.5 w-3.5 mr-1.5" />
-                          <span className="font-medium">{trip.current_participants}/{trip.max_participants}</span>
+                          <span className="font-medium">Small group</span>
                         </div>
                         <div className="h-4 w-px bg-gray-300"></div>
                         <div className="flex items-center min-w-0">
@@ -338,10 +338,10 @@ export default function TripsPage() {
                       </div>
 
                       {/* Available Spots Warning */}
-                      {availableSpots > 0 && availableSpots < 5 && (
+                      {trip.max_participants && availableSpots > 0 && availableSpots < 5 && (
                         <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
                           <p className="text-xs text-orange-700 font-medium">
-                            Only {availableSpots} {availableSpots === 1 ? 'spot' : 'spots'} left!
+                            Few seats left — booking closing soon!
                           </p>
                         </div>
                       )}
@@ -430,8 +430,8 @@ export default function TripsPage() {
                       </div>
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">{displayDescription}</p>
                       <div className="flex items-center flex-wrap gap-2 text-xs text-gray-500 mb-4">
-                        <span className="flex items-center"><Clock className="h-3.5 w-3.5 mr-1" />{trip.duration_days} Days</span>
-                        <span className="flex items-center"><Users className="h-3.5 w-3.5 mr-1" />{trip.current_participants} participants</span>
+                        <span className="flex items-center"><Clock className="h-3.5 w-3.5 mr-1" />{(trip as any).duration_text || `${trip.duration_days} Days`}</span>
+                        <span className="flex items-center"><Users className="h-3.5 w-3.5 mr-1" />Small group</span>
                         {trip.completed_at && (
                           <span>Completed {new Date(trip.completed_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         )}

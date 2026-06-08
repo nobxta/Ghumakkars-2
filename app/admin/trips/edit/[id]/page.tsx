@@ -49,6 +49,7 @@ export default function EditTripPage() {
   const [endDate, setEndDate] = useState('');
   const [bookingDeadline, setBookingDeadline] = useState('');
   const [maxSeats, setMaxSeats] = useState('');
+  const [durationText, setDurationText] = useState('');
   const [currentParticipants, setCurrentParticipants] = useState(0);
 
   // Step 4: Images
@@ -97,6 +98,7 @@ export default function EditTripPage() {
       setDiscountedPrice(data.discounted_price?.toString() || '');
       setSeatLockPrice(data.seat_lock_price?.toString() || '');
       setMaxSeats(data.max_participants?.toString() || '');
+      setDurationText(data.duration_text || '');
       setCurrentParticipants(data.current_participants || 0);
       
       // Format dates for input fields (YYYY-MM-DD)
@@ -265,7 +267,7 @@ export default function EditTripPage() {
         }
         return true;
       case 3:
-        if (!startDate || !endDate || !bookingDeadline || !maxSeats) {
+        if (!startDate || !endDate || !bookingDeadline) {
           setError('Please fill in all date and seat information');
           return false;
         }
@@ -446,7 +448,8 @@ export default function EditTripPage() {
         early_bird_price: earlyBirdPriceNum,
         early_bird_conditions: earlyBirdConditionsData,
         duration_days: durationDays,
-        max_participants: parseInt(maxSeats),
+        max_participants: maxSeats ? parseInt(maxSeats) : null,
+        duration_text: durationText.trim() || null,
         // Keep existing current_participants - don't reset it
         start_date: startDate,
         end_date: endDate,
@@ -846,18 +849,35 @@ export default function EditTripPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Maximum Seats <span className="text-red-500">*</span>
+                  Maximum Seats <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="number"
                   value={maxSeats}
                   onChange={(e) => setMaxSeats(e.target.value)}
-                  required
                   min="1"
-                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
+                  placeholder="Leave empty for unlimited"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 text-sm"
                 />
-                <p className="text-sm text-gray-600 mt-2">
-                  Total number of seats available for this trip (Current: {currentParticipants} booked)
+                <p className="text-xs text-gray-500 mt-2">
+                  Leave empty for no cap. Currently {currentParticipants} booked.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Duration Display <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={durationText}
+                  onChange={(e) => setDurationText(e.target.value)}
+                  maxLength={40}
+                  placeholder="e.g. 4N 5D or 4 Days / 3 Nights"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  How duration shows everywhere. Leave empty to auto-fill from trip dates.
                 </p>
               </div>
             </div>
