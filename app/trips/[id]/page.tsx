@@ -194,16 +194,16 @@ export default function TripDetailPage() {
   };
 
   return (
-    <div className="min-h-screen pt-16 md:pt-20 pb-20 lg:pb-0 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
+    <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-20 lg:pb-0 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero Section with Image */}
-      <div className="relative h-[50vh] md:h-[60vh] lg:h-[70vh] overflow-hidden">
+      <div className="relative h-[40vh] sm:h-[50vh] md:h-[55vh] lg:h-[60vh] overflow-hidden">
         {(trip.cover_image_url || trip.image_url) ? (
-          <div 
+          <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{ backgroundImage: `url(${trip.cover_image_url || trip.image_url})` }}
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30"></div>
             {isCompleted && (
               <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
                 <CheckCircle className="h-5 w-5" />
@@ -266,35 +266,33 @@ export default function TripDetailPage() {
         </div>
 
         {/* Trip Title Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 lg:p-12">
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 mb-3">
-              {trip.discount_percentage > 0 && (
-                <div className="bg-purple-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center space-x-2 shadow-xl">
-                  <Tag className="h-4 w-4" />
-                  <span>{trip.discount_percentage}% OFF</span>
-                </div>
-              )}
-              <div className="bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center space-x-2">
-                <Sparkles className="h-4 w-4" />
-                <span>{trip.duration_days} Days Journey</span>
+            {trip.discount_percentage > 0 && (
+              <div className="inline-flex items-center bg-purple-600 text-white px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-bold mb-2 sm:mb-3 shadow-lg">
+                <Tag className="h-3 w-3 mr-1" />
+                {trip.discount_percentage}% OFF
               </div>
-            </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-3 drop-shadow-lg leading-tight">
+            )}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 leading-tight">
               {trip.title}
             </h1>
-            <div className="flex items-center space-x-4 text-white/90">
-              <div className="flex items-center bg-white/20 backdrop-blur-md px-4 py-2 rounded-full">
-                <MapPin className="h-5 w-5 mr-2" />
-                <span className="font-medium">{trip.destination}</span>
-              </div>
-              <div className="flex items-center bg-white/20 backdrop-blur-md px-4 py-2 rounded-full">
-                <Calendar className="h-5 w-5 mr-2" />
-                <span className="font-medium">
-                  {formatDate(trip.start_date, { day: 'numeric', month: 'short' })}
-                  {trip.end_date && ` - ${formatDate(trip.end_date, { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                </span>
-              </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-white/95 text-sm sm:text-base">
+              <span className="flex items-center">
+                <MapPin className="h-4 w-4 mr-1.5" />
+                {trip.destination}
+              </span>
+              <span className="text-white/40">·</span>
+              <span className="flex items-center">
+                <Calendar className="h-4 w-4 mr-1.5" />
+                {formatDate(trip.start_date, { day: 'numeric', month: 'short' })}
+                {trip.end_date && ` - ${formatDate(trip.end_date, { day: 'numeric', month: 'short' })}`}
+              </span>
+              <span className="text-white/40">·</span>
+              <span className="flex items-center">
+                <Clock className="h-4 w-4 mr-1.5" />
+                {trip.duration_days} {trip.duration_days === 1 ? 'day' : 'days'}
+              </span>
             </div>
           </div>
         </div>
@@ -304,74 +302,92 @@ export default function TripDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           <div className="lg:col-span-2">
 
-            {/* Quick Info Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
-              <div className="bg-white border border-purple-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
-                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1.5" />
-                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Duration</p>
-                <p className="font-bold text-gray-900 text-xs sm:text-sm">{trip.duration_days} Days</p>
-              </div>
-              <div className="bg-white border border-blue-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mx-auto mb-1.5" />
-                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Group size</p>
-                <p className="font-bold text-gray-900 text-xs sm:text-sm">{trip.max_participants}</p>
-              </div>
-              <div className={`bg-white border rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm ${isLowAvailability ? 'border-orange-300' : 'border-green-200'}`}>
-                <Check className={`h-4 w-4 sm:h-5 sm:w-5 mx-auto mb-1.5 ${isLowAvailability ? 'text-orange-600' : 'text-green-600'}`} />
-                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">{isLowAvailability ? 'Hurry!' : 'Available'}</p>
-                <p className={`font-bold text-xs sm:text-sm ${isLowAvailability ? 'text-orange-600' : 'text-green-700'}`}>
-                  {availableSpots} left
-                </p>
-              </div>
-              <div className="bg-white border border-amber-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
-                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 mx-auto mb-1.5" />
-                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Starts</p>
-                <p className="font-bold text-gray-900 text-xs sm:text-sm">{formatDate(trip.start_date)}</p>
+            {/* Quick Stats Strip */}
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-5 sm:mb-6 overflow-hidden">
+              <div className="grid grid-cols-3 divide-x divide-gray-100">
+                <div className="p-3 sm:p-4 text-center">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1" />
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider">Duration</p>
+                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5">{trip.duration_days} {trip.duration_days === 1 ? 'day' : 'days'}</p>
+                </div>
+                <div className="p-3 sm:p-4 text-center">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1" />
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider">Group size</p>
+                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5">Up to {trip.max_participants}</p>
+                </div>
+                <div className="p-3 sm:p-4 text-center">
+                  <Check className={`h-4 w-4 sm:h-5 sm:w-5 mx-auto mb-1 ${isLowAvailability ? 'text-orange-600' : 'text-green-600'}`} />
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider">Spots left</p>
+                  <p className={`font-bold text-sm sm:text-base mt-0.5 ${isLowAvailability ? 'text-orange-600' : 'text-gray-900'}`}>
+                    {availableSpots}
+                    {isLowAvailability && <span className="text-[10px] font-normal ml-1">hurry!</span>}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-sm border border-purple-100 rounded-xl md:rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 sm:p-6 md:p-8">
               <div className="mb-6 sm:mb-8">
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-3">About this trip</h2>
-                <p className="text-sm sm:text-base md:text-lg text-gray-700 leading-relaxed whitespace-pre-line">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">About this trip</h2>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">
                   {trip.full_description || trip.description}
                 </p>
               </div>
 
-              {/* Day-wise Itinerary */}
+              {/* Day-wise Itinerary - Timeline */}
               {itineraryDays.length > 0 && (
-                <div className="mb-6 sm:mb-8 pt-6 border-t border-purple-100">
-                  <div className="flex items-center mb-4 sm:mb-5">
-                    <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2.5" />
-                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Day-by-day plan</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {itineraryDays.map((day, index) => {
-                      const isOpen = expandedDay === index;
-                      return (
-                        <div key={index} className="border border-purple-100 rounded-xl overflow-hidden bg-purple-50/30 hover:bg-purple-50/60 transition-colors">
-                          <button
-                            onClick={() => setExpandedDay(isOpen ? null : index)}
-                            className="w-full flex items-center justify-between p-3 sm:p-4 text-left"
-                          >
-                            <div className="flex items-center min-w-0 flex-1">
-                              <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-purple-600 text-white rounded-lg flex items-center justify-center font-bold text-sm sm:text-base mr-3">
-                                {day.day || index + 1}
+                <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-1">Day-by-day plan</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-5">Tap a day to expand</p>
+                  <div className="relative">
+                    {/* Vertical line */}
+                    <div className="absolute left-4 sm:left-5 top-2 bottom-2 w-px bg-gradient-to-b from-purple-200 via-purple-100 to-transparent"></div>
+                    <div className="space-y-3">
+                      {itineraryDays.map((day, index) => {
+                        const isOpen = expandedDay === index;
+                        const isLast = index === itineraryDays.length - 1;
+                        return (
+                          <div key={index} className="relative pl-12 sm:pl-14">
+                            {/* Day number circle */}
+                            <button
+                              onClick={() => setExpandedDay(isOpen ? null : index)}
+                              className={`absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all ${
+                                isOpen
+                                  ? 'bg-purple-600 text-white shadow-lg ring-4 ring-purple-100'
+                                  : 'bg-white text-purple-700 border-2 border-purple-300'
+                              }`}
+                            >
+                              {day.day || index + 1}
+                            </button>
+                            <button
+                              onClick={() => setExpandedDay(isOpen ? null : index)}
+                              className={`w-full text-left rounded-xl border transition-all ${
+                                isOpen
+                                  ? 'border-purple-200 bg-purple-50/40'
+                                  : 'border-gray-200 bg-white hover:border-purple-200 hover:bg-purple-50/20'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between p-3 sm:p-4">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] sm:text-xs text-purple-600 uppercase tracking-wider font-semibold mb-0.5">
+                                    Day {day.day || index + 1}
+                                  </p>
+                                  <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                                    {day.title || `Day ${index + 1}`}
+                                  </h4>
+                                </div>
+                                {isOpen ? <ChevronUp className="h-4 w-4 text-purple-600 flex-shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0 ml-2" />}
                               </div>
-                              <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                {day.title || `Day ${index + 1}`}
-                              </h4>
-                            </div>
-                            {isOpen ? <ChevronUp className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0 ml-2" />}
-                          </button>
-                          {isOpen && day.description && (
-                            <div className="px-3 sm:px-4 pb-3 sm:pb-4 pl-14 sm:pl-16">
-                              <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">{day.description}</p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                              {isOpen && day.description && (
+                                <div className="px-3 sm:px-4 pb-3 sm:pb-4">
+                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{day.description}</p>
+                                </div>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -426,64 +442,63 @@ export default function TripDetailPage() {
               )}
 
               {trip.highlights && trip.highlights.length > 0 && (
-                <div className="mb-6 sm:mb-8 pt-6 border-t border-purple-100">
-                  <div className="flex items-center mb-4 sm:mb-5">
-                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2.5" />
-                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Highlights</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-1">Trip highlights</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-4">What you'll experience</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     {trip.highlights.map((highlight, index) => (
-                      <div key={index} className="flex items-start group bg-purple-50/50 p-4 rounded-xl hover:bg-purple-100/50 transition-colors border border-purple-100">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="w-6 h-6 md:w-7 md:h-7 bg-purple-600 rounded-full flex items-center justify-center">
-                            <Check className="h-4 w-4 md:h-5 md:w-5 text-white" />
-                          </div>
+                      <div key={index} className="flex items-start gap-2.5 p-2.5 sm:p-3 rounded-lg bg-gray-50/80 border border-gray-100">
+                        <div className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
+                          <Sparkles className="h-3 w-3 text-purple-600" />
                         </div>
-                        <span className="text-sm md:text-base text-gray-700 font-medium leading-relaxed ml-3">{highlight}</span>
+                        <span className="text-sm text-gray-800 leading-snug">{highlight}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {trip.included_features && trip.included_features.length > 0 && (
-                <div className="pt-8 border-t border-purple-100">
-                  <div className="flex items-center mb-5 md:mb-6">
-                    <Shield className="h-6 w-6 md:h-7 md:w-7 text-green-600 mr-3" />
-                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">What&apos;s Included</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-                    {trip.included_features.map((feature, index) => (
-                      <div key={index} className="flex items-start group bg-green-50/50 p-4 rounded-xl hover:bg-green-100/50 transition-colors border border-green-100">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="w-6 h-6 md:w-7 md:h-7 bg-green-600 rounded-full flex items-center justify-center">
-                            <Check className="h-4 w-4 md:h-5 md:w-5 text-white" />
+              {((trip.included_features && trip.included_features.length > 0) || (trip.excluded_features && trip.excluded_features.length > 0)) && (
+                <div className="pt-6 border-t border-gray-100">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-1">What's in & what's not</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-4">Check before you book</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {trip.included_features && trip.included_features.length > 0 && (
+                      <div className="rounded-xl border border-green-200 bg-green-50/30 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center">
+                            <Check className="h-4 w-4 text-green-700" />
                           </div>
+                          <p className="font-semibold text-gray-900 text-sm sm:text-base">Included</p>
                         </div>
-                        <span className="text-sm md:text-base text-gray-700 font-medium leading-relaxed ml-3">{feature}</span>
+                        <ul className="space-y-1.5">
+                          {trip.included_features.map((feature, index) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                              <Check className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {trip.excluded_features && trip.excluded_features.length > 0 && (
-                <div className="pt-8 border-t border-purple-100">
-                  <div className="flex items-center mb-5 md:mb-6">
-                    <AlertCircle className="h-6 w-6 md:h-7 md:w-7 text-amber-600 mr-3" />
-                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">What&apos;s Not Included</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-                    {trip.excluded_features.map((feature, index) => (
-                      <div key={index} className="flex items-start group bg-amber-50/50 p-4 rounded-xl hover:bg-amber-100/50 transition-colors border border-amber-100">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="w-6 h-6 md:w-7 md:h-7 bg-amber-500 rounded-full flex items-center justify-center">
-                            <X className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                    )}
+                    {trip.excluded_features && trip.excluded_features.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                            <X className="h-4 w-4 text-gray-700" />
                           </div>
+                          <p className="font-semibold text-gray-900 text-sm sm:text-base">Not included</p>
                         </div>
-                        <span className="text-sm md:text-base text-gray-700 font-medium leading-relaxed ml-3">{feature}</span>
+                        <ul className="space-y-1.5">
+                          {trip.excluded_features.map((feature, index) => (
+                            <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                              <X className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
@@ -491,7 +506,7 @@ export default function TripDetailPage() {
           </div>
 
           <div className="lg:col-span-1">
-            <div className="bg-gradient-to-br from-white to-purple-50/30 backdrop-blur-sm border border-purple-200 rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 lg:sticky lg:top-24">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-md p-4 sm:p-5 md:p-6 lg:sticky lg:top-24">
               {isPastTrip ? (
                 /* Completed / Cancelled / Postponed — view only, no booking */
                 <>
@@ -567,161 +582,118 @@ export default function TripDetailPage() {
               ) : (
                 <>
               {/* Pricing Section */}
-              <div className="mb-5 sm:mb-6 pb-5 border-b border-purple-200">
+              <div className="mb-5 pb-5 border-b border-gray-200">
                 {trip.original_price > trip.discounted_price && (
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-gray-500 line-through flex items-center">
-                      <IndianRupee className="h-3.5 w-3.5" />
-                      <span>{trip.original_price.toLocaleString()}</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <p className="text-sm text-gray-400 line-through flex items-center">
+                      <IndianRupee className="h-3 w-3" />
+                      {trip.original_price.toLocaleString()}
                     </p>
-                    <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-bold">
-                      {trip.discount_percentage}% off
+                    <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                      Save {trip.discount_percentage}%
                     </span>
                   </div>
                 )}
-                <div className="flex items-baseline mb-2">
-                  <p className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 flex items-baseline tracking-tight">
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-3xl sm:text-4xl font-bold text-gray-900 flex items-baseline tracking-tight">
                     <IndianRupee className="h-6 w-6 sm:h-7 sm:w-7" />
-                    <span>{trip.discounted_price.toLocaleString()}</span>
+                    {trip.discounted_price.toLocaleString()}
                   </p>
-                  <span className="text-base text-gray-500 ml-2">/person</span>
+                  <span className="text-sm text-gray-500">per person</span>
                 </div>
                 {trip.seat_lock_price && trip.seat_lock_price > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
-                    <div className="flex items-start gap-2">
-                      <Lock className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold text-amber-900">Or lock your seat for ₹{trip.seat_lock_price.toLocaleString()}</p>
-                        <p className="text-[11px] text-amber-700 mt-0.5">Pay the rest before the trip. Non-refundable.</p>
-                      </div>
-                    </div>
+                  <div className="mt-3 flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                    <Lock className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                    <span>
+                      Pay <span className="font-semibold text-gray-900">₹{trip.seat_lock_price.toLocaleString()}</span> now to lock your seat
+                    </span>
                   </div>
                 )}
               </div>
 
-              {/* Info Section */}
-              <div className="space-y-4 mb-6 md:mb-8">
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-700 flex items-center font-semibold">
-                      <Users className="h-5 w-5 mr-2 text-blue-600" />
-                      Participants
-                    </span>
-                    <span className="font-bold text-gray-900 text-lg">
-                      {trip.current_participants}/{trip.max_participants}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mt-3">
-                    <div 
-                      className="bg-blue-600 h-2.5 rounded-full transition-all"
-                      style={{ width: `${(trip.current_participants / trip.max_participants) * 100}%` }}
-                    ></div>
-                  </div>
+              {/* Capacity Bar */}
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-2 text-xs sm:text-sm">
+                  <span className="text-gray-600">Filling up</span>
+                  <span className="font-semibold text-gray-900">
+                    {trip.current_participants}/{trip.max_participants} booked
+                  </span>
                 </div>
-                
-                <div className={`border-2 rounded-xl p-4 ${isLowAvailability ? 'bg-orange-50 border-orange-300' : 'bg-green-50 border-green-200'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">Available Spots</span>
-                    <span className={`font-bold text-xl ${isLowAvailability ? 'text-orange-600' : 'text-green-700'}`}>
-                      {availableSpots}
-                    </span>
-                  </div>
-                  {isLowAvailability && (
-                    <p className="text-xs text-orange-700 mt-2 font-medium flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      Limited availability!
-                    </p>
-                  )}
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${isLowAvailability ? 'bg-orange-500' : 'bg-purple-600'}`}
+                    style={{ width: `${Math.min(100, (trip.current_participants / trip.max_participants) * 100)}%` }}
+                  ></div>
                 </div>
+                {isLowAvailability && (
+                  <p className="text-xs text-orange-600 mt-2 font-medium flex items-center">
+                    <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                    Only {availableSpots} {availableSpots === 1 ? 'spot' : 'spots'} left
+                  </p>
+                )}
               </div>
 
               {/* Book Button */}
               <button
                 onClick={handleBookNow}
                 disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
-                className={`w-full py-5 md:py-6 rounded-xl font-bold text-lg md:text-xl tracking-wide uppercase shadow-2xl transform transition-all duration-200 ${
+                className={`w-full py-3.5 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition-all ${
                   !trip.is_active || availableSpots === 0 || trip.booking_disabled
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 hover:scale-105 hover:shadow-3xl'
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 hover:shadow-lg active:scale-[0.99] shadow-md'
                 }`}
               >
-                <div className="flex items-center justify-center space-x-2">
-                  {trip.is_active && availableSpots > 0 && !trip.booking_disabled && <Heart className="h-5 w-5" />}
-                  <span>
-                    {trip.booking_disabled
-                      ? 'Bookings Closed'
-                      : !trip.is_active
-                      ? 'Not Available'
-                      : availableSpots === 0
-                      ? 'Sold Out'
-                      : 'Book This Trip'}
-                  </span>
-                </div>
+                {trip.booking_disabled
+                  ? 'Bookings Closed'
+                  : !trip.is_active
+                  ? 'Not Available'
+                  : availableSpots === 0
+                  ? 'Sold Out'
+                  : 'Book this trip'}
               </button>
-
-              {/* Urgency Message */}
-              {trip.is_active && availableSpots > 0 && !trip.booking_disabled && (
-                <div className={`mt-5 p-4 rounded-xl border-2 ${
-                  isLowAvailability 
-                    ? 'bg-orange-50 border-orange-300' 
-                    : 'bg-purple-50 border-purple-200'
-                }`}>
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
-                      isLowAvailability ? 'text-orange-600' : 'text-purple-600'
-                    }`} />
-                    <div>
-                      <p className={`text-sm font-bold ${
-                        isLowAvailability ? 'text-orange-900' : 'text-purple-900'
-                      }`}>
-                        {isLowAvailability ? 'Few Seats Left!' : 'Limited Time'}
-                      </p>
-                      <p className={`text-xs mt-1 ${
-                        isLowAvailability ? 'text-orange-700' : 'text-purple-700'
-                      }`}>
-                        {isLowAvailability 
-                          ? `Only ${availableSpots} ${availableSpots === 1 ? 'seat' : 'seats'} remaining - Book now to secure your place!`
-                          : `Only ${availableSpots} ${availableSpots === 1 ? 'spot' : 'spots'} remaining - Book now to secure your place!`
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <p className="text-center text-[11px] text-gray-500 mt-2">You won't be charged yet</p>
 
               {/* Trip Details */}
-              <div className="mt-5 pt-5 border-t border-purple-200 space-y-2.5">
-                <div className="flex items-start text-sm text-gray-700">
-                  <Calendar className="h-4 w-4 text-purple-600 mr-2.5 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-xs text-gray-500 block">Trip dates</span>
-                    <span className="font-medium">
-                      {formatDate(trip.start_date)}
-                      {trip.end_date && ` - ${formatDate(trip.end_date, { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                    </span>
+              <div className="mt-5 pt-5 border-t border-gray-100 space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center text-gray-600">
+                    <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>Trip dates</span>
                   </div>
+                  <span className="font-medium text-gray-900 text-right">
+                    {formatDate(trip.start_date)}
+                    {trip.end_date && ` – ${formatDate(trip.end_date, { day: 'numeric', month: 'short' })}`}
+                  </span>
                 </div>
                 {trip.booking_deadline_date && (
-                  <div className="flex items-start text-sm text-gray-700">
-                    <Clock className="h-4 w-4 text-orange-600 mr-2.5 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="text-xs text-gray-500 block">Bookings close</span>
-                      <span className="font-medium">{formatDate(trip.booking_deadline_date, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center text-gray-600">
+                      <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                      <span>Book by</span>
                     </div>
+                    <span className="font-medium text-gray-900">{formatDate(trip.booking_deadline_date, { day: 'numeric', month: 'short' })}</span>
                   </div>
                 )}
                 {trip.pickup_location && (
-                  <div className="flex items-start text-sm text-gray-700">
-                    <MapPin className="h-4 w-4 text-purple-600 mr-2.5 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="text-xs text-gray-500 block">Pickup point</span>
-                      <span className="font-medium">{trip.pickup_location}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center text-gray-600">
+                      <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                      <span>Pickup</span>
                     </div>
+                    <span className="font-medium text-gray-900 text-right">{trip.pickup_location}</span>
                   </div>
                 )}
-                <div className="flex items-center text-xs text-gray-500 pt-2">
-                  <Check className="h-3.5 w-3.5 text-green-600 mr-1.5" />
-                  <span>Pay via UPI, card, or net banking</span>
+              </div>
+
+              {/* Trust strip */}
+              <div className="mt-5 pt-5 border-t border-gray-100 grid grid-cols-2 gap-2 text-[11px] text-gray-600">
+                <div className="flex items-center gap-1.5">
+                  <Shield className="h-3.5 w-3.5 text-green-600" />
+                  <span>Secure payment</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  <span>Instant confirmation</span>
                 </div>
               </div>
                 </>
