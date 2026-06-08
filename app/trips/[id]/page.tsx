@@ -257,28 +257,61 @@ export default function TripDetailPage() {
   return (
     <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-24 lg:pb-0 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
-      {/* Hero — Swipeable Carousel (Amazon style) */}
+      {/* Hero — Swipeable Carousel (Amazon style, infinite loop) */}
       <div className="relative h-[50vh] sm:h-[55vh] md:h-[60vh] max-h-[640px] overflow-hidden bg-gray-200">
         {heroImages.length > 0 ? (
           <div
-            className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+            className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
             onScroll={(e) => {
               const el = e.currentTarget;
-              const idx = Math.round(el.scrollLeft / el.clientWidth);
-              if (idx !== galleryIndex) setGalleryIndex(idx);
+              const w = el.clientWidth;
+              if (w === 0) return;
+              const raw = Math.round(el.scrollLeft / w);
+              // We render: [last_clone, ...heroImages, first_clone]
+              // raw 0 → last image, raw 1..N → image 0..N-1, raw N+1 → first image
+              const n = heroImages.length;
+              if (raw === 0) {
+                // Jump to last real slide without animation
+                requestAnimationFrame(() => el.scrollTo({ left: n * w, behavior: 'auto' as any }));
+                setGalleryIndex(n - 1);
+              } else if (raw === n + 1) {
+                // Jump to first real slide without animation
+                requestAnimationFrame(() => el.scrollTo({ left: w, behavior: 'auto' as any }));
+                setGalleryIndex(0);
+              } else {
+                const realIdx = raw - 1;
+                if (realIdx !== galleryIndex) setGalleryIndex(realIdx);
+              }
+            }}
+            ref={(el) => {
+              if (el && el.scrollLeft === 0) {
+                // On first render, position at the first real slide (index 1)
+                el.scrollLeft = el.clientWidth;
+              }
             }}
             id="hero-scroller"
           >
+            {/* Clone of last image */}
+            <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImages[heroImages.length - 1]})` }}></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+            </div>
             {heroImages.map((img, i) => (
               <button
                 key={i}
                 onClick={() => { setGalleryIndex(i); setLightboxOpen(true); }}
-                className="relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
+                className="no-min-touch relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
+                style={{ minWidth: 0, minHeight: 0 }}
               >
                 <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img})` }}></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
               </button>
             ))}
+            {/* Clone of first image */}
+            <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImages[0]})` }}></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+            </div>
           </div>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-300 flex items-center justify-center">
@@ -298,7 +331,8 @@ export default function TripDetailPage() {
                   onClick={() => {
                     setGalleryIndex(i);
                     const scroller = document.getElementById('hero-scroller');
-                    if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
+                    // +1 because index 0 is the cloned last slide
+                    if (scroller) scroller.scrollTo({ left: (i + 1) * scroller.clientWidth, behavior: 'smooth' });
                   }}
                   style={{
                     width: i === galleryIndex ? '20px' : '6px',
