@@ -125,9 +125,15 @@ export default function EditTripPage() {
         setHighlights(['']);
       }
 
-      // Itinerary
+      // Itinerary — normalize old/new formats to ensure activities is always an array
       if (data.day_wise_itinerary && Array.isArray(data.day_wise_itinerary) && data.day_wise_itinerary.length > 0) {
-        setItinerary(data.day_wise_itinerary);
+        const normalized = data.day_wise_itinerary.map((d: any, i: number) => ({
+          day: d.day ?? i + 1,
+          title: d.title ?? '',
+          description: d.description ?? '',
+          activities: Array.isArray(d.activities) && d.activities.length > 0 ? d.activities : [''],
+        }));
+        setItinerary(normalized);
       }
 
       // Included/Excluded
@@ -318,18 +324,20 @@ export default function EditTripPage() {
 
   const addActivity = (dayIndex: number) => {
     const updated = [...itinerary];
+    if (!updated[dayIndex].activities) updated[dayIndex].activities = [];
     updated[dayIndex].activities.push('');
     setItinerary(updated);
   };
 
   const removeActivity = (dayIndex: number, activityIndex: number) => {
     const updated = [...itinerary];
-    updated[dayIndex].activities = updated[dayIndex].activities.filter((_, i) => i !== activityIndex);
+    updated[dayIndex].activities = (updated[dayIndex].activities || []).filter((_, i) => i !== activityIndex);
     setItinerary(updated);
   };
 
   const updateActivity = (dayIndex: number, activityIndex: number, value: string) => {
     const updated = [...itinerary];
+    if (!updated[dayIndex].activities) updated[dayIndex].activities = [];
     updated[dayIndex].activities[activityIndex] = value;
     setItinerary(updated);
   };
@@ -1065,7 +1073,7 @@ export default function EditTripPage() {
                             </button>
                           </div>
                           <div className="space-y-2">
-                            {day.activities.map((activity, activityIndex) => (
+                            {(day.activities || []).map((activity, activityIndex) => (
                               <div key={activityIndex} className="flex space-x-2">
                                 <input
                                   type="text"
@@ -1074,7 +1082,7 @@ export default function EditTripPage() {
                                   className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900 placeholder-gray-400 bg-white"
                                   placeholder="Activity description"
                                 />
-                                {day.activities.length > 1 && (
+                                {(day.activities || []).length > 1 && (
                                   <button
                                     type="button"
                                     onClick={() => removeActivity(dayIndex, activityIndex)}
