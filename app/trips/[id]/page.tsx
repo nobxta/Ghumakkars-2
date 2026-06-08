@@ -168,6 +168,57 @@ export default function TripDetailPage() {
   const heroImages = [cover, ...galleryImages].filter(Boolean) as string[];
   const sections = trip.display_sections || { photos: true, itinerary: true, highlights: true, perks: true, included: true };
 
+  // Early Bird evaluation — check if conditions match
+  const earlyBird = (() => {
+    const eb: any = trip.early_bird_conditions;
+    const ebPrice = trip.early_bird_price;
+    if (!eb?.enabled || !ebPrice || ebPrice <= 0 || ebPrice >= trip.discounted_price) return null;
+    const conditions = Array.isArray(eb.conditions) ? eb.conditions : [];
+    if (conditions.length === 0) return null;
+
+    const now = new Date();
+    let isActive = true;
+    let status = '';
+    let seatsLeft: number | null = null;
+    let daysLeft: number | null = null;
+
+    for (const c of conditions) {
+      if (c.type === 'date_range' && c.value) {
+        const [start, end] = String(c.value).split('|');
+        if (start && end) {
+          const startDate = new Date(start);
+          const endDate = new Date(end);
+          if (now < startDate || now > endDate) { isActive = false; break; }
+          const diff = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          daysLeft = diff;
+        }
+      }
+      if (c.type === 'first_bookings' && c.value) {
+        const limit = parseInt(c.value);
+        const taken = trip.current_participants || 0;
+        if (taken >= limit) { isActive = false; break; }
+        seatsLeft = limit - taken;
+      }
+    }
+    if (!isActive) return null;
+
+    if (seatsLeft !== null && seatsLeft <= 3) {
+      status = seatsLeft === 1 ? 'Last early bird seat!' : `Only ${seatsLeft} early bird seats left`;
+    } else if (daysLeft !== null && daysLeft <= 3) {
+      status = daysLeft === 0 ? 'Last day for early bird!' : daysLeft === 1 ? 'Ends tomorrow' : `Ends in ${daysLeft} days`;
+    } else if (seatsLeft !== null) {
+      status = `${seatsLeft} early bird seats remaining`;
+    } else if (daysLeft !== null) {
+      status = `Ends in ${daysLeft} days`;
+    } else {
+      status = 'Limited time offer';
+    }
+
+    return { price: ebPrice, status, savings: trip.discounted_price - ebPrice };
+  })();
+
+  const effectivePrice = earlyBird ? earlyBird.price : trip.discounted_price;
+
   const formatDate = (d?: string, opts: any = { day: 'numeric', month: 'short' }) =>
     d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
 
@@ -202,7 +253,7 @@ export default function TripDetailPage() {
   };
 
   return (
-    <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-24 sm:pb-28 bg-gray-50/30">
+    <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-24 lg:pb-0 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero — Swipeable Carousel (Amazon style) */}
       <div className="relative h-[50vh] sm:h-[55vh] md:h-[60vh] max-h-[640px] overflow-hidden bg-gray-200">
@@ -236,7 +287,7 @@ export default function TripDetailPage() {
         {/* Carousel Dots + Counter */}
         {heroImages.length > 1 && (
           <>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full">
+            <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 bg-black/40 backdrop-blur-md px-2.5 py-1.5 rounded-full">
               {heroImages.map((_, i) => (
                 <button
                   key={i}
@@ -245,13 +296,13 @@ export default function TripDetailPage() {
                     const scroller = document.getElementById('hero-scroller');
                     if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
                   }}
-                  className={`h-2 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-8' : 'bg-white/50 w-2 hover:bg-white/80'}`}
+                  className={`h-1.5 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-5' : 'bg-white/60 w-1.5'}`}
                 />
               ))}
             </div>
-            <div className="absolute bottom-4 right-4 z-20 bg-black/60 backdrop-blur-md text-white text-sm px-3 py-1.5 rounded-full font-semibold flex items-center gap-1.5">
-              <ImageIcon className="h-4 w-4" />
-              {galleryIndex + 1} / {heroImages.length}
+            <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4 z-20 bg-black/60 backdrop-blur-md text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
+              <ImageIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              {galleryIndex + 1}/{heroImages.length}
             </div>
           </>
         )}
@@ -594,40 +645,37 @@ export default function TripDetailPage() {
                 </>
               ) : (
                 <>
-              {/* Early Bird Banner */}
-              {trip.early_bird_price && trip.early_bird_price > 0 && trip.early_bird_price < trip.discounted_price && (() => {
-                const earlyBirdSavings = trip.discounted_price - trip.early_bird_price;
-                return (
-                  <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-5 w-5 text-amber-600" />
-                      <p className="text-sm font-bold text-amber-900 uppercase tracking-wider">Early bird offer</p>
-                    </div>
-                    <p className="text-base text-gray-800 leading-relaxed">
-                      Save <span className="font-bold text-amber-700">₹{earlyBirdSavings.toLocaleString()}</span> if you book early.
-                      Pay just <span className="font-bold">₹{trip.early_bird_price.toLocaleString()}</span> per person.
-                    </p>
+              {/* Early Bird Banner — Active */}
+              {earlyBird && (
+                <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-300 animate-pulse-subtle">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Sparkles className="h-5 w-5 text-amber-700" />
+                    <p className="text-sm font-bold text-amber-900 uppercase tracking-wider">Early Bird Price Active</p>
                   </div>
-                );
-              })()}
+                  <p className="text-base text-amber-900 font-semibold mb-1">{earlyBird.status}</p>
+                  <p className="text-sm text-amber-800">
+                    You save <span className="font-bold">₹{earlyBird.savings.toLocaleString()}</span> right now!
+                  </p>
+                </div>
+              )}
 
               {/* Pricing Section */}
               <div className="mb-6 pb-6 border-b border-gray-200">
-                {trip.original_price > trip.discounted_price && (
+                {(trip.original_price > effectivePrice || earlyBird) && (
                   <div className="flex items-center gap-2 mb-2">
                     <p className="text-base text-gray-400 line-through flex items-center">
                       <IndianRupee className="h-3.5 w-3.5" />
-                      {trip.original_price.toLocaleString()}
+                      {(earlyBird ? trip.discounted_price : trip.original_price).toLocaleString()}
                     </p>
-                    <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
-                      Save ₹{(trip.original_price - trip.discounted_price).toLocaleString()}
+                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${earlyBird ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                      Save ₹{((earlyBird ? trip.discounted_price : trip.original_price) - effectivePrice).toLocaleString()}
                     </span>
                   </div>
                 )}
                 <div className="flex items-baseline gap-2">
-                  <p className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 flex items-baseline tracking-tight">
+                  <p className={`text-4xl sm:text-5xl md:text-6xl font-bold flex items-baseline tracking-tight ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
                     <IndianRupee className="h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9" />
-                    {trip.discounted_price.toLocaleString()}
+                    {effectivePrice.toLocaleString()}
                   </p>
                   <span className="text-base text-gray-500">/ person</span>
                 </div>
@@ -713,7 +761,12 @@ export default function TripDetailPage() {
                   ? 'Sold Out'
                   : 'Book this trip'}
               </button>
-              <p className="text-center text-sm text-gray-500 mt-3">You won&apos;t be charged yet</p>
+              <p className="text-center text-xs sm:text-sm text-gray-500 mt-3 leading-relaxed">
+                You won&apos;t be charged yet. By booking you agree to our{' '}
+                <Link href="/terms" className="text-purple-600 underline hover:text-purple-700">Terms</Link>
+                {' '}and{' '}
+                <Link href="/cancellation-policy" className="text-purple-600 underline hover:text-purple-700">Cancellation Policy</Link>.
+              </p>
 
               {/* Pickup + Booking deadline */}
               {(trip.pickup_location || trip.booking_deadline_date) && (
@@ -790,44 +843,53 @@ export default function TripDetailPage() {
         </div>
       )}
 
-      {/* Sticky Book Now bar — all screens */}
+      {/* Sticky Book Now bar — mobile only */}
       {!isPastTrip && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-purple-200 shadow-[0_-4px_20px_rgba(168,85,247,0.15)]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex items-center gap-3">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-purple-200 shadow-[0_-4px_20px_rgba(168,85,247,0.15)]">
+          {earlyBird && (
+            <div className="bg-gradient-to-r from-amber-400 to-orange-400 text-white text-xs font-bold px-3 py-1 text-center">
+              <Sparkles className="h-3 w-3 inline mr-1" />
+              {earlyBird.status}
+            </div>
+          )}
+          <div className="px-3 py-2.5 flex items-center gap-2.5">
             <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm text-gray-500 leading-tight">{trip.seat_lock_price ? 'Lock your seat from' : 'From'}</p>
-              <div className="flex items-baseline gap-2 leading-tight">
-                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-baseline">
-                  <IndianRupee className="h-5 w-5 sm:h-6 sm:w-6" />
-                  {(trip.seat_lock_price || trip.discounted_price).toLocaleString()}
-                </p>
-                <span className="text-sm text-gray-500 hidden sm:inline">
-                  {trip.seat_lock_price ? '/ seat lock' : '/ person'}
-                </span>
-                {trip.original_price > trip.discounted_price && (
-                  <span className="hidden md:inline text-sm text-gray-400 line-through">
-                    ₹{trip.original_price.toLocaleString()}
-                  </span>
+              <div className="flex items-center gap-1.5">
+                <p className="text-[10px] text-gray-500 leading-tight">{trip.seat_lock_price ? 'Lock from' : 'From'}</p>
+                {(earlyBird || trip.original_price > trip.discounted_price) && (
+                  <p className="text-[10px] text-gray-400 line-through leading-tight">
+                    ₹{(earlyBird ? trip.discounted_price : trip.original_price).toLocaleString()}
+                  </p>
                 )}
               </div>
+              <div className="flex items-baseline gap-1 leading-tight">
+                <p className={`text-xl font-bold flex items-baseline ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
+                  <IndianRupee className="h-4 w-4" />
+                  {(trip.seat_lock_price || effectivePrice).toLocaleString()}
+                </p>
+                <span className="text-[10px] text-gray-500">
+                  {trip.seat_lock_price ? '/lock' : '/person'}
+                </span>
+              </div>
+              <p className="text-[9px] text-gray-400 leading-tight mt-0.5">By booking you agree to terms</p>
             </div>
             <button
               onClick={handleBookNow}
               disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
-              className={`flex-shrink-0 px-6 sm:px-8 md:px-10 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg shadow-lg flex items-center gap-2 transition-all ${
+              className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center gap-1.5 transition-all ${
                 !trip.is_active || availableSpots === 0 || trip.booking_disabled
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 active:scale-95 hover:shadow-xl'
+                  : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white active:scale-95'
               }`}
             >
               {trip.booking_disabled
-                ? 'Bookings Closed'
+                ? 'Closed'
                 : availableSpots === 0
                 ? 'Sold Out'
                 : (
                   <>
                     Book Now
-                    <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 rotate-180" />
+                    <ArrowLeft className="h-4 w-4 rotate-180" />
                   </>
                 )}
             </button>
