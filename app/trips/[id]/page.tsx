@@ -294,19 +294,23 @@ export default function TripDetailPage() {
                 <button
                   key={i}
                   aria-label={`Photo ${i + 1}`}
+                  className="no-min-touch"
                   onClick={() => {
                     setGalleryIndex(i);
                     const scroller = document.getElementById('hero-scroller');
                     if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
                   }}
                   style={{
-                    width: i === galleryIndex ? '18px' : '6px',
+                    width: i === galleryIndex ? '20px' : '6px',
                     height: '6px',
-                    backgroundColor: i === galleryIndex ? '#ffffff' : 'rgba(255,255,255,0.55)',
+                    minWidth: 0,
+                    minHeight: 0,
+                    backgroundColor: i === galleryIndex ? '#ffffff' : 'rgba(255,255,255,0.6)',
                     borderRadius: '999px',
                     transition: 'all 0.3s',
                     border: 'none',
                     padding: 0,
+                    cursor: 'pointer',
                   }}
                 />
               ))}

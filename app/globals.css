@@ -48,11 +48,11 @@ body {
 
 /* Touch-friendly tap targets for mobile */
 @media (hover: none) and (pointer: coarse) {
-  button, a[role="button"], input[type="button"], input[type="submit"] {
+  button:not(.no-min-touch), a[role="button"]:not(.no-min-touch), input[type="button"], input[type="submit"] {
     min-height: 44px;
     min-width: 44px;
   }
-  
+
   /* Improve touch scrolling */
   * {
     -webkit-tap-highlight-color: rgba(73, 34, 91, 0.1);
