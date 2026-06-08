@@ -70,7 +70,7 @@ export default function BookingsPage() {
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false });
 
-      setBookings(data || []);
+      setBookings((data || []) as any);
       setLoading(false);
     };
     init();

@@ -630,7 +630,7 @@ export default function BookTripPage() {
   };
 
   const addPassenger = () => {
-    setPassengers([...passengers, { name: '', phone: '', age: '', gender: '' }]);
+    setPassengers([...passengers, { name: '', phone: '', age: '', gender: '', aadhaar_id: '' }]);
   };
 
   const removePassenger = (index: number) => {

@@ -9,23 +9,6 @@ import {
   Building2, Users, Calendar, CreditCard, Loader2, ChevronDown
 } from 'lucide-react';
 
-// Colleges/Universities list
-const MATHURA_COLLEGES = [
-  'GLA University',
-  'Sanskriti University',
-  'GL Bajaj Group of Institutions',
-  'Babu Shivnath Agrawal (PG) College',
-  'Aligarh Muslim University',
-  'Dayalbagh Educational Institute',
-  'IIT Kanpur',
-  'IIM Lucknow',
-  'Banaras Hindu University',
-  'MNNIT Allahabad',
-  'IIT (BHU) Varanasi',
-  'Other (Custom)',
-  'Not in College/University'
-];
-
 const EMERGENCY_RELATIONS = [
   'Father',
   'Mother',
@@ -64,9 +47,6 @@ export default function EditProfilePage() {
   const [verifyingPasswordOTP, setVerifyingPasswordOTP] = useState(false);
 
   // College selection state
-  const [collegeSelection, setCollegeSelection] = useState<'dropdown' | 'custom' | 'none'>('dropdown');
-  const [selectedCollege, setSelectedCollege] = useState('');
-  const [customCollege, setCustomCollege] = useState('');
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -99,19 +79,6 @@ export default function EditProfilePage() {
         .single();
 
       if (profileData) {
-        const collegeName = profileData.college_name || profileData.university || '';
-        const isInList = MATHURA_COLLEGES.slice(0, -2).includes(collegeName);
-        
-        if (collegeName === 'Not in College/University') {
-          setCollegeSelection('none');
-        } else if (isInList) {
-          setCollegeSelection('dropdown');
-          setSelectedCollege(collegeName);
-        } else if (collegeName) {
-          setCollegeSelection('custom');
-          setCustomCollege(collegeName);
-        }
-
         setFormData({
           firstName: profileData.first_name || '',
           lastName: profileData.last_name || '',
@@ -147,29 +114,6 @@ export default function EditProfilePage() {
     getUser();
   }, [router, supabase]);
 
-  const handleCollegeChange = (value: string) => {
-    if (value === 'Other (Custom)') {
-      setCollegeSelection('custom');
-      setSelectedCollege('');
-      setCustomCollege('');
-      setFormData({ ...formData, collegeName: '' });
-    } else if (value === 'Not in College/University') {
-      setCollegeSelection('none');
-      setSelectedCollege('Not in College/University');
-      setCustomCollege('');
-      setFormData({ ...formData, collegeName: 'Not in College/University' });
-    } else {
-      setCollegeSelection('dropdown');
-      setSelectedCollege(value);
-      setCustomCollege('');
-      setFormData({ ...formData, collegeName: value });
-    }
-  };
-
-  const handleCustomCollegeChange = (value: string) => {
-    setCustomCollege(value);
-    setFormData({ ...formData, collegeName: value });
-  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

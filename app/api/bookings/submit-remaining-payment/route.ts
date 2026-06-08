@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     // Fetch booking to verify user owns it
     const { data: booking, error: bookingError } = await adminClient
       .from('bookings')
-      .select('user_id, trips(discounted_price), number_of_participants, payment_amount, final_amount, payment_method')
+      .select('user_id, trips(discounted_price), number_of_participants, payment_amount, final_amount, total_price, payment_method')
       .eq('id', bookingId)
       .single();
 
