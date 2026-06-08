@@ -170,10 +170,10 @@ export default function TripsPage() {
         {/* Header Section */}
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-3 sm:mb-4 tracking-tight">
-            Discover Amazing Trips
+            Upcoming Trips
           </h1>
           <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
-            Explore handpicked destinations and carefully planned itineraries for adventurous travelers
+            Pick a date, pay or lock your seat, show up. We&apos;ll handle the rest.
           </p>
         </div>
 
