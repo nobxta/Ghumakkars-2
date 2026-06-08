@@ -57,6 +57,29 @@ export default function BookTripPage() {
   // Payment
   const [transactionId, setTransactionId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'full' | 'seat_lock'>('full');
+
+  // Force full payment when early bird is active
+  useEffect(() => {
+    if (trip && paymentMethod === 'seat_lock') {
+      const eb: any = (trip as any).early_bird_conditions;
+      const ebPrice = (trip as any).early_bird_price;
+      if (eb?.enabled && ebPrice && ebPrice > 0 && ebPrice < trip.discounted_price) {
+        const conditions = eb.conditions || [];
+        const now = new Date();
+        let active = conditions.length > 0;
+        for (const c of conditions) {
+          if (c.type === 'date_range' && c.value) {
+            const [s, e] = String(c.value).split('|');
+            if (s && e && (now < new Date(s) || now > new Date(e))) { active = false; break; }
+          }
+          if (c.type === 'first_bookings' && c.value) {
+            if (((trip as any).current_participants || 0) >= parseInt(c.value)) { active = false; break; }
+          }
+        }
+        if (active) setPaymentMethod('full');
+      }
+    }
+  }, [trip, paymentMethod]);
   const [paymentMode, setPaymentMode] = useState<'manual' | 'razorpay'>('manual');
   const [paymentSettings, setPaymentSettings] = useState<{ 
     qrUrl?: string; 
@@ -721,6 +744,26 @@ export default function BookTripPage() {
       setCurrentStep(currentStep - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const isEarlyBirdActive = (): boolean => {
+    if (!trip) return false;
+    const earlyBird: any = (trip as any).early_bird_conditions;
+    const earlyBirdPrice = (trip as any).early_bird_price;
+    if (!earlyBird?.enabled || !earlyBirdPrice || earlyBirdPrice <= 0 || earlyBirdPrice >= trip.discounted_price) return false;
+    const conditions = earlyBird.conditions || [];
+    if (conditions.length === 0) return false;
+    const now = new Date();
+    for (const c of conditions) {
+      if (c.type === 'date_range' && c.value) {
+        const [start, end] = String(c.value).split('|');
+        if (start && end && (now < new Date(start) || now > new Date(end))) return false;
+      }
+      if (c.type === 'first_bookings' && c.value) {
+        if (((trip as any).current_participants || 0) >= parseInt(c.value)) return false;
+      }
+    }
+    return true;
   };
 
   const getEffectivePrice = (): number => {
@@ -1419,26 +1462,36 @@ export default function BookTripPage() {
                           )}
                         </div>
                       </label>
-                      <label className="flex items-start p-3 md:p-5 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-300 transition-all bg-white">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="seat_lock"
-                          checked={paymentMethod === 'seat_lock'}
-                          onChange={(e) => setPaymentMethod(e.target.value as 'seat_lock')}
-                          className="mt-1 w-4 h-4 md:w-5 md:h-5 text-purple-600 flex-shrink-0"
-                        />
-                        <div className="ml-3 md:ml-4 flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-1">
-                            <span className="font-semibold text-gray-900 text-sm md:text-lg">Seat Lock (Partial)</span>
-                            <span className="text-lg md:text-xl font-bold text-purple-600">
-                              ₹{seatLockPrice.toLocaleString()}
-                            </span>
+                      {!isEarlyBirdActive() ? (
+                        <label className="flex items-start p-3 md:p-5 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-300 transition-all bg-white">
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="seat_lock"
+                            checked={paymentMethod === 'seat_lock'}
+                            onChange={(e) => setPaymentMethod(e.target.value as 'seat_lock')}
+                            className="mt-1 w-4 h-4 md:w-5 md:h-5 text-purple-600 flex-shrink-0"
+                          />
+                          <div className="ml-3 md:ml-4 flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-1">
+                              <span className="font-semibold text-gray-900 text-sm md:text-lg">Seat Lock (Partial)</span>
+                              <span className="text-lg md:text-xl font-bold text-purple-600">
+                                ₹{seatLockPrice.toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-xs md:text-sm text-gray-600">Pay ₹{seatLockPrice.toLocaleString()} now to lock your seat</p>
+                            <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Remaining ₹{(discountedPrice - seatLockPrice).toLocaleString()} due 5 days before departure. Seat lock amount is non-refundable.</p>
                           </div>
-                          <p className="text-xs md:text-sm text-gray-600">Pay ₹{seatLockPrice.toLocaleString()} now to lock your seat</p>
-                          <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Note: Remaining ₹{(discountedPrice - seatLockPrice).toLocaleString()} must be paid before 5 days of departure. Seat lock amount is non-refundable.</p>
+                        </label>
+                      ) : (
+                        <div className="p-3 md:p-4 border-2 border-amber-200 rounded-xl bg-amber-50 flex items-start gap-2">
+                          <span className="text-amber-600 mt-0.5">✨</span>
+                          <div>
+                            <p className="text-sm font-semibold text-amber-900">Seat lock unavailable during early bird</p>
+                            <p className="text-xs text-amber-800 mt-0.5">You're saving so much already — just pay the early bird amount in full.</p>
+                          </div>
                         </div>
-                      </label>
+                      )}
                     </div>
                   );
                 } else {

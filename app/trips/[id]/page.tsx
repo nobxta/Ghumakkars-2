@@ -218,6 +218,8 @@ export default function TripDetailPage() {
   })();
 
   const effectivePrice = earlyBird ? earlyBird.price : trip.discounted_price;
+  // When early bird is active, seat lock is disabled — user just pays the discounted full amount
+  const showSeatLock = !earlyBird && trip.seat_lock_price && trip.seat_lock_price > 0;
 
   const formatDate = (d?: string, opts: any = { day: 'numeric', month: 'short' }) =>
     d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
@@ -656,14 +658,14 @@ export default function TripDetailPage() {
                 <>
               {/* Early Bird Banner — Active */}
               {earlyBird && (
-                <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-300 animate-pulse-subtle">
+                <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300">
                   <div className="flex items-center gap-2 mb-1.5">
                     <Sparkles className="h-5 w-5 text-amber-700" />
-                    <p className="text-sm font-bold text-amber-900 uppercase tracking-wider">Early Bird Price Active</p>
+                    <p className="text-sm font-bold text-amber-900 uppercase tracking-wider">Early Bird Price</p>
                   </div>
-                  <p className="text-base text-amber-900 font-semibold mb-1">{earlyBird.status}</p>
-                  <p className="text-sm text-amber-800">
-                    You save <span className="font-bold">₹{earlyBird.savings.toLocaleString()}</span> right now!
+                  <p className="text-base text-amber-900 font-semibold">{earlyBird.status}</p>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Saving <span className="font-bold">₹{earlyBird.savings.toLocaleString()}</span> on this booking
                   </p>
                 </div>
               )}
@@ -688,12 +690,18 @@ export default function TripDetailPage() {
                   </p>
                   <span className="text-base text-gray-500">/ person</span>
                 </div>
-                {trip.seat_lock_price && trip.seat_lock_price > 0 && (
+                {showSeatLock && (
                   <div className="mt-4 flex items-center gap-2 text-sm sm:text-base text-gray-700">
                     <Lock className="h-4 w-4 text-purple-500 flex-shrink-0" />
                     <span>
-                      Or pay <span className="font-bold text-gray-900">₹{trip.seat_lock_price.toLocaleString()}</span> to lock your seat
+                      Or pay <span className="font-bold text-gray-900">₹{trip.seat_lock_price!.toLocaleString()}</span> to lock your seat
                     </span>
+                  </div>
+                )}
+                {earlyBird && (
+                  <div className="mt-3 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    <Sparkles className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                    <span>Seat lock isn't available during early bird pricing. Pay the full early bird amount to book.</span>
                   </div>
                 )}
               </div>
@@ -864,7 +872,7 @@ export default function TripDetailPage() {
           <div className="px-3 py-2.5 flex items-center gap-2.5">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[10px] text-gray-500 leading-tight">{trip.seat_lock_price ? 'Lock from' : 'From'}</p>
+                <p className="text-[10px] text-gray-500 leading-tight">{showSeatLock ? 'Lock from' : 'From'}</p>
                 {(earlyBird || trip.original_price > trip.discounted_price) && (
                   <p className="text-[10px] text-gray-400 line-through leading-tight">
                     ₹{(earlyBird ? trip.discounted_price : trip.original_price).toLocaleString()}
@@ -874,10 +882,10 @@ export default function TripDetailPage() {
               <div className="flex items-baseline gap-1 leading-tight">
                 <p className={`text-xl font-bold flex items-baseline ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
                   <IndianRupee className="h-4 w-4" />
-                  {(trip.seat_lock_price || effectivePrice).toLocaleString()}
+                  {(showSeatLock ? trip.seat_lock_price! : effectivePrice).toLocaleString()}
                 </p>
                 <span className="text-[10px] text-gray-500">
-                  {trip.seat_lock_price ? '/lock' : '/person'}
+                  {showSeatLock ? '/lock' : '/person'}
                 </span>
               </div>
               <p className="text-[9px] text-gray-400 leading-tight mt-0.5">By booking you agree to terms</p>
