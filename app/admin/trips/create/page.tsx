@@ -74,6 +74,13 @@ export default function CreateTripPage() {
 
   // Step 6: Additional
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
+  const [showSections, setShowSections] = useState({
+    photos: true,
+    itinerary: true,
+    highlights: true,
+    perks: true,
+    included: true,
+  });
   const [includedItems, setIncludedItems] = useState<string[]>(['']);
   const [excludedItems, setExcludedItems] = useState<string[]>(['']);
   const [freePerks, setFreePerks] = useState<string[]>(['']);
@@ -415,6 +422,7 @@ export default function CreateTripPage() {
         whatsapp_group_link: whatsappGroupLink || null,
         included_features: includedItems.filter(item => item.trim()),
         free_perks: freePerks.filter(item => item.trim()),
+        display_sections: showSections,
         excluded_features: excludedItems.filter(item => item.trim()).length > 0 ? excludedItems.filter(item => item.trim()) : null,
         status: publishOption === 'draft' ? 'draft' : publishOption === 'schedule' ? 'scheduled' : 'active',
         is_active: publishOption === 'now',
@@ -1128,7 +1136,13 @@ export default function CreateTripPage() {
                   <Sparkles className="h-4 w-4 text-purple-600 mr-1.5" />
                   Free Perks <span className="ml-2 text-xs text-gray-500 font-normal">(shown prominently — get attention)</span>
                 </label>
-                <p className="text-xs text-gray-600 mb-3">Free extras like "Free rafting", "Welcome drink", "20% off next trip". One per line.</p>
+                <p className="text-xs text-gray-600 mb-3">
+                  Add free extras or conditional offers. Examples:<br />
+                  &bull; "Free bike rental for first 10 bookings"<br />
+                  &bull; "Group of 5+ gets ₹500 off"<br />
+                  &bull; "20% off for the first 5 customers"<br />
+                  &bull; "Free welcome drink on arrival"
+                </p>
                 {freePerks.map((perk, index) => (
                   <div key={index} className="flex gap-2 mb-2">
                     <input
@@ -1161,6 +1175,36 @@ export default function CreateTripPage() {
                   <Plus className="h-4 w-4 mr-1" />
                   Add another perk
                 </button>
+              </div>
+
+              {/* Section Visibility Toggles */}
+              <div className="p-4 sm:p-5 bg-blue-50/50 border border-blue-200 rounded-xl">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Show on Trip Page
+                </label>
+                <p className="text-xs text-gray-600 mb-3">Pick which sections appear on the user-facing trip page.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    { key: 'photos', label: 'Photo carousel', desc: 'Swipeable gallery at top' },
+                    { key: 'itinerary', label: 'Day-by-day plan', desc: 'Timeline of activities' },
+                    { key: 'highlights', label: 'Trip highlights', desc: 'What you\'ll experience' },
+                    { key: 'perks', label: 'Free perks banner', desc: 'Big purple promo banner' },
+                    { key: 'included', label: 'Included / Not included', desc: 'Two-column list' },
+                  ] as const).map(s => (
+                    <label key={s.key} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-gray-200 bg-white hover:border-blue-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showSections[s.key]}
+                        onChange={(e) => setShowSections({ ...showSections, [s.key]: e.target.checked })}
+                        className="w-4 h-4 mt-0.5 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{s.label}</p>
+                        <p className="text-xs text-gray-500">{s.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div>

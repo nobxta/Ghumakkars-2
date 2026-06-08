@@ -38,6 +38,13 @@ interface Trip {
   excluded_features?: string[];
   highlights?: string[];
   free_perks?: string[];
+  display_sections?: {
+    photos?: boolean;
+    itinerary?: boolean;
+    highlights?: boolean;
+    perks?: boolean;
+    included?: boolean;
+  };
   day_wise_itinerary?: ItineraryDay[] | any;
   pickup_location?: string;
   whatsapp_group_link?: string;
@@ -157,10 +164,9 @@ export default function TripDetailPage() {
   const galleryImages: string[] = Array.isArray(trip.gallery_images)
     ? trip.gallery_images.filter(Boolean)
     : [];
-  const allImages = [
-    trip.cover_image_url || trip.image_url,
-    ...galleryImages,
-  ].filter(Boolean) as string[];
+  const cover = trip.cover_image_url || trip.image_url;
+  const heroImages = [cover, ...galleryImages].filter(Boolean) as string[];
+  const sections = trip.display_sections || { photos: true, itinerary: true, highlights: true, perks: true, included: true };
 
   const formatDate = (d?: string, opts: any = { day: 'numeric', month: 'short' }) =>
     d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
@@ -198,59 +204,84 @@ export default function TripDetailPage() {
   return (
     <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-20 lg:pb-0 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
-      {/* Hero Section with Image */}
-      <div className="relative h-[40vh] sm:h-[50vh] md:h-[55vh] lg:h-[60vh] overflow-hidden">
-        {(trip.cover_image_url || trip.image_url) ? (
+      {/* Hero — Swipeable Carousel (Amazon style) */}
+      <div className="relative h-[45vh] sm:h-[55vh] md:h-[60vh] lg:h-[65vh] overflow-hidden bg-gray-200">
+        {heroImages.length > 0 ? (
           <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${trip.cover_image_url || trip.image_url})` }}
+            className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const idx = Math.round(el.scrollLeft / el.clientWidth);
+              if (idx !== galleryIndex) setGalleryIndex(idx);
+            }}
+            id="hero-scroller"
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30"></div>
-            {isCompleted && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <CheckCircle className="h-5 w-5" />
-                <span>Trip Completed</span>
-              </div>
-            )}
-            {isCancelled && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <X className="h-5 w-5" />
-                <span>Trip Cancelled</span>
-              </div>
-            )}
-            {isPostponed && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <Clock className="h-5 w-5" />
-                <span>Trip Postponed{trip.postponed_to_date ? ` to ${new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</span>
-              </div>
-            )}
+            {heroImages.map((img, i) => (
+              <button
+                key={i}
+                onClick={() => { setGalleryIndex(i); setLightboxOpen(true); }}
+                className="relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
+              >
+                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img})` }}></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30"></div>
+              </button>
+            ))}
           </div>
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-purple-400 to-purple-300 flex items-center justify-center">
-            <MapPin className="h-32 w-32 text-white/30" />
-            {isCompleted && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <CheckCircle className="h-5 w-5" />
-                <span>Trip Completed</span>
-              </div>
-            )}
-            {isCancelled && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <X className="h-5 w-5" />
-                <span>Trip Cancelled</span>
-              </div>
-            )}
-            {isPostponed && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-6 py-2.5 rounded-full font-semibold flex items-center space-x-2 shadow-lg">
-                <Clock className="h-5 w-5" />
-                <span>Trip Postponed</span>
-              </div>
-            )}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-300 flex items-center justify-center">
+            <MapPin className="h-24 w-24 text-white/30" />
           </div>
         )}
+
+        {/* Carousel Dots */}
+        {heroImages.length > 1 && (
+          <div className="absolute bottom-24 sm:bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            {heroImages.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setGalleryIndex(i);
+                  const scroller = document.getElementById('hero-scroller');
+                  if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
+                }}
+                className={`h-1.5 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-6' : 'bg-white/50 w-1.5'}`}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Photo Counter */}
+        {heroImages.length > 1 && (
+          <div className="absolute top-20 sm:top-24 right-4 z-20 bg-black/60 backdrop-blur-sm text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-medium">
+            {galleryIndex + 1} / {heroImages.length}
+          </div>
+        )}
+
+        {/* Status badge over carousel */}
+        <div className="pointer-events-none absolute inset-0 z-10">
+          {isCompleted && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-semibold flex items-center space-x-1.5 shadow-lg">
+              <CheckCircle className="h-4 w-4" />
+              <span>Trip Completed</span>
+            </div>
+          )}
+          {isCancelled && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-1.5 rounded-full text-sm font-semibold flex items-center space-x-1.5 shadow-lg">
+              <X className="h-4 w-4" />
+              <span>Trip Cancelled</span>
+            </div>
+          )}
+          {isPostponed && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-sm font-semibold flex items-center space-x-1.5 shadow-lg">
+              <Clock className="h-4 w-4" />
+              <span>Postponed</span>
+            </div>
+          )}
+        </div>
         
         {/* Back Button + Share */}
-        <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+        <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+          <div className="pointer-events-auto">
           <Link
             href="/trips"
             className="inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg"
@@ -258,9 +289,10 @@ export default function TripDetailPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             <span className="text-sm">Back</span>
           </Link>
+          </div>
           <button
             onClick={handleShare}
-            className="inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg"
+            className="pointer-events-auto inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg"
           >
             {shareCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Share2 className="h-4 w-4 mr-2" />}
             <span className="text-sm">{shareCopied ? 'Copied!' : 'Share'}</span>
@@ -268,7 +300,7 @@ export default function TripDetailPage() {
         </div>
 
         {/* Trip Title Overlay - minimal, just title + destination */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12">
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12 pointer-events-none z-10">
           <div className="max-w-7xl mx-auto">
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 leading-tight drop-shadow-md">
               {trip.title}
@@ -327,7 +359,7 @@ export default function TripDetailPage() {
               </div>
 
               {/* Day-wise Itinerary - Timeline */}
-              {itineraryDays.length > 0 && (
+              {sections.itinerary !== false && itineraryDays.length > 0 && (
                 <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Day-by-day plan</h3>
                   <p className="text-xs sm:text-sm text-gray-500 mb-5">Tap a day to expand</p>
@@ -384,43 +416,8 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {/* Gallery - Mosaic for desktop, scrollable strip for mobile */}
-              {galleryImages.length > 0 && (
-                <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
-                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Photos</h3>
-                  <p className="text-sm sm:text-base text-gray-500 mb-5">{galleryImages.length} {galleryImages.length === 1 ? 'photo' : 'photos'} from this trip</p>
-
-                  {/* Desktop: mosaic grid */}
-                  <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-2">
-                    {galleryImages.map((img, i) => (
-                      <button
-                        key={i}
-                        onClick={() => { setGalleryIndex(i); setLightboxOpen(true); }}
-                        className={`relative overflow-hidden rounded-lg group ${i === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`}
-                      >
-                        <img src={img} alt={`${trip.title} ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Mobile: horizontal scroll */}
-                  <div className="sm:hidden flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
-                    {galleryImages.map((img, i) => (
-                      <button
-                        key={i}
-                        onClick={() => { setGalleryIndex(i); setLightboxOpen(true); }}
-                        className="flex-shrink-0 w-[85%] aspect-[4/3] rounded-xl overflow-hidden snap-center bg-gray-100"
-                      >
-                        <img src={img} alt={`${trip.title} ${i + 1}`} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Free Perks - Big Banner */}
-              {trip.free_perks && trip.free_perks.length > 0 && (
+              {sections.perks !== false && trip.free_perks && trip.free_perks.length > 0 && (
                 <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
                   <div className="rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 p-5 sm:p-6 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -445,7 +442,7 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {trip.highlights && trip.highlights.length > 0 && (
+              {sections.highlights !== false && trip.highlights && trip.highlights.length > 0 && (
                 <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Trip highlights</h3>
                   <p className="text-sm sm:text-base text-gray-500 mb-5">What you'll experience</p>
@@ -462,7 +459,7 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {((trip.included_features && trip.included_features.length > 0) || (trip.excluded_features && trip.excluded_features.length > 0)) && (
+              {sections.included !== false && ((trip.included_features && trip.included_features.length > 0) || (trip.excluded_features && trip.excluded_features.length > 0)) && (
                 <div className="pt-6 border-t border-gray-100">
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">What's in & what's not</h3>
                   <p className="text-sm sm:text-base text-gray-500 mb-5">Check before you book</p>
@@ -585,24 +582,6 @@ export default function TripDetailPage() {
                 </>
               ) : (
                 <>
-              {/* Free Perks */}
-              {trip.free_perks && trip.free_perks.length > 0 && (
-                <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="h-5 w-5 text-purple-600" />
-                    <p className="text-sm font-bold text-purple-900 uppercase tracking-wider">Included free</p>
-                  </div>
-                  <ul className="space-y-2">
-                    {trip.free_perks.map((perk, i) => (
-                      <li key={i} className="text-base text-gray-800 flex items-start gap-2">
-                        <Check className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                        <span>{perk}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {/* Early Bird Banner */}
               {trip.early_bird_price && trip.early_bird_price > 0 && trip.early_bird_price < trip.discounted_price && (() => {
                 const earlyBirdSavings = trip.discounted_price - trip.early_bird_price;
