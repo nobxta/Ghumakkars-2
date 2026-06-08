@@ -4,26 +4,42 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle } from 'lucide-react';
+import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy } from 'lucide-react';
+
+interface ItineraryDay {
+  day?: number;
+  title: string;
+  description: string;
+}
 
 interface Trip {
   id: string;
   title: string;
   description: string;
+  short_description?: string;
+  full_description?: string;
   destination: string;
   original_price: number;
   discounted_price: number;
   discount_percentage: number;
+  seat_lock_price?: number;
+  early_bird_price?: number;
+  early_bird_conditions?: any;
   duration_days: number;
   max_participants: number;
   current_participants: number;
   start_date: string;
   end_date?: string;
+  booking_deadline_date?: string;
   image_url?: string;
   cover_image_url?: string;
+  gallery_images?: string[];
   included_features?: string[];
   excluded_features?: string[];
   highlights?: string[];
+  day_wise_itinerary?: ItineraryDay[] | any;
+  pickup_location?: string;
+  whatsapp_group_link?: string;
   is_active: boolean;
   status?: string;
   completed_at?: string;
@@ -39,6 +55,10 @@ export default function TripDetailPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [expandedDay, setExpandedDay] = useState<number | null>(0);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -112,12 +132,42 @@ export default function TripDetailPage() {
   const isPastTrip = isCompleted || isCancelled || isPostponed;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
+  const handleShare = async () => {
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/trips/${trip.id}`;
+    const text = `Check out this trip: ${trip.title} (${trip.destination}) — ₹${trip.discounted_price.toLocaleString()}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: trip.title, text, url });
+        return;
+      } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {}
+  };
+
+  const itineraryDays: ItineraryDay[] = Array.isArray(trip.day_wise_itinerary)
+    ? trip.day_wise_itinerary
+    : [];
+  const galleryImages: string[] = Array.isArray(trip.gallery_images)
+    ? trip.gallery_images.filter(Boolean)
+    : [];
+  const allImages = [
+    trip.cover_image_url || trip.image_url,
+    ...galleryImages,
+  ].filter(Boolean) as string[];
+
+  const formatDate = (d?: string, opts: any = { day: 'numeric', month: 'short' }) =>
+    d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
+
   const tripJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'TouristTrip',
     name: trip.title,
     description: trip.short_description || trip.description,
-    touristType: 'University Students',
+    touristType: 'Budget Travellers',
     offers: {
       '@type': 'Offer',
       price: trip.discounted_price,
@@ -196,15 +246,22 @@ export default function TripDetailPage() {
           </div>
         )}
         
-        {/* Back Button Overlay */}
-        <div className="absolute top-4 left-4 z-10">
+        {/* Back Button + Share */}
+        <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
           <Link
             href="/trips"
-            className="inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg hover:shadow-xl"
+            className="inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             <span className="text-sm">Back</span>
           </Link>
+          <button
+            onClick={handleShare}
+            className="inline-flex items-center bg-white/90 backdrop-blur-md text-gray-900 hover:bg-white px-4 py-2 rounded-full font-medium transition-all shadow-lg"
+          >
+            {shareCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Share2 className="h-4 w-4 mr-2" />}
+            <span className="text-sm">{shareCopied ? 'Copied!' : 'Share'}</span>
+          </button>
         </div>
 
         {/* Trip Title Overlay */}
@@ -232,7 +289,10 @@ export default function TripDetailPage() {
               </div>
               <div className="flex items-center bg-white/20 backdrop-blur-md px-4 py-2 rounded-full">
                 <Calendar className="h-5 w-5 mr-2" />
-                <span className="font-medium">{new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                <span className="font-medium">
+                  {formatDate(trip.start_date, { day: 'numeric', month: 'short' })}
+                  {trip.end_date && ` - ${formatDate(trip.end_date, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                </span>
               </div>
             </div>
           </div>
@@ -244,45 +304,131 @@ export default function TripDetailPage() {
           <div className="lg:col-span-2">
 
             {/* Quick Info Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 md:mb-8">
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 rounded-xl p-4 text-center">
-                <Clock className="h-6 w-6 md:h-8 md:w-8 text-purple-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-600 mb-1">Duration</p>
-                <p className="font-bold text-gray-900 text-sm md:text-base">{trip.duration_days} Days</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-5 sm:mb-6">
+              <div className="bg-white border border-purple-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1.5" />
+                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Duration</p>
+                <p className="font-bold text-gray-900 text-xs sm:text-sm">{trip.duration_days} Days</p>
               </div>
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-4 text-center">
-                <Users className="h-6 w-6 md:h-8 md:w-8 text-blue-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-600 mb-1">Capacity</p>
-                <p className="font-bold text-gray-900 text-sm md:text-base">{trip.max_participants} People</p>
+              <div className="bg-white border border-blue-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mx-auto mb-1.5" />
+                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Group size</p>
+                <p className="font-bold text-gray-900 text-xs sm:text-sm">{trip.max_participants}</p>
               </div>
-              <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 rounded-xl p-4 text-center">
-                <Check className="h-6 w-6 md:h-8 md:w-8 text-green-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-600 mb-1">Available</p>
-                <p className={`font-bold text-sm md:text-base ${availableSpots < 5 ? 'text-orange-600' : 'text-green-700'}`}>
-                  {availableSpots} Spots
+              <div className={`bg-white border rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm ${isLowAvailability ? 'border-orange-300' : 'border-green-200'}`}>
+                <Check className={`h-4 w-4 sm:h-5 sm:w-5 mx-auto mb-1.5 ${isLowAvailability ? 'text-orange-600' : 'text-green-600'}`} />
+                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">{isLowAvailability ? 'Hurry!' : 'Available'}</p>
+                <p className={`font-bold text-xs sm:text-sm ${isLowAvailability ? 'text-orange-600' : 'text-green-700'}`}>
+                  {availableSpots} left
                 </p>
               </div>
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-200 rounded-xl p-4 text-center">
-                <Star className="h-6 w-6 md:h-8 md:w-8 text-orange-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-600 mb-1">Price</p>
-                <p className="font-bold text-gray-900 text-xs md:text-sm flex items-center justify-center">
-                  <IndianRupee className="h-3 w-3 md:h-4 md:w-4" />
-                  {trip.discounted_price.toLocaleString()}
-                </p>
+              <div className="bg-white border border-amber-200 rounded-xl p-2.5 sm:p-3.5 text-center shadow-sm">
+                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 mx-auto mb-1.5" />
+                <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5">Starts</p>
+                <p className="font-bold text-gray-900 text-xs sm:text-sm">{formatDate(trip.start_date)}</p>
               </div>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-sm border-2 border-purple-100 rounded-xl md:rounded-2xl shadow-xl p-6 md:p-8">
-              <div className="prose prose-purple max-w-none mb-8">
-                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">About This Journey</h2>
-                <p className="text-base md:text-lg text-gray-700 leading-relaxed">{trip.description}</p>
+            <div className="bg-white/90 backdrop-blur-sm border border-purple-100 rounded-xl md:rounded-2xl shadow-md p-4 sm:p-6 md:p-8">
+              <div className="mb-6 sm:mb-8">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-3">About this trip</h2>
+                <p className="text-sm sm:text-base md:text-lg text-gray-700 leading-relaxed whitespace-pre-line">
+                  {trip.full_description || trip.description}
+                </p>
               </div>
 
+              {/* Day-wise Itinerary */}
+              {itineraryDays.length > 0 && (
+                <div className="mb-6 sm:mb-8 pt-6 border-t border-purple-100">
+                  <div className="flex items-center mb-4 sm:mb-5">
+                    <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2.5" />
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Day-by-day plan</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {itineraryDays.map((day, index) => {
+                      const isOpen = expandedDay === index;
+                      return (
+                        <div key={index} className="border border-purple-100 rounded-xl overflow-hidden bg-purple-50/30 hover:bg-purple-50/60 transition-colors">
+                          <button
+                            onClick={() => setExpandedDay(isOpen ? null : index)}
+                            className="w-full flex items-center justify-between p-3 sm:p-4 text-left"
+                          >
+                            <div className="flex items-center min-w-0 flex-1">
+                              <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-purple-600 text-white rounded-lg flex items-center justify-center font-bold text-sm sm:text-base mr-3">
+                                {day.day || index + 1}
+                              </div>
+                              <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                                {day.title || `Day ${index + 1}`}
+                              </h4>
+                            </div>
+                            {isOpen ? <ChevronUp className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0 ml-2" />}
+                          </button>
+                          {isOpen && day.description && (
+                            <div className="px-3 sm:px-4 pb-3 sm:pb-4 pl-14 sm:pl-16">
+                              <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">{day.description}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Gallery */}
+              {galleryImages.length > 0 && (
+                <div className="mb-6 sm:mb-8 pt-6 border-t border-purple-100">
+                  <div className="flex items-center mb-4 sm:mb-5">
+                    <Hotel className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2.5" />
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Photos</h3>
+                  </div>
+                  <div className="relative aspect-[16/10] rounded-xl overflow-hidden border border-purple-100 bg-gray-100">
+                    <img
+                      src={galleryImages[galleryIndex]}
+                      alt={`${trip.title} photo ${galleryIndex + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {galleryImages.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => setGalleryIndex((galleryIndex - 1 + galleryImages.length) % galleryImages.length)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow-lg"
+                        >
+                          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </button>
+                        <button
+                          onClick={() => setGalleryIndex((galleryIndex + 1) % galleryImages.length)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 rounded-full p-2 shadow-lg rotate-180"
+                        >
+                          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </button>
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+                          {galleryIndex + 1} / {galleryImages.length}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {galleryImages.length > 1 && (
+                    <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                      {galleryImages.map((img, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setGalleryIndex(i)}
+                          className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all ${i === galleryIndex ? 'border-purple-600' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                        >
+                          <img src={img} alt={`thumb ${i + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {trip.highlights && trip.highlights.length > 0 && (
-                <div className="mb-8 md:mb-10 pt-8 border-t border-purple-100">
-                  <div className="flex items-center mb-5 md:mb-6">
-                    <Sparkles className="h-6 w-6 md:h-7 md:w-7 text-purple-600 mr-3" />
-                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900">Journey Highlights</h3>
+                <div className="mb-6 sm:mb-8 pt-6 border-t border-purple-100">
+                  <div className="flex items-center mb-4 sm:mb-5">
+                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2.5" />
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Highlights</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     {trip.highlights.map((highlight, index) => (
@@ -344,7 +490,7 @@ export default function TripDetailPage() {
           </div>
 
           <div className="lg:col-span-1">
-            <div className="bg-gradient-to-br from-white to-purple-50/30 backdrop-blur-sm border-2 border-purple-200 rounded-xl md:rounded-2xl shadow-2xl p-6 md:p-8 lg:sticky lg:top-24">
+            <div className="bg-gradient-to-br from-white to-purple-50/30 backdrop-blur-sm border border-purple-200 rounded-xl md:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 lg:sticky lg:top-24">
               {isPastTrip ? (
                 /* Completed / Cancelled / Postponed — view only, no booking */
                 <>
@@ -420,32 +566,34 @@ export default function TripDetailPage() {
               ) : (
                 <>
               {/* Pricing Section */}
-              <div className="mb-6 md:mb-8 pb-6 border-b-2 border-purple-200">
+              <div className="mb-5 sm:mb-6 pb-5 border-b border-purple-200">
                 {trip.original_price > trip.discounted_price && (
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-gray-500 line-through flex items-center">
-                      <IndianRupee className="h-4 w-4" />
+                      <IndianRupee className="h-3.5 w-3.5" />
                       <span>{trip.original_price.toLocaleString()}</span>
                     </p>
-                    <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
-                      Save {trip.discount_percentage}%
+                    <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                      {trip.discount_percentage}% off
                     </span>
                   </div>
                 )}
-                <div className="flex items-baseline mb-3">
-                  <p className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 flex items-baseline tracking-tight">
-                    <IndianRupee className="h-7 w-7 md:h-8 md:w-8" />
+                <div className="flex items-baseline mb-2">
+                  <p className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 flex items-baseline tracking-tight">
+                    <IndianRupee className="h-6 w-6 sm:h-7 sm:w-7" />
                     <span>{trip.discounted_price.toLocaleString()}</span>
                   </p>
-                  <span className="text-lg text-gray-600 font-medium ml-2">/person</span>
+                  <span className="text-base text-gray-500 ml-2">/person</span>
                 </div>
-                {trip.discount_percentage > 0 && (
-                  <div className="bg-purple-100 border-2 border-purple-200 rounded-lg p-3">
-                    <p className="text-sm text-purple-900 font-semibold flex items-center">
-                      <Tag className="h-4 w-4 mr-2" />
-                      You save <IndianRupee className="h-4 w-4 mx-1" />
-                      {(trip.original_price - trip.discounted_price).toLocaleString()} per person!
-                    </p>
+                {trip.seat_lock_price && trip.seat_lock_price > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+                    <div className="flex items-start gap-2">
+                      <Lock className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-amber-900">Or lock your seat for ₹{trip.seat_lock_price.toLocaleString()}</p>
+                        <p className="text-[11px] text-amber-700 mt-0.5">Pay the rest before the trip. Non-refundable.</p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -502,10 +650,10 @@ export default function TripDetailPage() {
                     {trip.booking_disabled
                       ? 'Bookings Closed'
                       : !trip.is_active
-                      ? 'Journey Unavailable'
+                      ? 'Not Available'
                       : availableSpots === 0
-                      ? 'Fully Booked'
-                      : 'Reserve Your Spot Now'}
+                      ? 'Sold Out'
+                      : 'Book This Trip'}
                   </span>
                 </div>
               </button>
@@ -540,21 +688,39 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {/* Trust Badges */}
-              <div className="mt-6 pt-6 border-t border-purple-200">
-                <div className="space-y-3">
-                  <div className="flex items-center text-sm text-gray-700">
-                    <Shield className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                    <span className="font-medium">Secure Booking</span>
+              {/* Trip Details */}
+              <div className="mt-5 pt-5 border-t border-purple-200 space-y-2.5">
+                <div className="flex items-start text-sm text-gray-700">
+                  <Calendar className="h-4 w-4 text-purple-600 mr-2.5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-xs text-gray-500 block">Trip dates</span>
+                    <span className="font-medium">
+                      {formatDate(trip.start_date)}
+                      {trip.end_date && ` - ${formatDate(trip.end_date, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                    </span>
                   </div>
-                  <div className="flex items-center text-sm text-gray-700">
-                    <Check className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                    <span className="font-medium">Verified Trip Organizer</span>
+                </div>
+                {trip.booking_deadline_date && (
+                  <div className="flex items-start text-sm text-gray-700">
+                    <Clock className="h-4 w-4 text-orange-600 mr-2.5 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-xs text-gray-500 block">Bookings close</span>
+                      <span className="font-medium">{formatDate(trip.booking_deadline_date, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm text-gray-700">
-                    <Star className="h-5 w-5 text-yellow-500 mr-3 flex-shrink-0" />
-                    <span className="font-medium">Best Price Guarantee</span>
+                )}
+                {trip.pickup_location && (
+                  <div className="flex items-start text-sm text-gray-700">
+                    <MapPin className="h-4 w-4 text-purple-600 mr-2.5 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-xs text-gray-500 block">Pickup point</span>
+                      <span className="font-medium">{trip.pickup_location}</span>
+                    </div>
                   </div>
+                )}
+                <div className="flex items-center text-xs text-gray-500 pt-2">
+                  <Check className="h-3.5 w-3.5 text-green-600 mr-1.5" />
+                  <span>Pay via UPI, card, or net banking</span>
                 </div>
               </div>
                 </>
