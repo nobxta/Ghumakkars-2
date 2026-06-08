@@ -76,6 +76,7 @@ export default function CreateTripPage() {
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
   const [includedItems, setIncludedItems] = useState<string[]>(['']);
   const [excludedItems, setExcludedItems] = useState<string[]>(['']);
+  const [freePerks, setFreePerks] = useState<string[]>(['']);
   const [pickupLocation, setPickupLocation] = useState('');
   const [cancellationPolicy, setCancellationPolicy] = useState('');
   
@@ -413,6 +414,7 @@ export default function CreateTripPage() {
         day_wise_itinerary: itinerary,
         whatsapp_group_link: whatsappGroupLink || null,
         included_features: includedItems.filter(item => item.trim()),
+        free_perks: freePerks.filter(item => item.trim()),
         excluded_features: excludedItems.filter(item => item.trim()).length > 0 ? excludedItems.filter(item => item.trim()) : null,
         status: publishOption === 'draft' ? 'draft' : publishOption === 'schedule' ? 'scheduled' : 'active',
         is_active: publishOption === 'now',
@@ -1119,6 +1121,46 @@ export default function CreateTripPage() {
                     <strong>Important:</strong> This WhatsApp group link will be shared with users only after their booking is <strong>confirmed</strong> (not for seat lock or pending bookings). Users will receive a notification with the group link upon booking confirmation.
                   </p>
                 </div>
+              </div>
+
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-purple-50 to-purple-100/40 border border-purple-200 rounded-xl">
+                <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center">
+                  <Sparkles className="h-4 w-4 text-purple-600 mr-1.5" />
+                  Free Perks <span className="ml-2 text-xs text-gray-500 font-normal">(shown prominently — get attention)</span>
+                </label>
+                <p className="text-xs text-gray-600 mb-3">Free extras like "Free rafting", "Welcome drink", "20% off next trip". One per line.</p>
+                {freePerks.map((perk, index) => (
+                  <div key={index} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={perk}
+                      onChange={(e) => {
+                        const updated = [...freePerks];
+                        updated[index] = e.target.value;
+                        setFreePerks(updated);
+                      }}
+                      className="flex-1 px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none text-sm"
+                      placeholder="e.g., Free welcome drink on arrival"
+                    />
+                    {freePerks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFreePerks(freePerks.filter((_, i) => i !== index))}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFreePerks([...freePerks, ''])}
+                  className="text-sm text-purple-700 hover:text-purple-800 font-semibold flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add another perk
+                </button>
               </div>
 
               <div>
