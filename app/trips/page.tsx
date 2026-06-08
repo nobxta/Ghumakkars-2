@@ -8,6 +8,7 @@ import { MapPin, Clock, Users, IndianRupee, Tag, ArrowRight, Search, Filter, Cal
 
 interface Trip {
   id: string;
+  slug?: string;
   title: string;
   short_description?: string;
   description: string;
@@ -258,11 +259,11 @@ export default function TripsPage() {
                   >
                     {/* Image */}
                     {displayImage ? (
-                      <Link href={`/trips/${trip.id}`} className="block relative h-48 sm:h-56 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-48 sm:h-56 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
                       </Link>
                     ) : (
-                      <Link href={`/trips/${trip.id}`} className="block relative h-48 sm:h-56 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-48 sm:h-56 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
                         <MapPin className="h-12 w-12 text-gray-300" />
                       </Link>
                     )}
@@ -277,7 +278,7 @@ export default function TripsPage() {
 
                     {/* Content */}
                     <div className="p-4 sm:p-5">
-                      <Link href={`/trips/${trip.id}`} className="block mb-2">
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block mb-2">
                         <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 line-clamp-2 hover:text-purple-600 transition-colors">
                           {trip.title}
                         </h3>
@@ -348,7 +349,7 @@ export default function TripsPage() {
                       {/* Actions */}
                       <div className="flex gap-2">
                         <Link
-                          href={`/trips/${trip.id}`}
+                          href={`/trips/${trip.slug || trip.id}`}
                           className="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 text-sm font-medium hover:bg-gray-50 transition-colors text-center rounded-lg"
                         >
                           View Details
@@ -401,7 +402,7 @@ export default function TripsPage() {
                     className="bg-white border border-gray-200 rounded-xl overflow-hidden opacity-90 hover:opacity-100 transition-opacity"
                   >
                     {displayImage ? (
-                      <Link href={`/trips/${trip.id}`} className="block relative h-40 sm:h-48 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-40 sm:h-48 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
                         <div className={`absolute top-3 right-3 ${badgeClass} text-white px-3 py-1 text-xs font-bold rounded-full shadow flex items-center space-x-1`}>
                           <BadgeIcon className="h-3 w-3" />
@@ -409,7 +410,7 @@ export default function TripsPage() {
                         </div>
                       </Link>
                     ) : (
-                      <Link href={`/trips/${trip.id}`} className="block relative h-40 sm:h-48 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-40 sm:h-48 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
                         <div className={`absolute top-3 right-3 ${badgeClass} text-white px-3 py-1 text-xs font-bold rounded-full shadow flex items-center space-x-1`}>
                           <BadgeIcon className="h-3 w-3" />
                           <span>{pastStatus.charAt(0).toUpperCase() + pastStatus.slice(1)}</span>
@@ -418,7 +419,7 @@ export default function TripsPage() {
                       </Link>
                     )}
                     <div className="p-4">
-                      <Link href={`/trips/${trip.id}`}>
+                      <Link href={`/trips/${trip.slug || trip.id}`}>
                         <h3 className="text-lg font-semibold text-gray-800 mb-1 line-clamp-2 hover:text-purple-600 transition-colors">
                           {trip.title}
                         </h3>
@@ -439,7 +440,7 @@ export default function TripsPage() {
                         )}
                       </div>
                       <Link
-                        href={`/trips/${trip.id}`}
+                        href={`/trips/${trip.slug || trip.id}`}
                         className="block w-full text-center py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
                       >
                         View Trip Details

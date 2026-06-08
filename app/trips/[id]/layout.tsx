@@ -5,11 +5,12 @@ type Props = { params: { id: string } };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = await createClient();
-  const { data: trip } = await supabase
-    .from('trips')
-    .select('title, destination, description, short_description, discounted_price, start_date, end_date, duration_days, cover_image_url, image_url')
-    .eq('id', params.id)
-    .single();
+  const idOrSlug = String(params.id);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+  const query = supabase.from('trips').select('title, destination, description, short_description, discounted_price, start_date, end_date, duration_days, cover_image_url, image_url, slug');
+  const { data: trip } = isUuid
+    ? await query.eq('id', idOrSlug).single()
+    : await query.eq('slug', idOrSlug).single();
 
   if (!trip) {
     return { title: 'Trip Not Found' };

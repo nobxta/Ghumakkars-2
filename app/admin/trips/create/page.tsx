@@ -30,9 +30,21 @@ export default function CreateTripPage() {
 
   // Step 1: Basic Information
   const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [shortDescription, setShortDescription] = useState('');
   const [fullDescription, setFullDescription] = useState('');
   const [destination, setDestination] = useState('');
+
+  const generateSlug = (text: string) =>
+    text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80);
 
   // Step 2: Pricing
   const [price, setPrice] = useState('');
@@ -374,8 +386,10 @@ export default function CreateTripPage() {
         };
       }
 
+      const finalSlug = (slug && slug.trim()) ? slug.trim() : generateSlug(title);
       const tripData = {
         title,
+        slug: finalSlug,
         short_description: shortDescription,
         full_description: fullDescription,
         description: shortDescription,
@@ -479,11 +493,35 @@ export default function CreateTripPage() {
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    if (!slugManuallyEdited) setSlug(generateSlug(e.target.value));
+                  }}
                   required
-                  className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400"
-                  placeholder="e.g., Amazing Goa Adventure"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 placeholder-gray-400 text-sm"
+                  placeholder="e.g., Manali Snow Adventure"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Trip URL <span className="text-gray-400 font-normal">(auto-filled)</span>
+                </label>
+                <div className="flex items-center border border-gray-200 rounded-xl focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all overflow-hidden bg-gray-50">
+                  <span className="pl-3 pr-1 text-xs sm:text-sm text-gray-500 select-none whitespace-nowrap">/trips/</span>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlug(generateSlug(e.target.value));
+                      setSlugManuallyEdited(true);
+                    }}
+                    className="flex-1 px-1 sm:px-2 py-2.5 sm:py-3 bg-transparent outline-none text-gray-900 text-sm font-mono"
+                    placeholder="manali-snow-adventure"
+                    maxLength={80}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">Used in the trip URL. Lowercase letters, numbers, and hyphens only.</p>
               </div>
 
               <div>

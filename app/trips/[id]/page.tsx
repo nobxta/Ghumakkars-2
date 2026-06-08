@@ -73,17 +73,18 @@ export default function TripDetailPage() {
 
   const fetchTrip = async () => {
     try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('id', params.id)
-        .single();
+      const idOrSlug = String(params.id);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+      const query = supabase.from('trips').select('*');
+      const { data, error } = isUuid
+        ? await query.eq('id', idOrSlug).single()
+        : await query.eq('slug', idOrSlug).single();
 
       if (error) throw error;
       setTrip(data);
     } catch (error) {
       console.error('Error fetching trip:', error);
-      router.push('/');
+      router.push('/trips');
     } finally {
       setLoading(false);
     }
@@ -193,7 +194,7 @@ export default function TripDetailPage() {
   };
 
   return (
-    <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
+    <div className="min-h-screen pt-16 md:pt-20 pb-20 lg:pb-0 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero Section with Image */}
       <div className="relative h-[50vh] md:h-[60vh] lg:h-[70vh] overflow-hidden">
@@ -729,6 +730,42 @@ export default function TripDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Sticky mobile Book Now bar */}
+      {!isPastTrip && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-purple-200 shadow-[0_-4px_20px_rgba(168,85,247,0.15)] px-3 py-2.5 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-gray-500 leading-tight">From</p>
+            <p className="text-lg font-bold text-gray-900 flex items-center leading-tight">
+              <IndianRupee className="h-4 w-4" />
+              {(trip.seat_lock_price || trip.discounted_price).toLocaleString()}
+              <span className="text-[10px] text-gray-500 ml-1 font-normal">
+                {trip.seat_lock_price ? '/seat lock' : '/person'}
+              </span>
+            </p>
+          </div>
+          <button
+            onClick={handleBookNow}
+            disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
+            className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center gap-1.5 ${
+              !trip.is_active || availableSpots === 0 || trip.booking_disabled
+                ? 'bg-gray-300 text-gray-500'
+                : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white active:scale-95'
+            }`}
+          >
+            {trip.booking_disabled
+              ? 'Closed'
+              : availableSpots === 0
+              ? 'Sold Out'
+              : (
+                <>
+                  Book Now
+                  <ArrowLeft className="h-4 w-4 rotate-180" />
+                </>
+              )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

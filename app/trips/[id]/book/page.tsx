@@ -183,11 +183,12 @@ export default function BookTripPage() {
 
   const fetchTrip = async () => {
     try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants')
-        .eq('id', params.id)
-        .single();
+      const idOrSlug = String(params.id);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions');
+      const { data, error } = isUuid
+        ? await query.eq('id', idOrSlug).single()
+        : await query.eq('slug', idOrSlug).single();
 
       if (error) throw error;
       setTrip(data);
