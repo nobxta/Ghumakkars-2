@@ -287,21 +287,30 @@ export default function TripDetailPage() {
         {/* Carousel Dots + Counter */}
         {heroImages.length > 1 && (
           <>
-            <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 bg-black/40 backdrop-blur-md px-2.5 py-1.5 rounded-full">
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full">
               {heroImages.map((_, i) => (
                 <button
                   key={i}
+                  aria-label={`Photo ${i + 1}`}
                   onClick={() => {
                     setGalleryIndex(i);
                     const scroller = document.getElementById('hero-scroller');
                     if (scroller) scroller.scrollTo({ left: i * scroller.clientWidth, behavior: 'smooth' });
                   }}
-                  className={`h-1.5 rounded-full transition-all ${i === galleryIndex ? 'bg-white w-5' : 'bg-white/60 w-1.5'}`}
+                  style={{
+                    width: i === galleryIndex ? '18px' : '6px',
+                    height: '6px',
+                    backgroundColor: i === galleryIndex ? '#ffffff' : 'rgba(255,255,255,0.55)',
+                    borderRadius: '999px',
+                    transition: 'all 0.3s',
+                    border: 'none',
+                    padding: 0,
+                  }}
                 />
               ))}
             </div>
-            <div className="absolute bottom-3 sm:bottom-4 right-3 sm:right-4 z-20 bg-black/60 backdrop-blur-md text-white text-xs sm:text-sm px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
-              <ImageIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            <div className="absolute bottom-3 right-3 z-20 bg-black/50 backdrop-blur-sm text-white text-[11px] sm:text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+              <ImageIcon className="h-3 w-3" />
               {galleryIndex + 1}/{heroImages.length}
             </div>
           </>

@@ -8,7 +8,7 @@ import Link from 'next/link';
 interface Trip {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   destination: string;
   original_price: number;
   discounted_price: number;

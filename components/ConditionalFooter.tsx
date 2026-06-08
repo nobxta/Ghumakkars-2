@@ -4,30 +4,55 @@ import { usePathname } from 'next/navigation';
 import Footer from '@/components/Footer';
 import BottomNav from '@/components/BottomNav';
 
-// Routes where the public footer + bottom nav should be hidden
-const HIDDEN_FOOTER_ROUTES = [
-  '/trips/[id]/book',
-  '/admin',
-  '/auth',
-];
+function isAdminOrAuth(p: string): boolean {
+  return p.startsWith('/admin') || p.startsWith('/auth');
+}
 
-function shouldHide(pathname: string | null): boolean {
-  if (!pathname) return false;
-  if (pathname.startsWith('/admin')) return true;
-  if (pathname.startsWith('/auth')) return true;
-  // Match /trips/<anything>/book and similar checkout flows
-  if (/^\/trips\/[^/]+\/book(?:\/.*)?$/.test(pathname)) return true;
-  if (/^\/bookings\/[^/]+\/(?:pay|payment).*$/.test(pathname)) return true;
+function isCheckoutFlow(p: string): boolean {
+  // Trip booking checkout
+  if (/^\/trips\/[^/]+\/book(?:\/.*)?$/.test(p)) return true;
+  // Payment / remaining payment flows
+  if (/^\/bookings\/[^/]+\/(?:pay|payment).*$/.test(p)) return true;
+  return false;
+}
+
+/**
+ * Footer (big marketing footer) is hidden on:
+ * - Admin pages, auth pages
+ * - Checkout/booking flows
+ * - Logged-in dashboards (profile, wallet, referral, bookings)
+ *   because they have their own clean layout
+ */
+function shouldHideFooter(p: string): boolean {
+  if (isAdminOrAuth(p) || isCheckoutFlow(p)) return true;
+  if (p.startsWith('/profile')) return true;
+  if (p.startsWith('/wallet')) return true;
+  if (p.startsWith('/referral')) return true;
+  if (p.startsWith('/bookings')) return true;
+  return false;
+}
+
+/**
+ * BottomNav (mobile-only tab bar) is hidden on:
+ * - Admin / auth pages
+ * - Checkout flows (so the sticky Book bar doesn't compete)
+ */
+function shouldHideBottomNav(p: string): boolean {
+  if (isAdminOrAuth(p)) return true;
+  if (isCheckoutFlow(p)) return true;
+  // Hide on trip detail too — the sticky Book Now bar already lives there
+  if (/^\/trips\/[^/]+\/?$/.test(p)) return true;
   return false;
 }
 
 export default function ConditionalFooter() {
-  const pathname = usePathname();
-  if (shouldHide(pathname)) return null;
+  const pathname = usePathname() || '';
+  const hideFooter = shouldHideFooter(pathname);
+  const hideBottomNav = shouldHideBottomNav(pathname);
   return (
     <>
-      <Footer />
-      <BottomNav />
+      {!hideFooter && <Footer />}
+      {!hideBottomNav && <BottomNav />}
     </>
   );
 }
