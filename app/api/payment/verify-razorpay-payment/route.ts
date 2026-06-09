@@ -97,18 +97,39 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', bookingId);
 
-      // Create payment transaction
+      // Create payment transaction with full Razorpay payment data
       const booking = existingBooking;
+      const p: any = payment;
+      const acquirer = p.acquirer_data || {};
       await adminClient
         .from('payment_transactions')
         .insert([
           {
             booking_id: bookingId,
+            user_id: user.id,
             transaction_id: razorpay_payment_id,
+            razorpay_order_id,
+            razorpay_payment_id,
             amount: amountInRupees,
+            currency: p.currency || 'INR',
             payment_type: booking.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
             payment_status: 'verified',
             payment_mode: 'razorpay',
+            payment_method: p.method || null,
+            captured: !!p.captured,
+            vpa: p.vpa || null,
+            upi_provider: acquirer.upi_provider || null,
+            card_network: p.card?.network || null,
+            card_type: p.card?.type || null,
+            card_last4: p.card?.last4 || null,
+            card_issuer: p.card?.issuer || null,
+            bank: p.bank || null,
+            wallet: p.wallet || null,
+            customer_name: p.notes?.name || null,
+            customer_email: p.email || null,
+            customer_phone: p.contact || null,
+            paid_at: p.created_at ? new Date(p.created_at * 1000).toISOString() : new Date().toISOString(),
+            razorpay_raw: p,
           },
         ]);
 

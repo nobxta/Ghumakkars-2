@@ -64,9 +64,16 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'order.paid':
-        // Order fully paid - handle if needed
         if (payload.order?.entity) {
           await handleOrderPaid(payload.order.entity, adminClient);
+        }
+        break;
+
+      case 'refund.created':
+      case 'refund.processed':
+      case 'refund.failed':
+        if (payload.refund?.entity) {
+          await handleRefundEvent(event, payload.refund.entity, adminClient);
         }
         break;
 
@@ -258,3 +265,61 @@ async function handleOrderPaid(order: any, adminClient: any) {
   console.log('Order paid event received:', order.id);
 }
 
+
+
+async function handleRefundEvent(event: string, refund: any, adminClient: any) {
+  const rzpPaymentId = refund.payment_id;
+  const rzpRefundId = refund.id;
+  const amount = (refund.amount || 0) / 100;
+  const status = event === 'refund.processed' ? 'processed' : event === 'refund.failed' ? 'failed' : (refund.status || 'pending');
+
+  // Find the payment_transaction
+  const { data: pt } = await adminClient
+    .from('payment_transactions')
+    .select('id, booking_id, amount, amount_refunded')
+    .or(`razorpay_payment_id.eq.${rzpPaymentId},transaction_id.eq.${rzpPaymentId}`)
+    .limit(1)
+    .single();
+
+  if (!pt) {
+    console.error('[refund] payment_transaction not found for', rzpPaymentId);
+    return;
+  }
+
+  // Upsert refund record
+  const { data: existing } = await adminClient
+    .from('payment_refunds')
+    .select('id, status')
+    .eq('razorpay_refund_id', rzpRefundId)
+    .maybeSingle();
+
+  if (existing) {
+    await adminClient.from('payment_refunds').update({
+      status,
+      processed_at: status === 'processed' ? new Date().toISOString() : null,
+      razorpay_raw: refund,
+    }).eq('id', existing.id);
+  } else {
+    await adminClient.from('payment_refunds').insert([{
+      payment_id: pt.id,
+      razorpay_refund_id: rzpRefundId,
+      amount,
+      currency: refund.currency || 'INR',
+      status,
+      reason: refund.notes?.reason || null,
+      notes: refund.notes || null,
+      processed_at: status === 'processed' ? new Date().toISOString() : null,
+      razorpay_raw: refund,
+    }]);
+  }
+
+  // Update payment_transactions.amount_refunded if processed
+  if (status === 'processed') {
+    const totalRefunded = Number(pt.amount_refunded || 0) + amount;
+    const newStatus = totalRefunded >= Number(pt.amount) ? 'refunded' : 'partially_refunded';
+    await adminClient.from('payment_transactions').update({
+      amount_refunded: totalRefunded,
+      payment_status: newStatus,
+    }).eq('id', pt.id);
+  }
+}
