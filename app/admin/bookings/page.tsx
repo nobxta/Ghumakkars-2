@@ -95,13 +95,27 @@ export default function AdminBookingsPage() {
     ).length,
   };
 
-  const totalRevenue = bookings
+  // Revenue: amount actually paid for non-cancelled bookings (uses amount_paid, not final_amount)
+  const confirmedRevenue = bookings
     .filter(b => b.booking_status === 'confirmed')
-    .reduce((sum, b) => sum + (parseFloat(b.final_amount || b.total_price || 0)), 0);
+    .reduce((sum, b) => sum + parseFloat(b.amount_paid || b.final_amount || 0), 0);
+
+  const seatLockRevenue = bookings
+    .filter(b => b.booking_status === 'seat_locked')
+    .reduce((sum, b) => sum + parseFloat(b.amount_paid || 0), 0);
+
+  const totalRevenue = confirmedRevenue + seatLockRevenue;
 
   const pendingRevenue = bookings
     .filter(b => (b.payment_status === 'pending' || b.payment_status === 'cash_pending') && b.booking_status !== 'cancelled')
-    .reduce((sum, b) => sum + (parseFloat(b.final_amount || b.total_price || 0)), 0);
+    .reduce((sum, b) => sum + parseFloat(b.final_amount || b.total_price || 0), 0);
+
+  const needsAttention = bookings.filter(b =>
+    b.payment_transactions?.some((p: any) => p.payment_status === 'pending') ||
+    (b.booking_status === 'pending' && b.payment_mode !== 'razorpay')
+  ).length;
+
+  const conversionRate = stats.total > 0 ? Math.round((stats.confirmed / stats.total) * 100) : 0;
 
   // Get filtered bookings by trip first (for count calculations)
   const tripFilteredBookings = selectedTripId !== 'all' 
@@ -364,69 +378,75 @@ export default function AdminBookingsPage() {
         </button>
       </div>
 
-      {/* Key Stats Cards - Compact */}
+      {/* Key Stats Cards — consistent neutral palette, more info per card */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        {/* Total Revenue */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg sm:rounded-xl border border-green-200 p-2.5 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+        {/* Revenue */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-green-100 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-green-700" />
             </div>
-            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
+            <TrendingUp className="h-3.5 w-3.5 text-green-500" />
           </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Revenue</p>
-          <p className="text-base sm:text-xl font-bold text-gray-900 flex items-center">
-            <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5" />
-            {totalRevenue.toLocaleString()}
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</p>
+          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center mt-0.5">
+            <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{totalRevenue.toLocaleString('en-IN')}
           </p>
+          <div className="mt-1.5 space-y-0.5">
+            <p className="text-[10px] sm:text-[11px] text-gray-500 flex items-center justify-between">
+              <span>Confirmed</span><span className="font-semibold text-gray-700">₹{confirmedRevenue.toLocaleString('en-IN')}</span>
+            </p>
+            {seatLockRevenue > 0 && (
+              <p className="text-[10px] sm:text-[11px] text-gray-500 flex items-center justify-between">
+                <span>Seat lock</span><span className="font-semibold text-gray-700">₹{seatLockRevenue.toLocaleString('en-IN')}</span>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Pending Revenue */}
-        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg sm:rounded-xl border border-yellow-200 p-2.5 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center">
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+              <Clock className="h-4 w-4 text-amber-700" />
             </div>
-            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400" />
+            {stats.pendingPayments > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-md text-[10px] font-bold">{stats.pendingPayments}</span>
+            )}
           </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Pending</p>
-          <p className="text-base sm:text-xl font-bold text-gray-900 flex items-center">
-            <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5" />
-            {pendingRevenue.toLocaleString()}
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending</p>
+          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center mt-0.5">
+            <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{pendingRevenue.toLocaleString('en-IN')}
           </p>
-          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{stats.pendingPayments} pending</p>
+          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">{stats.pendingPayments} awaiting payment</p>
         </div>
 
-        {/* Urgent Actions */}
-        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg sm:rounded-xl border border-orange-200 p-2.5 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+        {/* Needs Attention — replaces meaningless OC/OM/OR */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${needsAttention > 0 ? 'bg-orange-100' : 'bg-gray-100'}`}>
+              <AlertCircle className={`h-4 w-4 ${needsAttention > 0 ? 'text-orange-700' : 'text-gray-400'}`} />
             </div>
-            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] sm:text-xs font-bold">
-              {stats.cashPending + stats.manualPending + stats.razorpayPending}
-            </span>
           </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Action</p>
-          <p className="text-base sm:text-xl font-bold text-gray-900">{stats.cashPending + stats.manualPending + stats.razorpayPending}</p>
-          <div className="flex flex-wrap gap-1 mt-1">
-            <span className="px-1 sm:px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] sm:text-[10px]">{stats.cashPending}C</span>
-            <span className="px-1 sm:px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] sm:text-[10px]">{stats.manualPending}M</span>
-            <span className="px-1 sm:px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] sm:text-[10px]">{stats.razorpayPending}R</span>
-          </div>
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Needs attention</p>
+          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-0.5">{needsAttention}</p>
+          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">
+            {needsAttention === 0 ? 'All caught up' : 'Payments to verify / confirm'}
+          </p>
         </div>
 
-        {/* Total Bookings */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl border border-blue-200 p-2.5 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-md sm:rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+        {/* Total Bookings with conversion */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Calendar className="h-4 w-4 text-purple-700" />
             </div>
-            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
           </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Bookings</p>
-          <p className="text-base sm:text-xl font-bold text-gray-900">{stats.total}</p>
-          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{stats.confirmed} confirmed</p>
+          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Bookings</p>
+          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-0.5">{stats.total}</p>
+          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">
+            {stats.confirmed} confirmed · {conversionRate}% rate
+          </p>
         </div>
       </div>
 
@@ -603,23 +623,33 @@ export default function AdminBookingsPage() {
                             <div className="font-bold text-sm text-gray-900 group-hover:text-purple-600 transition-colors truncate">
                               {booking.trips?.title || 'N/A'}
                             </div>
-                            <div className="text-xs text-gray-500 truncate mt-0.5">
-                              {booking.trips?.destination || 'N/A'}
+                            <div className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1">
+                              <MapPin className="h-3 w-3 flex-shrink-0" />{booking.trips?.destination || 'N/A'}
                             </div>
-                            <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-                              <div className="font-semibold text-xs text-gray-900 truncate">
-                                {booking.primary_passenger_name || 
-                                 (booking.profiles?.first_name && booking.profiles?.last_name
-                                   ? `${booking.profiles.first_name} ${booking.profiles.last_name}`
-                                   : booking.profiles?.full_name || 'N/A')}
+                            {booking.trips?.start_date && (
+                              <div className="text-[10px] text-purple-700 font-semibold truncate mt-0.5 flex items-center gap-1">
+                                <Calendar className="h-3 w-3 flex-shrink-0" />Departs {new Date(booking.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                               </div>
-                              <div className="text-xs text-gray-500 truncate mt-0.5">
-                                {booking.primary_passenger_email || booking.profiles?.email || 'N/A'}
+                            )}
+                            <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-start gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-purple-700 mt-0.5">
+                                {((booking.primary_passenger_name || booking.profiles?.first_name || '?')[0] || '?').toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-xs text-gray-900 truncate">
+                                  {booking.primary_passenger_name ||
+                                   (booking.profiles?.first_name && booking.profiles?.last_name
+                                     ? `${booking.profiles.first_name} ${booking.profiles.last_name}`
+                                     : booking.profiles?.full_name || 'N/A')}
+                                </div>
+                                <div className="text-[10px] text-gray-500 truncate">
+                                  {booking.primary_passenger_email || booking.profiles?.email || 'N/A'}
+                                </div>
                               </div>
                             </div>
-                            <div className="text-xs text-gray-400 mt-1 flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              {new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-between">
+                              <span className="font-mono">#{booking.id.slice(0, 8).toUpperCase()}</span>
+                              <span>{new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                             </div>
                           </div>
                         </div>
@@ -747,36 +777,45 @@ export default function AdminBookingsPage() {
                             <span>Review</span>
                           </button>
                         )}
-                        {/* View Payments */}
-                        {booking.payment_transactions && booking.payment_transactions.length > 0 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openPaymentModal(booking);
-                            }}
-                            className={`w-full px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center justify-center space-x-1 ${
-                              booking.payment_transactions.some((p: any) => p.payment_status === 'pending')
-                                ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-300'
-                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300'
-                            }`}
-                          >
-                            <Eye className="h-3 w-3" />
-                            <span>Payments</span>
-                            {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length > 0 && (
-                              <span className="ml-1 px-1 py-0.5 bg-white rounded text-xs font-bold">
-                                {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length}
-                              </span>
-                            )}
-                          </button>
-                        )}
-                        {/* View Details */}
+                        {/* Primary: View booking */}
                         <Link
                           href={`/admin/bookings/${booking.id}`}
-                          className="w-full px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-xs font-semibold hover:bg-gray-200 transition-colors flex items-center justify-center space-x-1 border border-gray-200"
+                          className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-sm"
                         >
                           <Eye className="h-3 w-3" />
-                          <span>Details</span>
+                          <span>View booking</span>
                         </Link>
+                        {/* Secondary row */}
+                        <div className="flex gap-1">
+                          {booking.payment_transactions && booking.payment_transactions.length > 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openPaymentModal(booking); }}
+                              className={`flex-1 px-2 py-1 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 ${
+                                booking.payment_transactions.some((p: any) => p.payment_status === 'pending')
+                                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                              title="Payments"
+                            >
+                              <CreditCard className="h-3 w-3" /> Pay
+                              {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length > 0 && (
+                                <span className="ml-0.5 px-1 bg-white rounded text-[9px] font-bold">
+                                  {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length}
+                                </span>
+                              )}
+                            </button>
+                          )}
+                          {(booking.primary_passenger_phone || booking.profiles?.phone) && (
+                            <a
+                              onClick={(e) => e.stopPropagation()}
+                              href={`tel:${booking.primary_passenger_phone || booking.profiles?.phone}`}
+                              className="flex-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-[10px] font-semibold hover:bg-gray-200 flex items-center justify-center gap-1"
+                              title="Call customer"
+                            >
+                              <Phone className="h-3 w-3" /> Call
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
