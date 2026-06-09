@@ -1031,8 +1031,10 @@ export default function BookTripPage() {
   }
 
   const totalPassengers = 1 + passengers.length;
-  const availableSpots = trip.max_participants - trip.current_participants;
-  const canBook = availableSpots >= totalPassengers;
+  // If max_participants is null/0 → unlimited seats mode
+  const unlimitedSeats = !trip.max_participants || trip.max_participants <= 0;
+  const availableSpots = unlimitedSeats ? Infinity : trip.max_participants - trip.current_participants;
+  const canBook = unlimitedSeats || availableSpots >= totalPassengers;
 
   // Step Indicator
   const StepIndicator = () => (
