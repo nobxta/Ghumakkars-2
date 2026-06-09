@@ -336,6 +336,9 @@ export default function AdminUserDetailsPage() {
     return sum + (total - paid);
   }, 0);
 
+  const fullName: string = user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : '');
+  const initials: string = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
   return (
     <div className="min-h-screen pt-16 pb-24 bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -350,16 +353,7 @@ export default function AdminUserDetailsPage() {
           </Link>
           
           {/* Premium User Hero Card */}
-          {(() => {
-            const fullName = user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : '');
-            const initials = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-            const upcoming = bookings.find((b: any) => b.booking_status === 'confirmed' && b.trips?.start_date && new Date(b.trips.start_date) > new Date());
-            const last = [...bookings].filter((b: any) => b.trips?.start_date).sort((a: any, b: any) => new Date(b.trips.start_date).getTime() - new Date(a.trips.start_date).getTime())[0];
-            const destCount: Record<string, number> = {};
-            bookings.forEach((b: any) => { const d = b.trips?.destination; if (d) destCount[d] = (destCount[d] || 0) + 1; });
-            const favDest = Object.keys(destCount).sort((a, b) => destCount[b] - destCount[a])[0];
-            return (
-              <>
+          <>
               {/* Hero */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
                 {/* Top gradient strip */}
@@ -448,8 +442,6 @@ export default function AdminUserDetailsPage() {
               <Stat label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="balance" />
             </div>
               </>
-            );
-          })()}
 
         {/* Tabs Navigation - Compact */}
         <div className="mb-4">
