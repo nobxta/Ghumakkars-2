@@ -40,16 +40,16 @@ const shortId = (id: string) => id.slice(0, 8).toUpperCase();
 export async function sendLoginOTPEmail(email: string, otp: string) {
   const opts = {
     theme: 'brand' as const,
-    preheader: `Your login code: ${otp}`,
-    title: 'Sign-in code',
-    intro: 'Use this code to complete your sign-in. It expires in 10 minutes.',
-    code: { label: 'Your code', value: otp, sub: 'Expires in 10 minutes' },
-    outro: "If you didn't try to sign in, you can ignore this email — your account is safe.",
+    preheader: `Your code is ${otp}. Don't share it with anyone.`,
+    title: 'Your sign-in code',
+    intro: 'Enter this code to log in. Don\'t share it with anyone, not even our team.',
+    code: { label: 'Code', value: otp, sub: 'Valid for 10 minutes' },
+    outro: "Didn't try to log in? Just ignore this email, your account is safe.",
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
     to: email,
-    subject: `${otp} is your sign-in code`,
+    subject: `${otp} is your Ghumakkars code`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -58,17 +58,17 @@ export async function sendLoginOTPEmail(email: string, otp: string) {
 export async function sendSignupOTPEmail(email: string, otp: string, firstName?: string) {
   const opts = {
     theme: 'brand' as const,
-    preheader: `Verify your email with code ${otp}`,
+    preheader: `Your verification code is ${otp}.`,
     title: 'Verify your email',
-    greeting: firstName ? `Hi ${firstName},` : 'Welcome!',
-    intro: 'Use this code to verify your email and finish creating your Ghumakkars account.',
-    code: { label: 'Verification code', value: otp, sub: 'Expires in 10 minutes' },
-    outro: "If you didn't request this, you can safely ignore the email.",
+    greeting: firstName ? `Hey ${firstName},` : 'Hey there,',
+    intro: 'Almost done. Enter this code on the signup page to finish creating your account.',
+    code: { label: 'Code', value: otp, sub: 'Valid for 10 minutes' },
+    outro: "Didn't sign up? You can ignore this email.",
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
     to: email,
-    subject: `${otp} — verify your email`,
+    subject: `${otp} is your verification code`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -81,11 +81,11 @@ export async function sendOTPEmail(email: string, otp: string) {
 export async function sendPasswordResetEmail(email: string, resetLink: string) {
   const opts = {
     theme: 'brand' as const,
-    preheader: 'Reset your Ghumakkars password',
+    preheader: 'Tap the link to set a new password.',
     title: 'Reset your password',
-    intro: 'Click the button below to set a new password. The link expires in 1 hour.',
-    cta: { label: 'Reset password', url: resetLink },
-    outro: "If you didn't request a password reset, you can ignore this email.",
+    intro: 'Got a request to reset your password. Tap the button below to set a new one. Link works for 1 hour.',
+    cta: { label: 'Set new password', url: resetLink },
+    outro: "Didn't ask for this? Just ignore the email and your password stays the same.",
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.noreply}>`,
@@ -105,23 +105,23 @@ export async function sendBookingReceivedEmail(
 ) {
   const opts = {
     theme: 'pending' as const,
-    preheader: `Booking received for ${bookingDetails.tripTitle}`,
-    title: 'We got your booking',
+    preheader: `We're checking your payment. You'll hear from us shortly.`,
+    title: 'Got your booking',
     statusPill: 'Under review',
-    greeting: `Hi ${userName},`,
-    intro: 'Thanks for booking with Ghumakkars. Our team is reviewing your booking and payment — we\'ll confirm shortly.',
+    greeting: `Hey ${userName},`,
+    intro: `Thanks for booking ${bookingDetails.tripTitle}. We're verifying your payment now. You'll get a confirmation email once it's done, usually within a few hours.`,
     details: [
       { label: 'Trip', value: bookingDetails.tripTitle },
-      { label: 'Destination', value: bookingDetails.destination },
+      { label: 'Going to', value: bookingDetails.destination },
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId), highlight: true },
     ],
-    cta: { label: 'View booking', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
-    outro: 'Most bookings are reviewed within a few hours. Sit tight — we\'ll be in touch.',
+    cta: { label: 'See your booking', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
+    outro: `Save this booking ID. You'll need it if you contact us about this trip.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
-    subject: `We got your booking — ${bookingDetails.tripTitle}`,
+    subject: `Got your booking for ${bookingDetails.tripTitle}`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -141,39 +141,39 @@ export async function sendBookingConfirmedEmail(
   }
 ) {
   const dateRange = bookingDetails.endDate
-    ? `${fmtDate(bookingDetails.startDate)} → ${fmtDate(bookingDetails.endDate)}`
+    ? `${fmtDate(bookingDetails.startDate)} to ${fmtDate(bookingDetails.endDate)}`
     : fmtDate(bookingDetails.startDate);
 
   const opts = {
     theme: 'success' as const,
-    preheader: `Your booking for ${bookingDetails.tripTitle} is confirmed`,
-    title: 'You\'re booked!',
+    preheader: `Your seat is confirmed. See you on the trip.`,
+    title: 'You\'re in!',
     statusPill: 'Confirmed',
-    greeting: `Hi ${userName},`,
-    intro: 'Your seat is locked in. Get ready for an unforgettable trip — here are the details.',
+    greeting: `Hey ${userName},`,
+    intro: `Your seat for ${bookingDetails.tripTitle} is confirmed. We've added you to the list. Save this email, you'll need it for reference.`,
     details: [
       { label: 'Trip', value: bookingDetails.tripTitle },
-      { label: 'Destination', value: bookingDetails.destination },
+      { label: 'Going to', value: bookingDetails.destination },
       { label: 'Dates', value: dateRange },
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
       { label: 'Amount paid', value: fmtINR(bookingDetails.totalAmount), highlight: true },
     ],
     highlight: bookingDetails.whatsappGroupLink
       ? {
-          label: 'Join your trip group',
+          label: 'Join the trip WhatsApp group',
           lines: [
-            'Connect with fellow travellers and get live trip updates:',
+            'Meet your fellow travellers and get trip updates here:',
             `<a href="${bookingDetails.whatsappGroupLink}" style="color:#16a34a;font-weight:600;text-decoration:none;word-break:break-all;">${bookingDetails.whatsappGroupLink}</a>`,
           ],
         }
       : undefined,
-    cta: { label: 'View booking', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
-    outro: 'You\'ll get a detailed pre-trip brief about a week before departure — packing list, pickup point, contact for your trip leader. Until then, start dreaming of the mountains.',
+    cta: { label: 'See your booking', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
+    outro: `About a week before the trip, we'll send you the full plan: pickup point, what to pack, and your trip leader's number. Reach out anytime till then if you need anything.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
-    subject: `🎉 Booking confirmed — ${bookingDetails.tripTitle}`,
+    subject: `Booking confirmed for ${bookingDetails.tripTitle}`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -195,39 +195,39 @@ export async function sendSeatLockConfirmedEmail(
   }
 ) {
   const dateRange = bookingDetails.endDate
-    ? `${fmtDate(bookingDetails.startDate)} → ${fmtDate(bookingDetails.endDate)}`
+    ? `${fmtDate(bookingDetails.startDate)} to ${fmtDate(bookingDetails.endDate)}`
     : fmtDate(bookingDetails.startDate);
 
   const opts = {
     theme: 'warning' as const,
-    preheader: `Seat locked — ${fmtINR(bookingDetails.remainingAmount)} due by ${fmtDate(bookingDetails.dueDate)}`,
-    title: 'Your seat is locked',
-    statusPill: 'Seat locked',
-    greeting: `Hi ${userName},`,
-    intro: 'We\'ve reserved your spot. Pay the remaining amount before the due date to keep it confirmed.',
+    preheader: `Pay ${fmtINR(bookingDetails.remainingAmount)} by ${fmtDate(bookingDetails.dueDate)} to keep your seat.`,
+    title: 'Seat locked for you',
+    statusPill: 'Pay balance',
+    greeting: `Hey ${userName},`,
+    intro: `We've held your seat for ${bookingDetails.tripTitle}. Pay the remaining amount by the due date to confirm your booking.`,
     details: [
       { label: 'Trip', value: bookingDetails.tripTitle },
-      { label: 'Destination', value: bookingDetails.destination },
+      { label: 'Going to', value: bookingDetails.destination },
       { label: 'Dates', value: dateRange },
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
-      { label: 'Seat lock paid', value: fmtINR(bookingDetails.seatLockAmount) },
+      { label: 'Paid so far', value: fmtINR(bookingDetails.seatLockAmount) },
     ],
     highlight: {
-      label: 'Remaining payment',
+      label: 'Pay this to confirm',
       lines: [
-        `<strong style="font-size:20px;color:#ea580c;">${fmtINR(bookingDetails.remainingAmount)}</strong> due by <strong>${fmtDate(bookingDetails.dueDate)}</strong>`,
-        'If we don\'t receive the balance by then, your seat will be released and the lock amount becomes non-refundable.',
+        `<strong style="font-size:20px;color:#ea580c;">${fmtINR(bookingDetails.remainingAmount)}</strong> by <strong>${fmtDate(bookingDetails.dueDate)}</strong>`,
+        `If we don't get the balance by then, your seat will be released. The lock amount can't be refunded after that.`,
       ],
     },
-    cta: { label: 'Pay remaining now', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
+    cta: { label: 'Pay now', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
     outro: bookingDetails.whatsappGroupLink
-      ? `Once you complete payment you'll be added to the trip WhatsApp group. Join early: <a href="${bookingDetails.whatsappGroupLink}" style="color:#ea580c;">trip group</a>.`
-      : 'You\'ll get payment reminders. Reply to this email or message us on WhatsApp if anything changes.',
+      ? `Once you pay, we'll add you to the trip WhatsApp group: <a href="${bookingDetails.whatsappGroupLink}" style="color:#ea580c;">join here</a>.`
+      : `Already paid? Ignore this. Need more time or want to switch dates? Reply to this email or ping us on WhatsApp.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
-    subject: `🔒 Seat locked — pay ${fmtINR(bookingDetails.remainingAmount)} by ${fmtDate(bookingDetails.dueDate)}`,
+    subject: `Seat held. Pay ${fmtINR(bookingDetails.remainingAmount)} by ${fmtDate(bookingDetails.dueDate)}`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -240,28 +240,28 @@ export async function sendBookingRejectedEmail(
 ) {
   const opts = {
     theme: 'danger' as const,
-    preheader: `Your booking couldn't be confirmed`,
-    title: 'Booking not confirmed',
-    statusPill: 'Cancelled',
-    greeting: `Hi ${userName},`,
-    intro: `We weren't able to confirm your booking for ${bookingDetails.tripTitle}. Details below.`,
+    preheader: `Sorry, we couldn't confirm your booking. Refund is on the way.`,
+    title: 'Couldn\'t confirm your booking',
+    statusPill: 'Not confirmed',
+    greeting: `Hey ${userName},`,
+    intro: `Sorry about this. We weren't able to confirm your booking for ${bookingDetails.tripTitle}.`,
     details: [
       { label: 'Trip', value: bookingDetails.tripTitle },
-      { label: 'Destination', value: bookingDetails.destination },
+      { label: 'Going to', value: bookingDetails.destination },
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
     ],
     highlight: {
-      label: 'Reason',
+      label: 'What happened',
       lines: [bookingDetails.reason],
       tone: 'danger' as const,
     },
-    cta: { label: 'Browse other trips', url: `${SITE_URL}/trips` },
-    outro: 'Any amount you paid will be refunded to your original payment method within 5–7 business days. If you think this is a mistake, reply to this email and we\'ll look into it right away.',
+    cta: { label: 'See other trips', url: `${SITE_URL}/trips` },
+    outro: `Any amount you paid will come back to your original payment method in 5 to 7 working days. Think this is a mistake? Just reply to this email and we'll look into it.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
-    subject: `Booking not confirmed — ${bookingDetails.tripTitle}`,
+    subject: `About your ${bookingDetails.tripTitle} booking`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -281,30 +281,30 @@ export async function sendPaymentReminderEmail(
 ) {
   const opts = {
     theme: 'warning' as const,
-    preheader: `Reminder — ${fmtINR(bookingDetails.remainingAmount)} due by ${fmtDate(bookingDetails.dueDate)}`,
-    title: 'Friendly payment reminder',
-    statusPill: 'Payment due',
-    greeting: `Hi ${userName},`,
-    intro: 'A quick reminder — your remaining payment is due soon. Pay now to keep your seat confirmed.',
+    preheader: `${fmtINR(bookingDetails.remainingAmount)} pending. Pay by ${fmtDate(bookingDetails.dueDate)}.`,
+    title: 'Quick reminder about your payment',
+    statusPill: 'Payment pending',
+    greeting: `Hey ${userName},`,
+    intro: `Just a heads up. Your balance for ${bookingDetails.tripTitle} is still pending. Pay before the due date to keep your seat.`,
     details: [
       { label: 'Trip', value: bookingDetails.tripTitle },
-      { label: 'Destination', value: bookingDetails.destination },
-      { label: 'Departs', value: fmtDate(bookingDetails.startDate) },
+      { label: 'Going to', value: bookingDetails.destination },
+      { label: 'Departure', value: fmtDate(bookingDetails.startDate) },
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
     ],
     highlight: {
-      label: 'Amount due',
+      label: 'Pending',
       lines: [
         `<strong style="font-size:20px;color:#ea580c;">${fmtINR(bookingDetails.remainingAmount)}</strong> by <strong>${fmtDate(bookingDetails.dueDate)}</strong>`,
       ],
     },
-    cta: { label: 'Complete payment', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
-    outro: 'Already paid? You can ignore this — payments take a few minutes to reflect. Questions? Reply to this email or message us on WhatsApp.',
+    cta: { label: 'Pay now', url: `${SITE_URL}/bookings/${bookingDetails.bookingId}` },
+    outro: `Already paid? Give it a few minutes to show up, then you can ignore this. Anything else, just reply to this email or message us on WhatsApp.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
     to: email,
-    subject: `Reminder: ${fmtINR(bookingDetails.remainingAmount)} due by ${fmtDate(bookingDetails.dueDate)}`,
+    subject: `Pending: ${fmtINR(bookingDetails.remainingAmount)} for your trip`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });
@@ -324,31 +324,31 @@ export async function sendCouponEmail(
 ) {
   const opts = {
     theme: 'offer' as const,
-    preheader: `${couponDetails.couponCode} — save ${fmtINR(couponDetails.discountAmount)} on your next trip`,
-    title: `You've got a gift`,
+    preheader: `Use ${couponDetails.couponCode} to save ${fmtINR(couponDetails.discountAmount)} on your next trip.`,
+    title: `Here's ${fmtINR(couponDetails.discountAmount)} off`,
     statusPill: 'Coupon',
-    greeting: userName ? `Hi ${userName},` : undefined,
-    intro: couponDetails.description || 'Here\'s a discount you can use on your next booking.',
+    greeting: userName ? `Hey ${userName},` : undefined,
+    intro: couponDetails.description || `Use this code on your next booking and save ${fmtINR(couponDetails.discountAmount)}.`,
     code: {
-      label: 'Your coupon code',
+      label: 'Your code',
       value: couponDetails.couponCode,
-      sub: couponDetails.expiryDate ? `Valid until ${fmtDate(couponDetails.expiryDate)}` : 'No expiry',
+      sub: couponDetails.expiryDate ? `Use before ${fmtDate(couponDetails.expiryDate)}` : 'No expiry',
     },
     highlight: {
-      label: 'How to redeem',
+      label: 'How to use it',
       lines: [
-        '1. Pick a trip you love',
-        '2. Enter this code at checkout',
-        `3. Save <strong>${fmtINR(couponDetails.discountAmount)}</strong> instantly`,
+        '1. Pick any trip you like',
+        '2. Paste the code at checkout',
+        `3. Save <strong>${fmtINR(couponDetails.discountAmount)}</strong> right away`,
       ],
     },
-    cta: { label: 'Browse trips', url: `${SITE_URL}/trips` },
-    outro: 'One-time use. Code is non-transferable.',
+    cta: { label: 'See all trips', url: `${SITE_URL}/trips` },
+    outro: `One-time use. Can't be combined with other offers.`,
   };
   return send({
     from: `"${FROM_NAME}" <${EMAIL_ALIASES.offers}>`,
     to: email,
-    subject: `🎁 ${couponDetails.couponCode} — Save ${fmtINR(couponDetails.discountAmount)} on your next trip`,
+    subject: `${fmtINR(couponDetails.discountAmount)} off with code ${couponDetails.couponCode}`,
     html: renderEmail(opts),
     text: renderPlainText(opts),
   });

@@ -27,13 +27,13 @@ export type Theme =
   | 'brand'     // welcome, OTP, info
   | 'offer';    // coupons, discounts
 
-const THEMES: Record<Theme, { primary: string; primaryDark: string; soft: string; border: string; emoji: string; statusBg: string; statusText: string }> = {
-  success:  { primary: '#16a34a', primaryDark: '#15803d', soft: '#f0fdf4', border: '#bbf7d0', emoji: '✅', statusBg: '#dcfce7', statusText: '#166534' },
-  warning:  { primary: '#ea580c', primaryDark: '#c2410c', soft: '#fff7ed', border: '#fed7aa', emoji: '⏳', statusBg: '#ffedd5', statusText: '#9a3412' },
-  pending:  { primary: '#7c3aed', primaryDark: '#6d28d9', soft: '#faf5ff', border: '#e9d5ff', emoji: '📩', statusBg: '#f3e8ff', statusText: '#6b21a8' },
-  danger:   { primary: '#dc2626', primaryDark: '#b91c1c', soft: '#fef2f2', border: '#fecaca', emoji: '⚠️', statusBg: '#fee2e2', statusText: '#991b1b' },
-  brand:    { primary: '#7c3aed', primaryDark: '#6d28d9', soft: '#faf5ff', border: '#e9d5ff', emoji: '🌄', statusBg: '#f3e8ff', statusText: '#6b21a8' },
-  offer:    { primary: '#db2777', primaryDark: '#be185d', soft: '#fdf2f8', border: '#fbcfe8', emoji: '🎁', statusBg: '#fce7f3', statusText: '#9d174d' },
+const THEMES: Record<Theme, { primary: string; primaryDark: string; soft: string; border: string; statusBg: string; statusText: string }> = {
+  success:  { primary: '#16a34a', primaryDark: '#15803d', soft: '#f0fdf4', border: '#bbf7d0', statusBg: '#dcfce7', statusText: '#166534' },
+  warning:  { primary: '#ea580c', primaryDark: '#c2410c', soft: '#fff7ed', border: '#fed7aa', statusBg: '#ffedd5', statusText: '#9a3412' },
+  pending:  { primary: '#7c3aed', primaryDark: '#6d28d9', soft: '#faf5ff', border: '#e9d5ff', statusBg: '#f3e8ff', statusText: '#6b21a8' },
+  danger:   { primary: '#dc2626', primaryDark: '#b91c1c', soft: '#fef2f2', border: '#fecaca', statusBg: '#fee2e2', statusText: '#991b1b' },
+  brand:    { primary: '#7c3aed', primaryDark: '#6d28d9', soft: '#faf5ff', border: '#e9d5ff', statusBg: '#f3e8ff', statusText: '#6b21a8' },
+  offer:    { primary: '#db2777', primaryDark: '#be185d', soft: '#fdf2f8', border: '#fbcfe8', statusBg: '#fce7f3', statusText: '#9d174d' },
 };
 
 interface KeyValueRow {
@@ -123,16 +123,16 @@ export function renderEmail(o: RenderOptions): string {
            <p style="margin:0 0 12px 0;font-size:13px;color:#6b7280;">Need help?</p>
            <p style="margin:0 0 14px 0;font-size:13px;color:#374151;">
              <a href="mailto:${BRAND.supportEmail}" style="color:${t.primary};text-decoration:none;font-weight:600;">${BRAND.supportEmail}</a>
-             &nbsp;·&nbsp;
+             &nbsp;&nbsp;
              <a href="${BRAND.whatsappLink}" style="color:${t.primary};text-decoration:none;font-weight:600;">WhatsApp</a>
-             &nbsp;·&nbsp;
+             &nbsp;&nbsp;
              <a href="${BRAND.instagram}" style="color:${t.primary};text-decoration:none;font-weight:600;">Instagram</a>
            </p>
          </td></tr>
          <tr><td style="padding:0 32px 28px;text-align:center;">
            <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.6;">
-             © ${year} ${BRAND.name}. ${BRAND.tagline}.<br>
-             You received this because you booked or signed up at ${BRAND.domain}.
+             © ${year} ${BRAND.name}<br>
+             You got this email because you booked or signed up at ${BRAND.domain}.
            </p>
          </td></tr>
        </table>`
@@ -175,11 +175,10 @@ ${preheaderHtml(o.preheader)}
         </td>
       </tr>
 
-      <!-- Hero icon + title -->
+      <!-- Title -->
       <tr>
-        <td style="padding:8px 32px 4px;">
-          <div style="font-size:32px;line-height:1;">${t.emoji}</div>
-          <h1 style="margin:12px 0 0 0;font-size:24px;line-height:1.3;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">${escape(o.title)}</h1>
+        <td style="padding:12px 32px 4px;">
+          <h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">${escape(o.title)}</h1>
         </td>
       </tr>
 
@@ -250,9 +249,9 @@ export function renderPlainText(o: RenderOptions): string {
     lines.push(o.outro.replace(/<[^>]+>/g, ''));
   }
   lines.push('');
-  lines.push('—');
-  lines.push(`${BRAND.name} · ${BRAND.tagline}`);
-  lines.push(`Support: ${BRAND.supportEmail} · WhatsApp: ${BRAND.whatsapp}`);
+  lines.push('--');
+  lines.push(BRAND.name);
+  lines.push(`Support: ${BRAND.supportEmail} | WhatsApp: ${BRAND.whatsapp}`);
   lines.push(`© ${new Date().getFullYear()} ${BRAND.name}`);
   return lines.join('\n');
 }
