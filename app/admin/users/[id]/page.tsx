@@ -10,7 +10,7 @@ import {
   GraduationCap, Heart, Eye, AlertCircle, Shield, 
   Wallet, UserCircle, PhoneCall, Calendar as CalendarIcon, 
   Hash, AlertTriangle, Edit, Plus, Send, Gift, X, 
-  Activity, FileText, TrendingUp, History
+  Activity, FileText, TrendingUp, History, MessageCircle
 } from 'lucide-react';
 
 export default function AdminUserDetailsPage() {
@@ -349,174 +349,147 @@ export default function AdminUserDetailsPage() {
             <span>Back to All Users</span>
           </Link>
           
-          {/* User Header Card - Compact */}
-          <div className="bg-white rounded-xl border border-purple-200 shadow-lg p-4 sm:p-6 mb-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                {/* Avatar */}
-                <div className="relative flex-shrink-0">
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md ring-2 ring-white">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt="Avatar" className="w-full h-full rounded-xl object-cover" />
-                    ) : (
-                      <User className="h-8 w-8 text-white" />
-                    )}
-                  </div>
-                  {user.email_verified && (
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
-                      <CheckCircle className="h-3 w-3 text-white" />
-                    </div>
-                  )}
+          {/* Premium User Hero Card */}
+          {(() => {
+            const fullName = user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : '');
+            const initials = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+            const upcoming = bookings.find((b: any) => b.booking_status === 'confirmed' && b.trips?.start_date && new Date(b.trips.start_date) > new Date());
+            const last = [...bookings].filter((b: any) => b.trips?.start_date).sort((a: any, b: any) => new Date(b.trips.start_date).getTime() - new Date(a.trips.start_date).getTime())[0];
+            const destCount: Record<string, number> = {};
+            bookings.forEach((b: any) => { const d = b.trips?.destination; if (d) destCount[d] = (destCount[d] || 0) + 1; });
+            const favDest = Object.keys(destCount).sort((a, b) => destCount[b] - destCount[a])[0];
+            return (
+              <>
+              {/* Hero */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                {/* Top gradient strip */}
+                <div className="h-16 sm:h-20 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 relative">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 </div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
-                      {user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : 'User Details')}
-                    </h1>
-                    {user.role === 'admin' && (
-                      <span className="px-2 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm flex items-center flex-shrink-0">
-                        <Shield className="h-3 w-3 mr-1" />
-                        Admin
-                      </span>
-                    )}
-                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold border flex-shrink-0 ${
-                      user.email_verified 
-                        ? 'bg-green-50 text-green-700 border-green-200' 
-                        : 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                    }`}>
-                      {user.email_verified ? (
-                        <>
-                          <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 inline mr-1" />
-                          Verified
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-3 w-3 inline mr-1" />
-                          Unverified
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-600">
-                    <div className="flex items-center gap-1.5">
-                      <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
-                      <span className="truncate max-w-[200px] sm:max-w-none">{user.email || 'N/A'}</span>
-                    </div>
-                    {user.phone && (
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
-                        <span>{user.phone}</span>
+                <div className="px-4 sm:px-6 pb-4 sm:pb-5 -mt-10 sm:-mt-12">
+                  <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    {/* Avatar + Identity */}
+                    <div className="flex items-end gap-3 sm:gap-4 min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-lg ring-4 ring-white text-white text-2xl sm:text-3xl font-extrabold">
+                          {user.avatar_url ? (
+                            <img src={user.avatar_url} alt={fullName} className="w-full h-full rounded-2xl object-cover" />
+                          ) : (
+                            <span>{initials}</span>
+                          )}
+                        </div>
+                        {user.email_verified && (
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-3 border-white flex items-center justify-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex items-center gap-1.5">
-                      <Hash className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-purple-500 flex-shrink-0" />
-                      <span className="font-mono text-xs">{user.id.substring(0, 8)}...</span>
+                      <div className="min-w-0 flex-1 pb-1">
+                        <div className="flex items-center flex-wrap gap-2 mb-1">
+                          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{fullName || 'Unnamed User'}</h1>
+                          {user.role === 'admin' && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white">
+                              <Shield className="h-2.5 w-2.5 inline mr-0.5" /> Admin
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${user.email_verified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {user.email_verified ? 'Verified' : 'Unverified'}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 font-medium mb-2">
+                          {bookingStats.confirmed > 2 ? '⭐ Loyal Customer' : bookingStats.total > 0 ? 'Customer' : 'New User'} · Joined {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-700">
+                          <span className="flex items-center gap-1 truncate"><Mail className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />{user.email || '—'}</span>
+                          {user.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-purple-500" />{user.phone}</span>}
+                          <span className="flex items-center gap-1 font-mono text-[10px]"><Hash className="h-3 w-3 text-gray-400" />{user.id.slice(0, 8).toUpperCase()}</span>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* LTV chip */}
+                    <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-xl px-4 py-3 flex-shrink-0">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-purple-700">Lifetime Value</p>
+                      <p className="text-2xl font-extrabold text-gray-900 flex items-baseline">
+                        <IndianRupee className="h-5 w-5" />{totalPaid.toLocaleString('en-IN')}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{bookingStats.total} bookings · {bookingStats.confirmed} confirmed</p>
+                    </div>
+                  </div>
+
+                  {/* Quick action buttons */}
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
+                    {user.phone && (
+                      <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer"
+                         className="inline-flex items-center px-3 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
+                      </a>
+                    )}
+                    {user.phone && (
+                      <a href={`tel:${user.phone}`} className="inline-flex items-center px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                        <Phone className="h-3.5 w-3.5 mr-1.5" /> Call
+                      </a>
+                    )}
+                    {user.email && (
+                      <a href={`mailto:${user.email}`} className="inline-flex items-center px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                        <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
+                      </a>
+                    )}
+                    <span className="hidden sm:inline-block w-px h-6 bg-gray-200 mx-1" />
+                    <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }}
+                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                      <Edit className="h-3.5 w-3.5 mr-1.5" /> Edit
+                    </button>
+                    <button onClick={() => setShowWalletModal(true)}
+                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                      <Wallet className="h-3.5 w-3.5 mr-1.5" /> Wallet
+                    </button>
+                    <button onClick={() => setShowCouponModal(true)}
+                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                      <Gift className="h-3.5 w-3.5 mr-1.5" /> Coupon
+                    </button>
+                    {getBookingsWithRemainingPayment().length > 0 && (
+                      <button onClick={() => setShowReminderModal(true)}
+                              className="inline-flex items-center px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-sm">
+                        <Send className="h-3.5 w-3.5 mr-1.5" /> Remind ({getBookingsWithRemainingPayment().length})
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-              
-              {/* Action Buttons - Compact */}
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <button
-                  onClick={() => {
-                    setEditForm({ ...user });
-                    setShowEditModal(true);
-                  }}
-                  className="inline-flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-all shadow-sm hover:shadow"
-                >
-                  <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
-                  Edit
-                </button>
-                <button
-                  onClick={() => setShowWalletModal(true)}
-                  className="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-green-700 transition-all shadow-sm hover:shadow"
-                >
-                  <Wallet className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
-                  Wallet
-                </button>
-                <button
-                  onClick={() => setShowCouponModal(true)}
-                  className="inline-flex items-center px-3 py-2 bg-orange-500 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-orange-600 transition-all shadow-sm hover:shadow"
-                >
-                  <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
-                  Coupon
-                </button>
-                {getBookingsWithRemainingPayment().length > 0 && (
-                  <button
-                    onClick={() => setShowReminderModal(true)}
-                    className="inline-flex items-center px-3 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-red-700 transition-all shadow-sm hover:shadow"
-                  >
-                    <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5" />
-                    Reminder ({getBookingsWithRemainingPayment().length})
-                  </button>
+            </div>
+
+            {/* Stats — meaningful business + travel context */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+              <Stat icon={<Package className="h-4 w-4 text-purple-700" />} bg="bg-purple-100" label="Bookings" value={String(bookingStats.total)} sub={`${bookingStats.confirmed} confirmed`} />
+              <Stat icon={<IndianRupee className="h-4 w-4 text-green-700" />} bg="bg-green-100" label="Revenue" value={`₹${totalPaid.toLocaleString('en-IN')}`} sub="lifetime paid" />
+              <Stat icon={<Wallet className="h-4 w-4 text-emerald-700" />} bg="bg-emerald-100" label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="available balance" />
+              <Stat icon={<XCircle className="h-4 w-4 text-red-700" />} bg="bg-red-100" label="Cancelled" value={String(bookingStats.cancelled || 0)} sub={`${bookingStats.pending || 0} pending`} />
+              <Stat icon={<MapPin className="h-4 w-4 text-fuchsia-700" />} bg="bg-fuchsia-100" label="Favourite" value={favDest ? favDest.split(',')[0] : '—'} sub={favDest ? `${destCount[favDest]} trips` : 'no trips yet'} />
+            </div>
+
+            {/* Travel context strip — Upcoming + Last trip */}
+            {(upcoming || last) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                {upcoming && (
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-blue-700 mb-1">🚌 Upcoming Trip</p>
+                    <p className="font-bold text-gray-900 truncate">{upcoming.trips?.title}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{new Date(upcoming.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {upcoming.trips?.destination}</p>
+                  </div>
+                )}
+                {last && (!upcoming || last.id !== upcoming.id) && (
+                  <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-xl p-3.5">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-purple-700 mb-1">🏔 Last Trip</p>
+                    <p className="font-bold text-gray-900 truncate">{last.trips?.title}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{new Date(last.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {last.trips?.destination}</p>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Cards - Compact */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          <div className="bg-white rounded-xl border border-purple-200 p-3 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <Package className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
-            </div>
-            <p className="text-xs text-gray-600 mb-1">Total Bookings</p>
-            <p className="text-xl font-bold text-gray-900">{bookingStats.total}</p>
-          </div>
-          
-          <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-            </div>
-            <p className="text-xs text-gray-600 mb-1">Confirmed</p>
-            <p className="text-xl font-bold text-green-600">{bookingStats.confirmed}</p>
-          </div>
-          
-          <div className="bg-white rounded-xl border-2 border-yellow-200 p-3 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-600" />
-            </div>
-            <p className="text-xs text-gray-600 mb-1">Pending</p>
-            <p className="text-xl font-bold text-yellow-600">{bookingStats.pending}</p>
-          </div>
-          
-          <div className="bg-white rounded-xl border-2 border-pink-200 p-3 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 text-pink-600" />
-            </div>
-            <p className="text-xs text-gray-600 mb-1">Total Paid</p>
-            <p className="text-lg font-bold text-pink-600 flex items-center">
-              <IndianRupee className="h-4 w-4" />
-              {totalPaid.toLocaleString()}
-            </p>
-          </div>
-          
-          {user.wallet_balance !== undefined && (
-            <div className="bg-white rounded-xl border-2 border-green-200 p-3 shadow-md">
-              <div className="flex items-center justify-between mb-2">
-                <Wallet className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-              </div>
-              <p className="text-xs text-gray-600 mb-1">Wallet</p>
-              <p className="text-lg font-bold text-green-600 flex items-center">
-                <IndianRupee className="h-4 w-4" />
-                {parseFloat(String(user.wallet_balance || 0)).toLocaleString()}
-              </p>
-            </div>
-          )}
-          
-          <div className="bg-white rounded-xl border-2 border-blue-200 p-3 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
-            </div>
-            <p className="text-xs text-gray-600 mb-1">Member Since</p>
-            <p className="text-sm font-bold text-gray-900">
-              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'N/A'}
-            </p>
-          </div>
-        </div>
+            )}
+              </>
+            );
+          })()}
 
         {/* Tabs Navigation - Compact */}
         <div className="mb-4">
@@ -1435,3 +1408,14 @@ export default function AdminUserDetailsPage() {
   );
 }
 
+
+function Stat({ icon, bg, label, value, sub }: { icon: React.ReactNode; bg: string; label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+      <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center mb-1.5`}>{icon}</div>
+      <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">{label}</p>
+      <p className="text-sm sm:text-base font-extrabold text-gray-900 mt-0.5 truncate">{value}</p>
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5 truncate">{sub}</p>}
+    </div>
+  );
+}
