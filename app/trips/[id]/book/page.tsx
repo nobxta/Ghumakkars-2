@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
 
 interface Passenger {
   name: string;
@@ -392,6 +392,30 @@ export default function BookTripPage() {
       const bookingData = await bookingRes.json();
       if (!bookingRes.ok) {
         throw new Error(bookingData.error || 'Failed to create booking');
+      }
+
+      // Zero-amount case: wallet + coupon fully cover the trip.
+      // Razorpay can't process < ₹1, so skip the gateway and confirm directly.
+      if (finalAmount < 1) {
+        const confirmRes = await fetch('/api/bookings/confirm-zero-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: bookingData.id }),
+        });
+        const confirmData = await confirmRes.json().catch(() => ({}));
+        if (!confirmRes.ok) {
+          throw new Error(confirmData.error || 'Failed to confirm booking');
+        }
+        await fetch('/api/bookings/send-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: bookingData.id, status: 'confirmed' }),
+        }).catch(() => {});
+        setPaymentOverlay('idle');
+        setProcessingRazorpay(false);
+        showToast('Booking confirmed! Fully covered by wallet + coupon.', 'success');
+        router.push(`/booking-success/${bookingData.id}`);
+        return;
       }
 
       // Create Razorpay order (only for remaining amount after wallet)
@@ -1697,8 +1721,17 @@ export default function BookTripPage() {
                     disabled={processingRazorpay || paymentOverlay !== 'idle'}
                     className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
-                    <span>Pay Now</span>
+                    {calculateTotalPrice() < 1 ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 md:h-6 md:w-6" />
+                        <span>Confirm Booking (Fully Covered)</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
+                        <span>Pay ₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+                      </>
+                    )}
                   </button>
                 )}
 
