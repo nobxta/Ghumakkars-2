@@ -291,6 +291,21 @@ export default function BookingDetailsPage() {
   const isStartingSoon = daysUntil <= 7 && daysUntil > 0;
   const isPast = trip?.end_date ? new Date(trip.end_date).getTime() < Date.now() : false;
 
+  // Filter primary out of the passengers array — many old bookings stored
+  // the primary as the first passenger entry too, causing the duplicate.
+  const primaryDigits = String(booking.primary_passenger_phone || '').replace(/\D/g, '');
+  const primaryName = (booking.primary_passenger_name || '').trim().toLowerCase();
+  const additionalPassengers: any[] = Array.isArray(booking.passengers)
+    ? booking.passengers.filter((p: any) => {
+        if (!p) return false;
+        if (p.is_primary === true) return false;
+        const pDigits = String(p.phone || '').replace(/\D/g, '');
+        const pName = String(p.name || '').trim().toLowerCase();
+        const sameAsPrimary = (pDigits && primaryDigits && pDigits === primaryDigits) || (pName && primaryName && pName === primaryName);
+        return !sameAsPrimary;
+      })
+    : [];
+
   const totalAmount = parseFloat(String(booking.total_price || 0));
   const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
   const paidAmount = parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
@@ -336,6 +351,111 @@ export default function BookingDetailsPage() {
 
   const copyBookingId = () => {
     navigator.clipboard?.writeText(booking.id);
+  };
+
+  /** Open a dedicated clean print window with just the ticket info. */
+  const handlePrintTicket = () => {
+    const w = window.open('', '_blank', 'width=820,height=1100');
+    if (!w) return;
+    const allPassengers = [
+      { name: booking.primary_passenger_name, age: booking.primary_passenger_age, gender: booking.primary_passenger_gender, phone: booking.primary_passenger_phone, isPrimary: true },
+      ...additionalPassengers.map((p: any) => ({ ...p, isPrimary: false })),
+    ];
+    const passengerRows = allPassengers.map((p: any, i: number) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${p.name || '—'}${p.isPrimary ? ' <span style="background:#ede9fe;color:#6d28d9;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:600;">PRIMARY</span>' : ''}</td>
+        <td>${p.age || '—'}</td>
+        <td style="text-transform:capitalize;">${p.gender || '—'}</td>
+        <td>${p.phone || '—'}</td>
+      </tr>`).join('');
+    w.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Trip Ticket · ${trip?.title || ''} · ${shortId}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; background: #fff; padding: 40px; line-height: 1.5; }
+  .ticket { max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .header { background: #7c3aed; color: #fff; padding: 24px 28px; }
+  .brand { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.8; margin-bottom: 4px; }
+  .ref { font-family: 'Courier New', monospace; font-size: 12px; opacity: 0.9; margin-top: 8px; }
+  h1 { font-size: 24px; font-weight: 700; }
+  .body { padding: 28px; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 20px; }
+  .col { flex: 1; min-width: 180px; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; font-weight: 600; margin-bottom: 4px; }
+  .value { font-size: 15px; font-weight: 600; color: #0f172a; }
+  .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+  .section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; font-weight: 700; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+  th { background: #f9fafb; color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .pay-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+  .pay-row.total { border-top: 1px solid #e5e7eb; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 700; }
+  .stamp { display: inline-block; padding: 4px 10px; border: 2px solid #16a34a; color: #15803d; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-radius: 4px; transform: rotate(-4deg); }
+  .footer { padding: 16px 28px; background: #f9fafb; font-size: 11px; color: #6b7280; text-align: center; border-top: 1px solid #e5e7eb; }
+  .important { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 14px; margin-top: 16px; font-size: 12px; color: #9a3412; }
+  @page { margin: 12mm; size: A4; }
+  @media print { body { padding: 0; } .ticket { border: none; box-shadow: none; } }
+</style>
+</head><body>
+<div class="ticket">
+  <div class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <p class="brand">Ghumakkars · Trip Ticket</p>
+        <h1>${trip?.title || 'Trip'}</h1>
+        <p style="margin-top:4px;font-size:13px;opacity:0.9;">${trip?.destination || ''}</p>
+        <p class="ref">REF #${shortId}</p>
+      </div>
+      ${status === 'confirmed' ? '<div class="stamp">Confirmed</div>' : status === 'seat_locked' ? '<div class="stamp" style="border-color:#ea580c;color:#c2410c;">Seat Locked</div>' : ''}
+    </div>
+  </div>
+  <div class="body">
+    <div class="row">
+      <div class="col"><p class="label">Departure</p><p class="value">${fmtDate(trip?.start_date)}</p></div>
+      <div class="col"><p class="label">Return</p><p class="value">${fmtDate(trip?.end_date)}</p></div>
+      <div class="col"><p class="label">Duration</p><p class="value">${trip?.duration_text || (trip?.duration_days ? `${trip.duration_days} days` : '—')}</p></div>
+      <div class="col"><p class="label">Travellers</p><p class="value">${booking.number_of_participants}</p></div>
+    </div>
+
+    <div class="section">
+      <h2>Travellers</h2>
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Gender</th><th>Phone</th></tr></thead>
+        <tbody>${passengerRows}</tbody>
+      </table>
+    </div>
+
+    ${(booking.emergency_contact_name || booking.emergency_contact_phone) ? `
+    <div class="section">
+      <h2>Emergency Contact</h2>
+      <div class="row" style="margin:0;">
+        <div class="col"><p class="label">Name</p><p class="value">${booking.emergency_contact_name || '—'}</p></div>
+        <div class="col"><p class="label">Phone</p><p class="value">${booking.emergency_contact_phone || '—'}</p></div>
+      </div>
+    </div>` : ''}
+
+    <div class="section">
+      <h2>Payment</h2>
+      <div class="pay-row"><span>Trip price</span><span>₹${totalAmount.toLocaleString('en-IN')}</span></div>
+      ${couponDiscount > 0 ? `<div class="pay-row" style="color:#15803d;"><span>Coupon (${booking.coupon_code || ''})</span><span>−₹${couponDiscount.toLocaleString('en-IN')}</span></div>` : ''}
+      ${walletUsed > 0 ? `<div class="pay-row" style="color:#6d28d9;"><span>Wallet used</span><span>−₹${walletUsed.toLocaleString('en-IN')}</span></div>` : ''}
+      <div class="pay-row total"><span>Amount paid</span><span>₹${Math.max(paidAmount, finalAmount - remainingAmount).toLocaleString('en-IN')}</span></div>
+      ${remainingAmount > 0 ? `<div class="pay-row" style="color:#c2410c;font-weight:700;"><span>Pending balance</span><span>₹${remainingAmount.toLocaleString('en-IN')}</span></div>` : ''}
+      ${(booking.reference_id || booking.transaction_id) ? `<p style="margin-top:10px;font-size:11px;color:#6b7280;">Txn ID: <span style="font-family:'Courier New',monospace;color:#0f172a;">${booking.reference_id || booking.transaction_id}</span></p>` : ''}
+    </div>
+
+    <div class="important">
+      <strong>Please carry:</strong> a printout or digital copy of this ticket + a valid government photo ID (Aadhaar / Driving Licence / Passport). Reach the pickup point 30 minutes before departure.
+    </div>
+  </div>
+  <div class="footer">
+    Booked on ${new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · Support: support@ghumakkars.in · +91 96218 86657
+  </div>
+</div>
+<script>setTimeout(() => { window.print(); }, 300);</script>
+</body></html>`);
+    w.document.close();
   };
 
   return (
@@ -408,7 +528,7 @@ export default function BookingDetailsPage() {
               <Phone className="h-5 w-5 text-blue-600" />
               <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Call us</span>
             </a>
-            <button onClick={() => window.print()} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
+            <button onClick={handlePrintTicket} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
               <FileText className="h-5 w-5 text-gray-700" />
               <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Print ticket</span>
             </button>
@@ -513,32 +633,32 @@ export default function BookingDetailsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-gray-900 text-base">{booking.primary_passenger_name || 'Traveller'}</p>
                   <p className="text-sm text-gray-500 truncate flex items-center gap-1.5"><Mail className="h-3 w-3" />{booking.primary_passenger_email || '—'}</p>
-                  <p className="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5"><Phone className="h-3 w-3" />{maskPhone(booking.primary_passenger_phone)}</p>
+                  <p className="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5"><Phone className="h-3 w-3" />{booking.primary_passenger_phone || '—'}</p>
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-3 text-xs">
                 <div><p className="text-gray-500 mb-0.5">Gender</p><p className="font-semibold text-gray-900 capitalize">{booking.primary_passenger_gender || '—'}</p></div>
                 <div><p className="text-gray-500 mb-0.5">Age</p><p className="font-semibold text-gray-900">{booking.primary_passenger_age || '—'}</p></div>
-                <div><p className="text-gray-500 mb-0.5">Aadhaar</p><p className="font-semibold text-gray-900 font-mono">{maskAadhaar(booking.aadhaar_id)}</p></div>
+                <div><p className="text-gray-500 mb-0.5">Aadhaar</p><p className="font-semibold text-gray-900 font-mono">{booking.aadhaar_id || '—'}</p></div>
               </div>
             </div>
 
             {/* Additional passengers */}
-            {booking.passengers && booking.passengers.length > 0 && (
+            {additionalPassengers.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center"><Users className="h-4 w-4 text-blue-700" /></div>
-                  <h3 className="font-bold text-gray-900">Additional travellers ({booking.passengers.length})</h3>
+                  <h3 className="font-bold text-gray-900">Additional travellers ({additionalPassengers.length})</h3>
                 </div>
                 <div className="space-y-3">
-                  {booking.passengers.map((p: any, i: number) => (
+                  {additionalPassengers.map((p: any, i: number) => (
                     <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold flex-shrink-0">
                         {(p?.name || 'P')[0].toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-gray-900 truncate">{p?.name || '—'}</p>
-                        <p className="text-xs text-gray-500">{maskPhone(p?.phone)} · {p?.age || '—'} yrs · <span className="capitalize">{p?.gender || '—'}</span></p>
+                        <p className="text-xs text-gray-500">{p?.phone || '—'} · {p?.age || '—'} yrs · <span className="capitalize">{p?.gender || '—'}</span></p>
                       </div>
                     </div>
                   ))}
@@ -717,7 +837,7 @@ export default function BookingDetailsPage() {
             <Phone className="h-5 w-5 text-blue-600" />
             <span className="text-[10px] font-bold text-gray-700">Call</span>
           </a>
-          <button onClick={() => window.print()} className="flex flex-col items-center gap-1 px-2 py-2.5 hover:bg-gray-50 rounded-lg">
+          <button onClick={handlePrintTicket} className="flex flex-col items-center gap-1 px-2 py-2.5 hover:bg-gray-50 rounded-lg">
             <FileText className="h-5 w-5 text-purple-600" />
             <span className="text-[10px] font-bold text-gray-700">Ticket</span>
           </button>

@@ -187,10 +187,17 @@ export default function AdminTripDetailsPage() {
     const rows: any[][] = [];
     let i = 1;
     list.forEach((b: any) => {
+      const primaryDigits = String(b.primary_passenger_phone || '').replace(/\D/g, '');
+      const primaryName = String(b.primary_passenger_name || '').trim().toLowerCase();
       rows.push([i++, _displayName(b), b.primary_passenger_age || '', b.primary_passenger_gender || '', _displayPhone(b), b.emergency_contact_name || '', b.emergency_contact_phone || '', b.id.slice(0, 8).toUpperCase(), b.pickup_point || trip?.pickup_location || '']);
       const subs = Array.isArray(b.passengers) ? b.passengers : [];
       subs.forEach((p: any) => {
         if (!p?.name) return;
+        if (p.is_primary === true) return;
+        const pDigits = String(p.phone || '').replace(/\D/g, '');
+        const pName = String(p.name || '').trim().toLowerCase();
+        const dup = (pDigits && primaryDigits && pDigits === primaryDigits) || (pName && primaryName && pName === primaryName);
+        if (dup) return;
         rows.push([i++, p.name, p.age || '', p.gender || '', p.phone || '', '', '', b.id.slice(0, 8).toUpperCase(), b.pickup_point || trip?.pickup_location || '']);
       });
     });
@@ -352,9 +359,15 @@ export default function AdminTripDetailsPage() {
     const pGender = g(b.primary_passenger_gender || '');
     parts.push(pName + (pAge ? ` (${pAge})` : '') + (pGender ? ` ${pGender}` : ''));
     const arr = Array.isArray(b.passengers) ? b.passengers : [];
-    arr.forEach((p: { name?: string; age?: string; gender?: string }) => {
+    const primaryDigits = String(b.primary_passenger_phone || '').replace(/\D/g, '');
+    const primaryLower = String(pName).trim().toLowerCase();
+    arr.forEach((p: { name?: string; age?: string; gender?: string; phone?: string; is_primary?: boolean }) => {
       const n = (p?.name || '').trim();
       if (!n) return;
+      if (p.is_primary === true) return;
+      const pDigits = String(p.phone || '').replace(/\D/g, '');
+      const dup = (pDigits && primaryDigits && pDigits === primaryDigits) || (n.toLowerCase() === primaryLower);
+      if (dup) return;
       const a = p?.age != null ? String(p.age).trim() : '';
       const pg = g(p?.gender || '');
       parts.push(n + (a ? ` (${a})` : '') + (pg ? ` ${pg}` : ''));
