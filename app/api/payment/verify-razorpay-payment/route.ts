@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
+import { getRazorpayConfig } from '@/lib/razorpay';
 
 export const runtime = "nodejs";
 
@@ -21,22 +22,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing payment details' }, { status: 400 });
     }
 
-    // Fetch payment settings
+    // Keys come from env vars — never from the database.
     const adminClient = createAdminClient();
-    const { data: paymentSettings, error: settingsError } = await adminClient
-      .from('payment_settings')
-      .select('razorpay_key_id, razorpay_key_secret')
-      .limit(1)
-      .single();
-
-    if (settingsError || !paymentSettings?.razorpay_key_secret) {
-      return NextResponse.json({ error: 'Payment configuration error' }, { status: 500 });
+    let config;
+    try {
+      config = getRazorpayConfig();
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
 
     // Verify signature
     const text = `${razorpay_order_id}|${razorpay_payment_id}`;
     const generatedSignature = crypto
-      .createHmac('sha256', paymentSettings.razorpay_key_secret)
+      .createHmac('sha256', config.key_secret)
       .update(text)
       .digest('hex');
 
@@ -45,10 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch payment details from Razorpay
-    const razorpay = new Razorpay({
-      key_id: paymentSettings.razorpay_key_id,
-      key_secret: paymentSettings.razorpay_key_secret,
-    });
+    const razorpay = new Razorpay({ key_id: config.key_id, key_secret: config.key_secret });
 
     const payment = await razorpay.payments.fetch(razorpay_payment_id);
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getRazorpayConfig } from '@/lib/razorpay';
 
 export const runtime = "nodejs";
 
@@ -20,27 +21,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }
 
-    // Fetch payment settings to get Razorpay keys
+    // Only payment_mode (a non-secret feature flag) is read from DB.
+    // Keys come from env vars via getRazorpayConfig() — never from the database.
     const adminClient = createAdminClient();
-    const { data: paymentSettings, error: settingsError } = await adminClient
+    const { data: paymentSettings } = await adminClient
       .from('payment_settings')
-      .select('razorpay_key_id, razorpay_key_secret, payment_mode')
+      .select('payment_mode')
       .limit(1)
       .single();
 
-    if (settingsError || !paymentSettings || paymentSettings.payment_mode !== 'razorpay') {
-      return NextResponse.json({ error: 'Razorpay is not configured' }, { status: 400 });
+    if (!paymentSettings || paymentSettings.payment_mode !== 'razorpay') {
+      return NextResponse.json({ error: 'Razorpay is not enabled in admin settings' }, { status: 400 });
     }
 
-    if (!paymentSettings.razorpay_key_id || !paymentSettings.razorpay_key_secret) {
-      return NextResponse.json({ error: 'Razorpay keys are not configured' }, { status: 400 });
+    let config;
+    try {
+      config = getRazorpayConfig();
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
 
-    // Initialize Razorpay
-    const razorpay = new Razorpay({
-      key_id: paymentSettings.razorpay_key_id,
-      key_secret: paymentSettings.razorpay_key_secret,
-    });
+    const razorpay = new Razorpay({ key_id: config.key_id, key_secret: config.key_secret });
 
     // Create Razorpay order
     const options = {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: paymentSettings.razorpay_key_id,
+      keyId: config.key_id,
     });
   } catch (error: any) {
     console.error('Error creating Razorpay order:', error);

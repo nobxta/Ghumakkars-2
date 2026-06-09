@@ -284,9 +284,10 @@ export default function AdminSettingsPage() {
               payment_qr_url: qrUrl,
               payment_upi_id: paymentSettings.upiId,
               payment_mode: paymentSettings.paymentMode,
-              razorpay_key_id: paymentSettings.razorpayKeyId || null,
-              razorpay_key_secret: paymentSettings.razorpayKeySecret || null,
-              razorpay_webhook_secret: paymentSettings.razorpayWebhookSecret || null,
+              // Razorpay secrets are managed via env vars — never written to DB
+              razorpay_key_id: null,
+              razorpay_key_secret: null,
+              razorpay_webhook_secret: null,
               referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
               referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
               updated_by: user?.id,
@@ -691,52 +692,31 @@ export default function AdminSettingsPage() {
               </>
             )}
 
-            {/* Razorpay Settings */}
+            {/* Razorpay Settings — read from env vars only, not editable here */}
             {paymentSettings.paymentMode === 'razorpay' && (
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Razorpay Key ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={paymentSettings.razorpayKeyId}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayKeyId: e.target.value })}
-                    placeholder="rzp_test_..."
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Enter your Razorpay Key ID from dashboard</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Razorpay Key Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={paymentSettings.razorpayKeySecret}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayKeySecret: e.target.value })}
-                    placeholder="Enter secret key"
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Enter your Razorpay Key Secret (keep it secure)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Razorpay Webhook Secret <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={paymentSettings.razorpayWebhookSecret}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, razorpayWebhookSecret: e.target.value })}
-                    placeholder="whsec_..."
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Enter your Razorpay Webhook Secret (from Razorpay Dashboard → Settings → Webhooks)
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1 font-medium">
-                    Webhook URL: <span className="font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/razorpay</span>
-                  </p>
+              <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="h-5 w-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0h-2m9-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-amber-900 text-sm sm:text-base mb-1">Razorpay keys are managed via environment variables</h3>
+                    <p className="text-xs sm:text-sm text-amber-900 leading-relaxed">
+                      For security, payment secrets are no longer stored in the database. Set them in:
+                    </p>
+                    <ul className="text-xs sm:text-sm text-amber-900 mt-2 space-y-1 font-mono">
+                      <li>• <strong>RAZORPAY_KEY_ID</strong></li>
+                      <li>• <strong>RAZORPAY_KEY_SECRET</strong></li>
+                      <li>• <strong>RAZORPAY_WEBHOOK_SECRET</strong></li>
+                    </ul>
+                    <p className="text-xs sm:text-sm text-amber-900 mt-3 leading-relaxed">
+                      Vercel → Project Settings → Environment Variables. Then redeploy.
+                    </p>
+                    <p className="text-xs text-blue-700 mt-3 font-medium break-all">
+                      Webhook URL to register in Razorpay Dashboard:<br />
+                      <span className="font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/razorpay</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
 import crypto from 'crypto';
+import { getRazorpayWebhookSecret } from '@/lib/razorpay';
 
 export const runtime = "nodejs";
 
@@ -22,25 +23,19 @@ export async function POST(request: NextRequest) {
     const body = await request.text();
     const webhookBody = JSON.parse(body);
 
-    // Fetch payment settings to get webhook secret
+    // Webhook secret from env vars only — never from the database.
     const adminClient = createAdminClient();
-    const { data: paymentSettings, error: settingsError } = await adminClient
-      .from('payment_settings')
-      .select('razorpay_webhook_secret')
-      .limit(1)
-      .single();
-
-    if (settingsError || !paymentSettings?.razorpay_webhook_secret) {
-      console.error('Webhook secret not configured:', settingsError);
-      return NextResponse.json(
-        { error: 'Webhook secret not configured' },
-        { status: 500 }
-      );
+    let webhookSecret: string;
+    try {
+      webhookSecret = getRazorpayWebhookSecret();
+    } catch (e: any) {
+      console.error('Webhook secret not configured:', e.message);
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
 
     // Verify webhook signature
     const expectedSignature = crypto
-      .createHmac('sha256', paymentSettings.razorpay_webhook_secret)
+      .createHmac('sha256', webhookSecret)
       .update(body)
       .digest('hex');
 
