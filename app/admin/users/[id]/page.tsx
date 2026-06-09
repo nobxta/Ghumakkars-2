@@ -407,50 +407,33 @@ export default function AdminUserDetailsPage() {
                       </div>
                     </div>
 
-                    {/* LTV chip */}
-                    <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-xl px-4 py-3 flex-shrink-0">
-                      <p className="text-[10px] uppercase tracking-wider font-bold text-purple-700">Lifetime Value</p>
-                      <p className="text-2xl font-extrabold text-gray-900 flex items-baseline">
-                        <IndianRupee className="h-5 w-5" />{totalPaid.toLocaleString('en-IN')}
-                      </p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{bookingStats.total} bookings · {bookingStats.confirmed} confirmed</p>
-                    </div>
                   </div>
 
-                  {/* Quick action buttons */}
+                  {/* Single action row — admin tasks only, neutral palette */}
                   <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
+                    <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }}
+                            className="inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                      <Edit className="h-3.5 w-3.5 mr-1.5" /> Edit user
+                    </button>
                     {user.phone && (
                       <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer"
-                         className="inline-flex items-center px-3 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
+                         className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                        <MessageCircle className="h-3.5 w-3.5 mr-1.5 text-green-600" /> WhatsApp
                       </a>
                     )}
                     {user.phone && (
-                      <a href={`tel:${user.phone}`} className="inline-flex items-center px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                        <Phone className="h-3.5 w-3.5 mr-1.5" /> Call
+                      <a href={`tel:${user.phone}`} className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                        <Phone className="h-3.5 w-3.5 mr-1.5 text-purple-600" /> Call
                       </a>
                     )}
                     {user.email && (
-                      <a href={`mailto:${user.email}`} className="inline-flex items-center px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                        <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
+                      <a href={`mailto:${user.email}`} className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                        <Mail className="h-3.5 w-3.5 mr-1.5 text-purple-600" /> Email
                       </a>
                     )}
-                    <span className="hidden sm:inline-block w-px h-6 bg-gray-200 mx-1" />
-                    <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }}
-                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                      <Edit className="h-3.5 w-3.5 mr-1.5" /> Edit
-                    </button>
-                    <button onClick={() => setShowWalletModal(true)}
-                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                      <Wallet className="h-3.5 w-3.5 mr-1.5" /> Wallet
-                    </button>
-                    <button onClick={() => setShowCouponModal(true)}
-                            className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-bold transition-colors">
-                      <Gift className="h-3.5 w-3.5 mr-1.5" /> Coupon
-                    </button>
                     {getBookingsWithRemainingPayment().length > 0 && (
                       <button onClick={() => setShowReminderModal(true)}
-                              className="inline-flex items-center px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-sm">
+                              className="inline-flex items-center px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors ml-auto">
                         <Send className="h-3.5 w-3.5 mr-1.5" /> Remind ({getBookingsWithRemainingPayment().length})
                       </button>
                     )}
@@ -459,34 +442,12 @@ export default function AdminUserDetailsPage() {
               </div>
             </div>
 
-            {/* Stats — meaningful business + travel context */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-              <Stat icon={<Package className="h-4 w-4 text-purple-700" />} bg="bg-purple-100" label="Bookings" value={String(bookingStats.total)} sub={`${bookingStats.confirmed} confirmed`} />
-              <Stat icon={<IndianRupee className="h-4 w-4 text-green-700" />} bg="bg-green-100" label="Revenue" value={`₹${totalPaid.toLocaleString('en-IN')}`} sub="lifetime paid" />
-              <Stat icon={<Wallet className="h-4 w-4 text-emerald-700" />} bg="bg-emerald-100" label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="available balance" />
-              <Stat icon={<XCircle className="h-4 w-4 text-red-700" />} bg="bg-red-100" label="Cancelled" value={String(bookingStats.cancelled || 0)} sub={`${bookingStats.pending || 0} pending`} />
-              <Stat icon={<MapPin className="h-4 w-4 text-fuchsia-700" />} bg="bg-fuchsia-100" label="Favourite" value={favDest ? favDest.split(',')[0] : '—'} sub={favDest ? `${destCount[favDest]} trips` : 'no trips yet'} />
+            {/* Stats — three cards only, parent metrics only */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <Stat label="Bookings" value={String(bookingStats.total)} sub={`${bookingStats.confirmed} confirmed${bookingStats.cancelled ? ` · ${bookingStats.cancelled} cancelled` : ''}`} />
+              <Stat label="Spent" value={`₹${totalPaid.toLocaleString('en-IN')}`} sub="lifetime" />
+              <Stat label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="balance" />
             </div>
-
-            {/* Travel context strip — Upcoming + Last trip */}
-            {(upcoming || last) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                {upcoming && (
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3.5">
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-blue-700 mb-1">🚌 Upcoming Trip</p>
-                    <p className="font-bold text-gray-900 truncate">{upcoming.trips?.title}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">{new Date(upcoming.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {upcoming.trips?.destination}</p>
-                  </div>
-                )}
-                {last && (!upcoming || last.id !== upcoming.id) && (
-                  <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-xl p-3.5">
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-purple-700 mb-1">🏔 Last Trip</p>
-                    <p className="font-bold text-gray-900 truncate">{last.trips?.title}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">{new Date(last.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {last.trips?.destination}</p>
-                  </div>
-                )}
-              </div>
-            )}
               </>
             );
           })()}
@@ -549,117 +510,21 @@ export default function AdminUserDetailsPage() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <>
-            {/* User Information - Compact */}
-            <div className="bg-white rounded-xl border border-purple-200 shadow-md p-4 sm:p-6 mb-4">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-purple-100">
-                <User className="h-5 w-5 text-purple-600" />
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                  Personal Information
-                </h2>
+            {/* Profile details — only fields NOT already in the header. Plain dl, no decoration. */}
+            {(user.alternative_number || user.college || user.college_name || user.university || user.student_id || user.gender || user.date_of_birth || authUser?.last_sign_in_at || user.bio) && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Profile details</h2>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+                  {user.alternative_number && (<div><dt className="text-xs text-gray-500">Alt. phone</dt><dd className="font-semibold text-gray-900">{user.alternative_number}</dd></div>)}
+                  {(user.college_name || user.college || user.university) && (<div><dt className="text-xs text-gray-500">College</dt><dd className="font-semibold text-gray-900 truncate">{user.college_name || user.college || user.university}</dd></div>)}
+                  {user.student_id && (<div><dt className="text-xs text-gray-500">Student ID</dt><dd className="font-semibold text-gray-900">{user.student_id}</dd></div>)}
+                  {user.gender && (<div><dt className="text-xs text-gray-500">Gender</dt><dd className="font-semibold text-gray-900 capitalize">{user.gender}</dd></div>)}
+                  {user.date_of_birth && (<div><dt className="text-xs text-gray-500">Date of birth</dt><dd className="font-semibold text-gray-900">{new Date(user.date_of_birth).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</dd></div>)}
+                  {authUser?.last_sign_in_at && (<div><dt className="text-xs text-gray-500">Last login</dt><dd className="font-semibold text-gray-900">{new Date(authUser.last_sign_in_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</dd></div>)}
+                  {user.bio && (<div className="sm:col-span-2 lg:col-span-3"><dt className="text-xs text-gray-500">Bio</dt><dd className="font-semibold text-gray-900">{user.bio}</dd></div>)}
+                </dl>
               </div>
-          
-              {/* Avatar - Compact */}
-              {user.avatar_url && (
-                <div className="mb-4 pb-4 border-b border-purple-100">
-                  <p className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wider">Profile Picture</p>
-                  <div className="relative inline-block">
-                    <img 
-                      src={user.avatar_url} 
-                      alt="Profile" 
-                      className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white shadow-md ring-2 ring-purple-100"
-                    />
-                    {user.email_verified && (
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow-md flex items-center justify-center">
-                        <CheckCircle className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Full Name</p>
-                  <p className="font-bold text-gray-900 text-sm">
-                    {user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : 'N/A')}
-                  </p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</p>
-                  <p className="font-bold text-gray-900 text-sm flex items-center truncate">
-                    <Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                    <span className="truncate">{user.email || 'N/A'}</span>
-                  </p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</p>
-                  <p className="font-bold text-gray-900 text-sm flex items-center">
-                    <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                    {user.phone || user.phone_number || 'N/A'}
-                  </p>
-                </div>
-                {user.alternative_number && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Alt. Phone</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <PhoneCall className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      {user.alternative_number}
-                    </p>
-                  </div>
-                )}
-                {(user.college || user.college_name || user.university) && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">College</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <GraduationCap className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      <span className="truncate">{user.college_name || user.college || user.university}</span>
-                    </p>
-                  </div>
-                )}
-                {user.student_id && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Student ID</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <Hash className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      {user.student_id}
-                    </p>
-                  </div>
-                )}
-                {user.gender && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Gender</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <UserCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      {user.gender}
-                    </p>
-                  </div>
-                )}
-                {user.date_of_birth && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Date of Birth</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <CalendarIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      {new Date(user.date_of_birth).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-                {authUser?.last_sign_in_at && (
-                  <div className="bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Last Login</p>
-                    <p className="font-bold text-gray-900 text-sm flex items-center">
-                      <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1.5 text-purple-600 flex-shrink-0" />
-                      {new Date(authUser.last_sign_in_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                )}
-                {user.bio && (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-purple-50 rounded-lg p-2 sm:p-3 border border-purple-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Bio</p>
-                    <p className="font-semibold text-gray-900 text-sm">{user.bio}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Emergency Contact - Compact */}
             {(user.emergency_contact || user.emergency_contact_name) && (
@@ -710,15 +575,6 @@ export default function AdminUserDetailsPage() {
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {user.wallet_balance !== undefined && (
-                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Wallet Balance</p>
-                      <p className="font-bold text-green-600 text-lg flex items-center">
-                        <IndianRupee className="h-4 w-4" />
-                        {parseFloat(String(user.wallet_balance || 0)).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
                   {user.referral_code && (
                     <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referral Code</p>
@@ -1409,13 +1265,12 @@ export default function AdminUserDetailsPage() {
 }
 
 
-function Stat({ icon, bg, label, value, sub }: { icon: React.ReactNode; bg: string; label: string; value: string; sub?: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-      <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center mb-1.5`}>{icon}</div>
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">{label}</p>
-      <p className="text-sm sm:text-base font-extrabold text-gray-900 mt-0.5 truncate">{value}</p>
-      {sub && <p className="text-[10px] text-gray-500 mt-0.5 truncate">{sub}</p>}
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <p className="text-xs uppercase tracking-wider font-semibold text-gray-500">{label}</p>
+      <p className="text-2xl font-extrabold text-gray-900 mt-1 truncate">{value}</p>
+      {sub && <p className="text-xs text-gray-500 mt-1 truncate">{sub}</p>}
     </div>
   );
 }
