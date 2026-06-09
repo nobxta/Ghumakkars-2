@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { 
   ArrowLeft, MapPin, Calendar, Users, IndianRupee, Edit, 
   CheckCircle, XCircle, Clock, Package, CreditCard, TrendingUp,
-  DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus
+  DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
 } from 'lucide-react';
 
 export default function AdminTripDetailsPage() {
@@ -17,6 +17,7 @@ export default function AdminTripDetailsPage() {
   const router = useRouter();
   const supabase = createClient();
   
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [trip, setTrip] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
@@ -158,6 +159,102 @@ export default function AdminTripDetailsPage() {
   const seatLockedBookings = bookings.filter((b: any) => b.booking_status === 'seat_locked');
   const pendingBookings = bookings.filter((b: any) => b.booking_status === 'pending');
   const cancelledRejectedBookings = bookings.filter((b: any) => ['rejected', 'cancelled'].includes(b.booking_status || ''));
+
+  // ─────────────────────────── Operational exports ───────────────────────────
+  const genericCSV = (rows: any[][], headers: string[], filename: string) => {
+    if (rows.length === 0) { alert('No data to export.'); return; }
+    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const _displayName = (b: any) => {
+    if (b.is_offline_booking || !b.user_id) return b.primary_passenger_name || '—';
+    const u = b.profiles;
+    return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
+  };
+  const _displayPhone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
+  const _paid = (b: any) => (b.payment_transactions || []).filter((pt: any) => pt.payment_status === 'verified').reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
+
+  /** Operational export: Passenger Manifest — what trip captains need on board */
+  const exportPassengerManifest = () => {
+    const headers = ['#', 'Name', 'Age', 'Gender', 'Phone', 'Emergency Name', 'Emergency Phone', 'Booking ID', 'Pickup'];
+    const list = confirmedBookings.concat(bookings.filter((b: any) => b.booking_status === 'seat_locked'));
+    const rows: any[][] = [];
+    let i = 1;
+    list.forEach((b: any) => {
+      rows.push([i++, _displayName(b), b.primary_passenger_age || '', b.primary_passenger_gender || '', _displayPhone(b), b.emergency_contact_name || '', b.emergency_contact_phone || '', b.id.slice(0, 8).toUpperCase(), b.pickup_point || trip?.pickup_location || '']);
+      const subs = Array.isArray(b.passengers) ? b.passengers : [];
+      subs.forEach((p: any) => {
+        if (!p?.name) return;
+        rows.push([i++, p.name, p.age || '', p.gender || '', p.phone || '', '', '', b.id.slice(0, 8).toUpperCase(), b.pickup_point || trip?.pickup_location || '']);
+      });
+    });
+    genericCSV(rows, headers, 'Passenger-Manifest');
+  };
+
+  /** Operational export: Paid Customers — for finance */
+  const exportPaidCustomers = () => {
+    const headers = ['Name', 'Phone', 'Email', 'Paid (₹)', 'Total (₹)', 'Payment Method', 'Payment Date', 'Booking ID'];
+    const rows = confirmedBookings.map((b: any) => [
+      _displayName(b), _displayPhone(b), b.profiles?.email || '',
+      _paid(b).toFixed(0), parseFloat(String(b.final_amount || 0)).toFixed(0),
+      getPaymentMethodLabel(b.payment_method),
+      new Date(b.created_at).toLocaleString('en-IN'),
+      b.id.slice(0, 8).toUpperCase(),
+    ]);
+    genericCSV(rows, headers, 'Paid-Customers');
+  };
+
+  /** Operational export: Seat-Locked Customers — for follow-up */
+  const exportSeatLocked = () => {
+    const headers = ['Name', 'Phone', 'Email', 'Locked Amount (₹)', 'Remaining (₹)', 'Booked At', 'Booking ID'];
+    const list = bookings.filter((b: any) => b.booking_status === 'seat_locked');
+    const rows = list.map((b: any) => {
+      const paid = _paid(b);
+      const total = parseFloat(String(b.final_amount || 0));
+      return [_displayName(b), _displayPhone(b), b.profiles?.email || '', paid.toFixed(0), Math.max(0, total - paid).toFixed(0), new Date(b.created_at).toLocaleString('en-IN'), b.id.slice(0, 8).toUpperCase()];
+    });
+    genericCSV(rows, headers, 'Seat-Locked');
+  };
+
+  /** Operational export: Pending Payments — for sales follow-up */
+  const exportPendingPayments = () => {
+    const headers = ['Name', 'Phone', 'Email', 'Outstanding (₹)', 'Days Since Booking', 'Booking ID'];
+    const list = bookings.filter((b: any) => ['pending', 'seat_locked'].includes(b.booking_status));
+    const rows = list.map((b: any) => {
+      const paid = _paid(b);
+      const total = parseFloat(String(b.final_amount || 0));
+      const due = Math.max(0, total - paid);
+      const days = Math.floor((Date.now() - new Date(b.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      return [_displayName(b), _displayPhone(b), b.profiles?.email || '', due.toFixed(0), days, b.id.slice(0, 8).toUpperCase()];
+    }).filter((r) => Number(r[3]) > 0);
+    genericCSV(rows, headers, 'Pending-Payments');
+  };
+
+  /** Operational export: Revenue Report */
+  const exportRevenueReport = () => {
+    const headers = ['Metric', 'Amount (₹)'];
+    const collected = confirmedBookings.reduce((s: number, b: any) => s + _paid(b), 0);
+    const expected = bookings.filter((b: any) => b.booking_status !== 'cancelled' && b.booking_status !== 'rejected').reduce((s: number, b: any) => s + parseFloat(String(b.final_amount || 0)), 0);
+    const seatLockCollected = bookings.filter((b: any) => b.booking_status === 'seat_locked').reduce((s: number, b: any) => s + _paid(b), 0);
+    const pending = Math.max(0, expected - collected - seatLockCollected);
+    const rows = [
+      ['Total expected revenue', expected.toFixed(0)],
+      ['Collected (confirmed)', collected.toFixed(0)],
+      ['Collected (seat lock)', seatLockCollected.toFixed(0)],
+      ['Pending', pending.toFixed(0)],
+      ['Total bookings', String(bookings.length)],
+      ['Confirmed bookings', String(confirmedBookings.length)],
+      ['Seat-locked bookings', String(bookings.filter((b: any) => b.booking_status === 'seat_locked').length)],
+      ['Cancelled / rejected', String(cancelledRejectedBookings.length)],
+    ];
+    genericCSV(rows, headers, 'Revenue-Report');
+  };
 
   const downloadCSV = () => {
     const headers = ['Name', 'Email', 'Phone', 'Status', 'Participants', 'Total (₹)', 'Paid (₹)', 'Payment mode', 'Payment type', 'Booked at', 'Coupon'];
@@ -811,37 +908,88 @@ export default function AdminTripDetailsPage() {
               All Bookings ({bookings.length})
             </h2>
             {bookings.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
                 <button
-                  onClick={downloadFullPDF}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
-                  title="Full list with email, payment, passengers (A–Z)"
-                >
-                  <FileText className="h-4 w-4" />
-                  PDF (Full)
-                </button>
-                <button
-                  onClick={downloadCarryPDF}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                  title="Name, number, gender, passengers only — no payment, to carry"
-                >
-                  <FileText className="h-4 w-4" />
-                  PDF (Carry)
-                </button>
-                <button
-                  onClick={downloadCSV}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
+                  onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm"
                 >
                   <Download className="h-4 w-4" />
-                  Download CSV
+                  Export
+                  <ChevronDown className={`h-4 w-4 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-                >
-                  <Printer className="h-4 w-4" />
-                  Print / PDF
-                </button>
+                {exportMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
+                    <div className="absolute right-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-b border-gray-100">Operations</div>
+                      <button onClick={() => { setExportMenuOpen(false); exportPassengerManifest(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <UsersIcon className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Passenger manifest</p>
+                          <p className="text-[11px] text-gray-500">Name, age, gender, phone, emergency — for trip captains</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); exportSeatLocked(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <LockIcon className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Seat-locked customers</p>
+                          <p className="text-[11px] text-gray-500">For follow-up calls — paid + remaining amount</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); exportPendingPayments(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <ClockIcon className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Pending payments</p>
+                          <p className="text-[11px] text-gray-500">Outstanding + days since booking — for sales</p>
+                        </div>
+                      </button>
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-y border-gray-100">Finance</div>
+                      <button onClick={() => { setExportMenuOpen(false); exportPaidCustomers(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <IndianRupeeIcon className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Paid customers</p>
+                          <p className="text-[11px] text-gray-500">Confirmed bookings with payment details</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); exportRevenueReport(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <DollarSign className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Revenue report</p>
+                          <p className="text-[11px] text-gray-500">Expected · collected · pending summary</p>
+                        </div>
+                      </button>
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-y border-gray-100">Advanced</div>
+                      <button onClick={() => { setExportMenuOpen(false); downloadCSV(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Full data (CSV)</p>
+                          <p className="text-[11px] text-gray-500">Everything — all columns, all bookings</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); downloadFullPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Detailed PDF</p>
+                          <p className="text-[11px] text-gray-500">Landscape A4 with email, payment, all passengers</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); downloadCarryPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Field PDF (no payments)</p>
+                          <p className="text-[11px] text-gray-500">Name, phone, gender, passengers only — safe to print</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); handlePrint(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3 border-t border-gray-100">
+                        <Printer className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Print preview</p>
+                          <p className="text-[11px] text-gray-500">Open browser print dialog</p>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
