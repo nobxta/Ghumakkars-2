@@ -31,7 +31,8 @@ export default function AdminUserDetailsPage() {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
-  
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
   // Form states
   const [editForm, setEditForm] = useState<any>(null);
   const [walletAmount, setWalletAmount] = useState('');
@@ -340,106 +341,59 @@ export default function AdminUserDetailsPage() {
   const initials = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s.charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className="min-h-screen pt-16 pb-24 bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Header - Compact */}
-        <div className="mb-6">
-          <Link 
-            href="/admin/users" 
-            className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 text-sm font-medium transition-all group"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-            <span>Back to All Users</span>
-          </Link>
-          
-          {/* Premium User Hero Card */}
-          {/* Hero */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                {/* Top gradient strip */}
-                <div className="h-16 sm:h-20 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 relative">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                </div>
-                <div className="px-4 sm:px-6 pb-4 sm:pb-5 -mt-10 sm:-mt-12">
-                  <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                    {/* Avatar + Identity */}
-                    <div className="flex items-end gap-3 sm:gap-4 min-w-0">
-                      <div className="relative flex-shrink-0">
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-lg ring-4 ring-white text-white text-2xl sm:text-3xl font-extrabold">
-                          {user.avatar_url ? (
-                            <img src={user.avatar_url} alt={fullName} className="w-full h-full rounded-2xl object-cover" />
-                          ) : (
-                            <span>{initials}</span>
-                          )}
-                        </div>
-                        {user.email_verified && (
-                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-3 border-white flex items-center justify-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 pb-1">
-                        <div className="flex items-center flex-wrap gap-2 mb-1">
-                          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{fullName || 'Unnamed User'}</h1>
-                          {user.role === 'admin' && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white">
-                              <Shield className="h-2.5 w-2.5 inline mr-0.5" /> Admin
-                            </span>
-                          )}
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${user.email_verified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {user.email_verified ? 'Verified' : 'Unverified'}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-500 font-medium mb-2">
-                          {bookingStats.confirmed > 2 ? '⭐ Loyal Customer' : bookingStats.total > 0 ? 'Customer' : 'New User'} · Joined {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-700">
-                          <span className="flex items-center gap-1 truncate"><Mail className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />{user.email || '—'}</span>
-                          {user.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-purple-500" />{user.phone}</span>}
-                          <span className="flex items-center gap-1 font-mono text-[10px]"><Hash className="h-3 w-3 text-gray-400" />{user.id.slice(0, 8).toUpperCase()}</span>
-                        </div>
-                      </div>
-                    </div>
+    <div className="min-h-screen pt-16 pb-20 bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Back link */}
+        <Link href="/admin/users" className="inline-flex items-center text-sm font-semibold text-gray-600 hover:text-purple-700 mb-5">
+          <ArrowLeft className="h-4 w-4 mr-1.5" /> All users
+        </Link>
 
-                  </div>
-
-                  {/* Single action row — admin tasks only, neutral palette */}
-                  <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
-                    <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }}
-                            className="inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors">
-                      <Edit className="h-3.5 w-3.5 mr-1.5" /> Edit user
-                    </button>
-                    {user.phone && (
-                      <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer"
-                         className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
-                        <MessageCircle className="h-3.5 w-3.5 mr-1.5 text-green-600" /> WhatsApp
-                      </a>
-                    )}
-                    {user.phone && (
-                      <a href={`tel:${user.phone}`} className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
-                        <Phone className="h-3.5 w-3.5 mr-1.5 text-purple-600" /> Call
-                      </a>
-                    )}
-                    {user.email && (
-                      <a href={`mailto:${user.email}`} className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-purple-300 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
-                        <Mail className="h-3.5 w-3.5 mr-1.5 text-purple-600" /> Email
-                      </a>
-                    )}
-                    {getBookingsWithRemainingPayment().length > 0 && (
-                      <button onClick={() => setShowReminderModal(true)}
-                              className="inline-flex items-center px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors ml-auto">
-                        <Send className="h-3.5 w-3.5 mr-1.5" /> Remind ({getBookingsWithRemainingPayment().length})
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-            {/* Stats — three cards only, parent metrics only */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <Stat label="Bookings" value={String(bookingStats.total)} sub={`${bookingStats.confirmed} confirmed${bookingStats.cancelled ? ` · ${bookingStats.cancelled} cancelled` : ''}`} />
-              <Stat label="Spent" value={`₹${totalPaid.toLocaleString('en-IN')}`} sub="lifetime" />
-              <Stat label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="balance" />
+        {/* Header — utility first, no banner */}
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-base sm:text-lg flex-shrink-0">
+              {user.avatar_url ? <img src={user.avatar_url} alt={fullName} className="w-full h-full rounded-full object-cover" /> : <span>{initials}</span>}
             </div>
+            <div className="min-w-0">
+              <div className="flex items-center flex-wrap gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{fullName || 'Unnamed user'}</h1>
+                {user.role === 'admin' && (<span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-100 text-purple-700">Admin</span>)}
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${user.email_verified ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{user.email_verified ? 'Verified' : 'Unverified'}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs sm:text-sm text-gray-600 mt-1">
+                <span className="truncate">{user.email || '—'}</span>
+                {user.phone && <span>·</span>}
+                {user.phone && <span>{user.phone}</span>}
+                <span>·</span>
+                <span className="font-mono text-[10px] text-gray-400">#{user.id.slice(0,8).toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+          {/* Actions — top right, action-first */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }} className="hidden sm:inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold"><Edit className="h-3.5 w-3.5 mr-1.5" /> Edit</button>
+            <button onClick={() => setShowWalletModal(true)} className="hidden sm:inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg text-sm font-semibold">Wallet</button>
+            <button onClick={() => setShowCouponModal(true)} className="hidden sm:inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg text-sm font-semibold">Coupons</button>
+            <div className="relative">
+              <button onClick={() => setShowMoreMenu(!showMoreMenu)} className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg text-sm font-semibold">More</button>
+              {showMoreMenu && (<div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                {user.phone && <a href={`tel:${user.phone}`} className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Phone className="h-3.5 w-3.5 mr-2 text-gray-400" /> Call</a>}
+                {user.phone && <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><MessageCircle className="h-3.5 w-3.5 mr-2 text-gray-400" /> WhatsApp</a>}
+                {user.email && <a href={`mailto:${user.email}`} className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Mail className="h-3.5 w-3.5 mr-2 text-gray-400" /> Email</a>}
+                <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); setShowMoreMenu(false); }} className="sm:hidden w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Edit className="h-3.5 w-3.5 mr-2 text-gray-400" /> Edit user</button>
+                <button onClick={() => { setShowWalletModal(true); setShowMoreMenu(false); }} className="sm:hidden w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Wallet className="h-3.5 w-3.5 mr-2 text-gray-400" /> Wallet</button>
+                <button onClick={() => { setShowCouponModal(true); setShowMoreMenu(false); }} className="sm:hidden w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Gift className="h-3.5 w-3.5 mr-2 text-gray-400" /> Coupon</button>
+                {getBookingsWithRemainingPayment().length > 0 && (<button onClick={() => { setShowReminderModal(true); setShowMoreMenu(false); }} className="w-full text-left flex items-center px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"><Send className="h-3.5 w-3.5 mr-2" /> Send reminder ({getBookingsWithRemainingPayment().length})</button>)}
+              </div>)}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats row — 3 metrics, big numbers, no gradients */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 pb-6 border-b border-gray-200">
+          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Bookings</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{bookingStats.total}</p><p className="text-xs text-gray-500 mt-1">{bookingStats.confirmed} confirmed</p></div>
+          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Lifetime Value</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">₹{totalPaid.toLocaleString('en-IN')}</p><p className="text-xs text-gray-500 mt-1">{bookingStats.cancelled || 0} cancelled</p></div>
+          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Wallet Balance</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">₹{parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}</p><p className="text-xs text-gray-500 mt-1">Member since {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}</p></div>
         </div>
 
         {/* Tabs Navigation - Compact */}
