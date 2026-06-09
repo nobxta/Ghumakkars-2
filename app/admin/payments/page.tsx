@@ -101,10 +101,58 @@ export default function AdminPaymentsPage() {
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [q, status, method]);
 
   const totals = useMemo(() => {
-    const paid = payments.filter(p => ['verified', 'partially_refunded', 'refunded'].includes(p.payment_status)).reduce((s, p) => s + Number(p.amount), 0);
-    const refunded = payments.reduce((s, p) => s + Number(p.amount_refunded || 0), 0);
-    return { paid, refunded };
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const yesterdayStart = todayStart - 86400000;
+
+    let collected = 0, refunded = 0, pending = 0, failed = 0;
+    let today = 0, yesterday = 0, thisMonth = 0, lastMonth = 0;
+    const methodCounts: Record<string, number> = {};
+    const tripRevenue: Record<string, { name: string; amount: number }> = {};
+
+    payments.forEach(p => {
+      const amt = Number(p.amount || 0);
+      const refAmt = Number(p.amount_refunded || 0);
+      const paidAt = p.paid_at ? new Date(p.paid_at).getTime() : new Date(p.created_at).getTime();
+      const isPaid = ['verified', 'partially_refunded', 'refunded'].includes(p.payment_status);
+
+      if (isPaid) collected += amt;
+      refunded += refAmt;
+      if (p.payment_status === 'pending') pending += amt;
+      if (p.payment_status === 'failed' || p.payment_status === 'rejected') failed += amt;
+
+      if (isPaid) {
+        if (paidAt >= todayStart) today += amt;
+        else if (paidAt >= yesterdayStart) yesterday += amt;
+        if (paidAt >= monthStart) thisMonth += amt;
+        else if (paidAt >= lastMonthStart) lastMonth += amt;
+      }
+
+      const m = (p.payment_method || p.payment_mode || 'other').toLowerCase();
+      methodCounts[m] = (methodCounts[m] || 0) + 1;
+
+      if (isPaid && p.trip_title) {
+        const k = p.trip_title;
+        if (!tripRevenue[k]) tripRevenue[k] = { name: k, amount: 0 };
+        tripRevenue[k].amount += amt;
+      }
+    });
+
+    const topTrips = Object.values(tripRevenue).sort((a, b) => b.amount - a.amount).slice(0, 3);
+    const methodTotal = Object.values(methodCounts).reduce((s, n) => s + n, 0) || 1;
+    const methodPct = Object.entries(methodCounts)
+      .map(([k, n]) => ({ k, n, pct: Math.round((n / methodTotal) * 100) }))
+      .sort((a, b) => b.n - a.n);
+
+    return { collected, pending, refunded, failed, today, yesterday, thisMonth, lastMonth, topTrips, methodPct };
   }, [payments]);
+
+  // Net = collected − refunded
+  const net = totals.collected - totals.refunded;
+  const todayTrend = totals.yesterday > 0 ? ((totals.today - totals.yesterday) / totals.yesterday) * 100 : 0;
+  const monthTrend = totals.lastMonth > 0 ? ((totals.thisMonth - totals.lastMonth) / totals.lastMonth) * 100 : 0;
 
   const openDetail = async (p: Payment) => {
     setSelected(p);
@@ -146,11 +194,31 @@ export default function AdminPaymentsPage() {
               <ArrowLeft className="h-4 w-4 mr-1.5" /> Admin
             </Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">Payments</h1>
-            <p className="text-sm text-gray-600 mt-1">{total} total · {fmtINR(totals.paid)} collected · {fmtINR(totals.refunded)} refunded</p>
+            <p className="text-sm text-gray-600 mt-1">{total} total · Net {fmtINR(net)} after refunds</p>
           </div>
           <button onClick={load} className="inline-flex items-center gap-1.5 bg-white border border-gray-200 hover:border-purple-300 px-3 py-2 rounded-lg text-sm font-semibold text-gray-700">
             <RefreshCcw className="h-4 w-4" /> Refresh
           </button>
+        </div>
+
+        {/* KPI strip — 6 metrics, single neutral palette */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-5">
+          <Kpi label="Collected" value={fmtINR(totals.collected)} tone="green" sub="all-time" />
+          <Kpi label="Pending" value={fmtINR(totals.pending)} tone="amber" sub="awaiting verify" />
+          <Kpi label="Refunded" value={fmtINR(totals.refunded)} tone="red" sub="all-time" />
+          <Kpi label="Failed" value={fmtINR(totals.failed)} tone="red" sub="needs review" />
+          <Kpi label="Today" value={fmtINR(totals.today)} tone="purple" sub={totals.yesterday > 0 ? `${todayTrend >= 0 ? '+' : ''}${todayTrend.toFixed(0)}% vs yest.` : 'no prior data'} trend={totals.yesterday > 0 ? todayTrend : undefined} />
+          <Kpi label="This month" value={fmtINR(totals.thisMonth)} tone="purple" sub={totals.lastMonth > 0 ? `${monthTrend >= 0 ? '+' : ''}${monthTrend.toFixed(0)}% vs last` : 'no prior data'} trend={totals.lastMonth > 0 ? monthTrend : undefined} />
+        </div>
+
+        {/* Quick filters — action-first chips */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs uppercase tracking-wider font-bold text-gray-500 mr-1">Quick filters:</span>
+          <QuickChip active={status === '' && method === ''} onClick={() => { setStatus(''); setMethod(''); }}>All</QuickChip>
+          <QuickChip active={status === 'pending'} onClick={() => setStatus(status === 'pending' ? '' : 'pending')} tone="amber">Pending collection</QuickChip>
+          <QuickChip active={status === 'failed'} onClick={() => setStatus(status === 'failed' ? '' : 'failed')} tone="red">Failed</QuickChip>
+          <QuickChip active={status === 'partially_refunded'} onClick={() => setStatus(status === 'partially_refunded' ? '' : 'partially_refunded')} tone="amber">Partial refund</QuickChip>
+          <QuickChip active={status === 'refunded'} onClick={() => setStatus(status === 'refunded' ? '' : 'refunded')} tone="red">Refunded</QuickChip>
         </div>
 
         {/* Filters — search grows, dropdowns sized to content */}
@@ -181,6 +249,55 @@ export default function AdminPaymentsPage() {
             <option value="emi">EMI</option>
           </select>
         </div>
+
+        {/* Insights — Top trips + Payment method distribution */}
+        {(totals.topTrips.length > 0 || totals.methodPct.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
+            {totals.topTrips.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">Top trips by revenue</p>
+                <ul className="space-y-2">
+                  {totals.topTrips.map((t, i) => {
+                    const maxAmt = totals.topTrips[0].amount;
+                    const pct = maxAmt > 0 ? (t.amount / maxAmt) * 100 : 0;
+                    return (
+                      <li key={t.name}>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-900 truncate flex items-center gap-2">
+                            <span className="text-xs text-gray-400">{i + 1}</span>
+                            {t.name}
+                          </span>
+                          <span className="text-sm font-bold text-gray-900 whitespace-nowrap">{fmtINR(t.amount)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-600 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+            {totals.methodPct.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">Payment method distribution</p>
+                <ul className="space-y-2">
+                  {totals.methodPct.map((m) => (
+                    <li key={m.k}>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-sm font-semibold text-gray-900 uppercase">{m.k}</span>
+                        <span className="text-xs text-gray-500">{m.n} · {m.pct}%</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-600 rounded-full" style={{ width: `${m.pct}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Table (desktop) / cards (mobile) */}
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -477,6 +594,31 @@ function Timeline({ payment, raw }: { payment: Payment; raw: any }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+function Kpi({ label, value, sub, tone, trend }: { label: string; value: string; sub?: string; tone?: 'green' | 'amber' | 'red' | 'purple'; trend?: number }) {
+  const toneCls = tone === 'green' ? 'text-green-700' : tone === 'amber' ? 'text-amber-700' : tone === 'red' ? 'text-red-700' : tone === 'purple' ? 'text-purple-700' : 'text-gray-900';
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4">
+      <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-gray-500">{label}</p>
+      <p className={`text-base sm:text-xl font-extrabold mt-1 truncate ${toneCls}`}>{value}</p>
+      {sub && (
+        <p className={`text-[10px] sm:text-xs mt-1 truncate ${trend !== undefined ? (trend >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold') : 'text-gray-500'}`}>
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function QuickChip({ children, active, onClick, tone }: { children: React.ReactNode; active?: boolean; onClick: () => void; tone?: 'amber' | 'red' }) {
+  const activeCls = tone === 'amber' ? 'bg-amber-600 text-white border-amber-600' : tone === 'red' ? 'bg-red-600 text-white border-red-600' : 'bg-purple-600 text-white border-purple-600';
+  const inactiveCls = tone === 'amber' ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100' : tone === 'red' ? 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300';
+  return (
+    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? activeCls : inactiveCls}`}>
+      {children}
+    </button>
   );
 }
 
