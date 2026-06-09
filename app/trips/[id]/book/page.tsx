@@ -105,6 +105,25 @@ export default function BookTripPage() {
   const [useWallet, setUseWallet] = useState(false);
   const [walletAmount, setWalletAmount] = useState(0);
 
+  // Whenever the coupon changes (applied or removed), re-cap the wallet
+  // amount so users don't over-spend wallet when a deep discount kicks in.
+  useEffect(() => {
+    if (!useWallet || !trip) return;
+    const totalPassengers = 1 + passengers.length;
+    const perPersonPrice = (() => {
+      if (paymentMethod === 'seat_lock' && trip.seat_lock_price) return trip.seat_lock_price;
+      const earlyBird = (trip as any).early_bird_active_price;
+      return earlyBird || trip.discounted_price || 0;
+    })();
+    const basePrice = perPersonPrice * totalPassengers;
+    const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
+    const cappedWallet = Math.min(walletBalance, amountAfterCoupon);
+    if (walletAmount > cappedWallet) {
+      setWalletAmount(cappedWallet);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couponApplied, trip, passengers.length, paymentMethod, useWallet, walletBalance]);
+
   useEffect(() => {
     checkUser();
     fetchTrip();
@@ -305,27 +324,35 @@ export default function BookTripPage() {
       // First create booking
       const totalPassengers = 1 + passengers.length;
       const basePrice = getBasePrice();
-      let finalAmount = calculateTotalPrice();
       const couponDiscount = couponApplied ? couponApplied.discount_amount : 0;
-      
+      const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
+
+      // CAP wallet to what's actually needed after coupon.
+      // Prevents over-deduction when user toggled wallet BEFORE applying coupon.
+      const walletToUse = (useWallet && walletAmount > 0)
+        ? Math.min(walletAmount, walletBalance, amountAfterCoupon)
+        : 0;
+      let finalAmount = Math.max(0, amountAfterCoupon - walletToUse);
+
       // Use wallet if selected
       let walletAmountUsed = 0;
-      if (useWallet && walletAmount > 0) {
+      if (walletToUse > 0) {
         try {
           const walletResponse = await fetch('/api/wallet/use', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              amount: walletAmount,
+              amount: walletToUse,
               description: `Booking payment for ${trip.title}`,
             }),
           });
-          
+
           if (walletResponse.ok) {
             const walletData = await walletResponse.json();
             walletAmountUsed = walletData.amountUsed;
             setWalletBalance(walletData.remainingBalance);
-            finalAmount = calculateTotalPrice(); // Recalculate after wallet usage
+            // Recompute final amount from actual server-confirmed wallet spend
+            finalAmount = Math.max(0, amountAfterCoupon - walletAmountUsed);
           } else {
             const errorData = await walletResponse.json();
             setError(errorData.error || 'Failed to use wallet balance');
@@ -1563,8 +1590,10 @@ export default function BookTripPage() {
                         onChange={(e) => {
                           setUseWallet(e.target.checked);
                           if (e.target.checked) {
-                            const totalPrice = calculateTotalPrice();
-                            const maxWalletUse = Math.min(walletBalance, totalPrice);
+                            // Cap to the actual amount due AFTER coupon
+                            const basePrice = getBasePrice();
+                            const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
+                            const maxWalletUse = Math.min(walletBalance, amountAfterCoupon);
                             setWalletAmount(maxWalletUse);
                           } else {
                             setWalletAmount(0);
