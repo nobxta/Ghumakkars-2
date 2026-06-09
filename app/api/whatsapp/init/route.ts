@@ -1,102 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWhatsAppService } from '@/lib/whatsapp';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Initialize WhatsApp client and get QR code if needed.
- * Only initializes when explicitly requested (POST). Never call this for status polling.
- * POST /api/whatsapp/init
+ * Get the current WhatsApp connection status + a QR code if not yet linked.
+ *
+ * Green-API hosts the connection. There is no "initialize" step here — the
+ * Green-API instance runs on their servers; we just ask for its status.
+ *
+ * POST /api/whatsapp/init  → returns { ready, qrCode?, state, message }
+ * GET  /api/whatsapp/init  → same (read-only)
  */
-export async function POST(request: NextRequest) {
+async function handler() {
   try {
     const whatsapp = getWhatsAppService();
 
-    // If already connected, return immediately — do NOT call initialize() (prevents 440 replace loop)
-    if (whatsapp.getReady()) {
+    if (!whatsapp.isPackageInstalled()) {
+      return NextResponse.json(
+        {
+          success: false,
+          ready: false,
+          installed: false,
+          message:
+            'GREEN_API_INSTANCE_ID / GREEN_API_TOKEN not set. Sign up at https://console.green-api.com and add credentials to environment variables.',
+        },
+        { status: 503 }
+      );
+    }
+
+    const status = await whatsapp.getStatus();
+    if (status.isAuthorized) {
       return NextResponse.json({
         success: true,
         ready: true,
-        message: 'WhatsApp client is already ready',
+        installed: true,
+        state: status.state,
+        wid: status.wid,
+        message: 'WhatsApp is connected',
       });
     }
 
-    if (!whatsapp.isPackageInstalled()) {
-      return NextResponse.json({
-        success: false,
-        ready: false,
-        error: '@whiskeysockets/baileys is not installed',
-        message: 'Please install @whiskeysockets/baileys and dependencies with: npm install @whiskeysockets/baileys qrcode pino @hapi/boom',
-      }, { status: 503 });
-    }
-
-    await whatsapp.initialize();
-
-    if (whatsapp.getReady()) {
-      return NextResponse.json({
-        success: true,
-        ready: true,
-        message: 'WhatsApp client is ready',
-      });
-    }
-
-    const qrCode = await whatsapp.getQRCode();
-    if (qrCode) {
-      const qrCodeImage = await whatsapp.getQRCodeImage();
-      return NextResponse.json({
-        success: true,
-        ready: false,
-        qrCode: qrCode,
-        qrCodeImage: qrCodeImage,
-        message: 'Scan QR code with WhatsApp',
-      });
-    }
-
-    return NextResponse.json({
-      success: false,
-      ready: false,
-      message: 'Initialization in progress - QR code not yet available. Please try again in a few seconds.',
-    });
-  } catch (error: any) {
-    console.error('Error initializing WhatsApp:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to initialize WhatsApp' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * Get WhatsApp client status (read-only). Use for polling.
- * MUST NOT call initialize(), create socket, or trigger reconnect — only getReady() / getQRCode().
- * GET /api/whatsapp/init
- */
-export async function GET(request: NextRequest) {
-  try {
-    const whatsapp = getWhatsAppService();
-    const ready = whatsapp.getReady();
-
-    if (!whatsapp.isPackageInstalled()) {
-      return NextResponse.json({
-        success: false,
-        ready: false,
-        installed: false,
-        message: '@whiskeysockets/baileys is not installed',
-      });
-    }
-
+    const qrResult = await whatsapp.getQRCode();
     return NextResponse.json({
       success: true,
-      ready,
+      ready: false,
       installed: true,
-      message: ready ? 'WhatsApp client is ready' : 'WhatsApp client is not ready',
+      state: status.state,
+      qrCode: qrResult.qr,
+      qrCodeImage: qrResult.qr, // alias for backward compat
+      message:
+        qrResult.type === 'qrCode'
+          ? 'Scan this QR code with the WhatsApp account you want to use for notifications'
+          : qrResult.message || 'Waiting for Green-API to issue a QR code…',
     });
   } catch (error: any) {
-    console.error('Error getting WhatsApp status:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get WhatsApp status' },
-      { status: 500 }
-    );
+    console.error('Error querying WhatsApp:', error);
+    return NextResponse.json({ error: error.message || 'Failed to query WhatsApp' }, { status: 500 });
   }
 }
+
+export const POST = handler;
+export const GET = handler;

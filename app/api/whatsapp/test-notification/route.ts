@@ -20,21 +20,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize WhatsApp service
     const whatsapp = getWhatsAppService();
-    
-    // Check if package is installed
+
     if (!whatsapp.isPackageInstalled()) {
       return NextResponse.json(
-        { error: '@whiskeysockets/baileys is not installed. Please install it to enable WhatsApp notifications.' },
+        { error: 'WhatsApp not configured. Set GREEN_API_INSTANCE_ID and GREEN_API_TOKEN in environment variables.' },
         { status: 503 }
       );
     }
-    
-    // Ensure client is ready
-    if (!whatsapp.getReady()) {
+
+    const status = await whatsapp.getStatus();
+    if (!status.isAuthorized) {
       return NextResponse.json(
-        { error: 'WhatsApp client is not ready. Please connect WhatsApp first.' },
+        { error: `WhatsApp not connected (state: ${status.state}). Connect in admin settings first.` },
         { status: 503 }
       );
     }
