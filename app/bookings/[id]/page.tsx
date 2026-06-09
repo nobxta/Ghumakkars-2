@@ -27,7 +27,6 @@ interface Trip {
   image_url?: string;
   cover_image_url?: string;
   gallery_images?: string[];
-  pickup_location?: string;
   whatsapp_group_link?: string;
   highlights?: string[];
 }
@@ -111,7 +110,6 @@ export default function BookingDetailsPage() {
             image_url,
             cover_image_url,
             gallery_images,
-            pickup_location,
             whatsapp_group_link,
             highlights
           )
@@ -455,7 +453,7 @@ export default function BookingDetailsPage() {
           <InfoCard icon={<Calendar className="h-5 w-5 text-purple-600" />} label="Travel dates" value={`${fmtDateShort(trip?.start_date)} → ${fmtDateShort(trip?.end_date)}`} />
           <InfoCard icon={<MapPin className="h-5 w-5 text-fuchsia-600" />} label="Destination" value={trip?.destination || '—'} />
           <InfoCard icon={<Users className="h-5 w-5 text-blue-600" />} label="Travellers" value={String(booking.number_of_participants)} />
-          <InfoCard icon={<MapPin className="h-5 w-5 text-orange-600" />} label="Pickup point" value={trip?.pickup_location || 'Shared 7 days before'} />
+          <InfoCard icon={<MapPin className="h-5 w-5 text-orange-600" />} label="Pickup point" value={'Shared 7 days before trip'} />
           <InfoCard icon={<Clock className="h-5 w-5 text-indigo-600" />} label="Duration" value={trip?.duration_text || (trip?.duration_days ? `${trip.duration_days} day${trip.duration_days > 1 ? 's' : ''}` : '—')} />
           <InfoCard icon={<CreditCard className="h-5 w-5 text-green-600" />} label="Payment" value={booking.payment_status === 'paid' || status === 'confirmed' ? 'Paid' : (booking.payment_status || 'Pending')} valueClass={booking.payment_status === 'paid' || status === 'confirmed' ? 'text-green-700' : 'text-orange-700'} />
         </div>
