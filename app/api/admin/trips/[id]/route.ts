@@ -125,24 +125,45 @@ export async function DELETE(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = params;
+    const force = request.nextUrl.searchParams.get('force') === 'true';
     const adminClient = createAdminClient();
 
     // Check if trip has bookings
     const { data: bookings, error: bookingsError } = await adminClient
       .from('bookings')
       .select('id')
-      .eq('trip_id', id)
-      .limit(1);
+      .eq('trip_id', id);
 
     if (bookingsError) {
       console.error('Error checking bookings:', bookingsError);
     }
 
-    if (bookings && bookings.length > 0) {
+    if (bookings && bookings.length > 0 && !force) {
       return NextResponse.json(
-        { error: 'Cannot delete trip with existing bookings. Cancel the trip instead.' },
+        { error: 'This trip has existing bookings. Confirm again with force=true to delete.' },
         { status: 400 }
       );
+    }
+
+    // Force delete: remove dependent records first
+    if (bookings && bookings.length > 0 && force) {
+      const bookingIds = bookings.map((b: any) => b.id);
+      const { error: txErr } = await adminClient
+        .from('payment_transactions')
+        .delete()
+        .in('booking_id', bookingIds);
+      if (txErr) {
+        console.error('Error deleting payment_transactions:', txErr);
+        return NextResponse.json({ error: 'Failed to delete payment transactions: ' + txErr.message }, { status: 500 });
+      }
+      const { error: bkErr } = await adminClient
+        .from('bookings')
+        .delete()
+        .eq('trip_id', id);
+      if (bkErr) {
+        console.error('Error deleting bookings:', bkErr);
+        return NextResponse.json({ error: 'Failed to delete bookings: ' + bkErr.message }, { status: 500 });
+      }
     }
 
     const { error } = await adminClient

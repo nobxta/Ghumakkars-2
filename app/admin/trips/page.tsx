@@ -74,13 +74,54 @@ export default function AdminTripsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this trip? This action cannot be undone.')) return;
-
     try {
-      const response = await fetch(`/api/admin/trips/${id}`, {
+      // Fetch booking summary first
+      const infoRes = await fetch(`/api/admin/trips/${id}`);
+      const info = await infoRes.json().catch(() => ({}));
+      if (!infoRes.ok) {
+        alert(info.error || 'Failed to load trip details');
+        return;
+      }
+
+      const totalBookings = info.metrics?.totalBookings || 0;
+      const confirmedBookings = info.metrics?.confirmedBookings || 0;
+      const pendingBookings = info.metrics?.pendingBookings || 0;
+      const totalRevenue = info.metrics?.totalRevenue || 0;
+
+      // Compute pending amount (booked but not yet fully paid)
+      const pendingAmount = (info.bookings || []).reduce((sum: number, b: any) => {
+        const total = parseFloat(String(b.total_price || 0));
+        const paid = (b.payment_transactions || [])
+          .filter((p: any) => p.payment_status === 'verified')
+          .reduce((s: number, p: any) => s + parseFloat(String(p.amount || 0)), 0);
+        return sum + Math.max(0, total - paid);
+      }, 0);
+
+      let message: string;
+      if (totalBookings === 0) {
+        message = 'Are you sure you want to delete this trip?\n\nThis action cannot be undone.';
+      } else {
+        message =
+          `⚠️ This trip has EXISTING BOOKINGS:\n\n` +
+          `• Total bookings: ${totalBookings}\n` +
+          `• Confirmed: ${confirmedBookings}\n` +
+          `• Pending / seat-locked: ${pendingBookings}\n` +
+          `• Amount received: ₹${totalRevenue.toLocaleString('en-IN')}\n` +
+          `• Amount pending: ₹${pendingAmount.toLocaleString('en-IN')}\n\n` +
+          `Deleting will PERMANENTLY remove all bookings and payment records for this trip.\n\n` +
+          `Are you absolutely sure?`;
+      }
+
+      if (!confirm(message)) return;
+
+      const response = await fetch(`/api/admin/trips/${id}${totalBookings > 0 ? '?force=true' : ''}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete trip');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        alert(data.error || 'Failed to delete trip');
+        return;
+      }
       fetchTrips();
       alert('Trip deleted successfully');
     } catch (error: any) {

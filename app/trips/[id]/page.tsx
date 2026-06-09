@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon, Phone } from 'lucide-react';
 
 interface ItineraryDay {
   day?: number;
@@ -450,33 +450,44 @@ export default function TripDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           <div className="lg:col-span-2">
 
-            {/* Quick Stats Strip */}
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-5 sm:mb-6 overflow-hidden">
-              <div className={`grid grid-cols-2 ${hasMaxLimit ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} divide-x divide-y sm:divide-y-0 divide-gray-100`}>
-                <div className="p-3 sm:p-4 text-center">
-                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1.5" />
+            {/* Quick Stats — 2x2 grid with tinted icon circles */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
+              <div className="bg-white border border-gray-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="h-5 w-5 text-purple-600" />
+                </div>
+                <div className="min-w-0">
                   <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Dates</p>
-                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-1 leading-tight">
-                    {pickupDay} <span className="text-[10px] text-gray-500 font-normal">pickup</span>
-                    {returnDay && <><br />{returnDay} <span className="text-[10px] text-gray-500 font-normal">return</span></>}
+                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5 leading-tight truncate">
+                    {pickupDay}{returnDay && ` — ${returnDay}`}
                   </p>
                 </div>
-                <div className="p-3 sm:p-4 text-center">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1.5" />
-                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Duration</p>
-                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-1">{durationDisplay}</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Clock className="h-5 w-5 text-blue-600" />
                 </div>
-                {hasMaxLimit && (
-                  <div className="p-3 sm:p-4 text-center">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto mb-1.5" />
-                    <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Group</p>
-                    <p className="font-bold text-gray-900 text-sm sm:text-base mt-1">Small group</p>
-                  </div>
-                )}
-                <div className="p-3 sm:p-4 text-center">
-                  <Check className={`h-4 w-4 sm:h-5 sm:w-5 mx-auto mb-1.5 ${seatStatus.tone === 'urgent' ? 'text-orange-600' : seatStatus.tone === 'sold' ? 'text-gray-500' : 'text-green-600'}`} />
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Duration</p>
+                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5 leading-tight">{durationDisplay}</p>
+                </div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <Users className="h-5 w-5 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Group</p>
+                  <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5 leading-tight">Small group</p>
+                </div>
+              </div>
+              <div className={`bg-white border rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3 ${seatStatus.tone === 'urgent' ? 'border-orange-200' : 'border-gray-200'}`}>
+                <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center flex-shrink-0 ${seatStatus.tone === 'urgent' ? 'bg-orange-100' : seatStatus.tone === 'sold' ? 'bg-gray-100' : 'bg-green-100'}`}>
+                  <Check className={`h-5 w-5 ${seatStatus.tone === 'urgent' ? 'text-orange-600' : seatStatus.tone === 'sold' ? 'text-gray-500' : 'text-green-600'}`} />
+                </div>
+                <div className="min-w-0">
                   <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Status</p>
-                  <p className={`font-bold text-sm sm:text-base mt-1 leading-tight ${seatStatus.tone === 'urgent' ? 'text-orange-600' : seatStatus.tone === 'sold' ? 'text-gray-500' : 'text-gray-900'}`}>
+                  <p className={`font-bold text-sm sm:text-base mt-0.5 leading-tight ${seatStatus.tone === 'urgent' ? 'text-orange-600' : seatStatus.tone === 'sold' ? 'text-gray-500' : 'text-gray-900'}`}>
                     {seatStatus.label}
                   </p>
                 </div>
@@ -485,7 +496,7 @@ export default function TripDetailPage() {
 
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 sm:p-6 md:p-8">
               <div className="mb-6 sm:mb-8">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">About this trip</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4 pl-3 border-l-4 border-purple-600">About this trip</h2>
                 <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">
                   {trip.full_description || trip.description}
                 </p>
@@ -494,7 +505,7 @@ export default function TripDetailPage() {
               {/* Day-wise Itinerary - Timeline */}
               {sections.itinerary !== false && itineraryDays.length > 0 && (
                 <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Day-by-day plan</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4 pl-3 border-l-4 border-purple-600">Day-by-day plan</h3>
                   <p className="text-xs sm:text-sm text-gray-500 mb-5">Tap a day to expand</p>
                   <div className="relative">
                     {/* Vertical line */}
@@ -577,7 +588,7 @@ export default function TripDetailPage() {
 
               {sections.highlights !== false && trip.highlights && trip.highlights.length > 0 && (
                 <div className="mb-6 sm:mb-8 pt-6 border-t border-gray-100">
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Trip highlights</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4 pl-3 border-l-4 border-purple-600">Trip highlights</h3>
                   <p className="text-xs sm:text-sm text-gray-500 mb-4">What you'll experience</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                     {trip.highlights.map((highlight, index) => (
@@ -594,7 +605,7 @@ export default function TripDetailPage() {
 
               {sections.included !== false && ((trip.included_features && trip.included_features.length > 0) || (trip.excluded_features && trip.excluded_features.length > 0)) && (
                 <div className="pt-6 border-t border-gray-100">
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">What's in & what's not</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4 pl-3 border-l-4 border-purple-600">What's in & what's not</h3>
                   <p className="text-xs sm:text-sm text-gray-500 mb-4">Check before you book</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {trip.included_features && trip.included_features.length > 0 && (
@@ -729,26 +740,42 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {/* Pricing Section */}
+              {/* Pricing Section — premium, conversion-focused */}
               <div className="mb-6 pb-6 border-b border-gray-200">
-                {(trip.original_price > effectivePrice || earlyBird) && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-base text-gray-400 line-through flex items-center">
-                      <IndianRupee className="h-3.5 w-3.5" />
-                      {(earlyBird ? trip.discounted_price : trip.original_price).toLocaleString()}
-                    </p>
-                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${earlyBird ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                      Save ₹{((earlyBird ? trip.discounted_price : trip.original_price) - effectivePrice).toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-baseline gap-2">
-                  <p className={`text-3xl sm:text-4xl font-bold flex items-baseline tracking-tight ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
-                    <IndianRupee className="h-6 w-6 sm:h-7 sm:w-7" />
-                    {effectivePrice.toLocaleString()}
-                  </p>
-                  <span className="text-sm text-gray-500">/ person</span>
-                </div>
+                {(() => {
+                  const originalForCalc = earlyBird ? trip.discounted_price : trip.original_price;
+                  const savings = originalForCalc - effectivePrice;
+                  const pct = originalForCalc > 0 ? Math.round((savings / originalForCalc) * 100) : 0;
+                  const hasDiscount = savings > 0;
+                  return (
+                    <>
+                      {hasDiscount && (
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                          <p className="text-base text-gray-400 line-through flex items-center">
+                            <IndianRupee className="h-3.5 w-3.5" />
+                            {originalForCalc.toLocaleString()}
+                          </p>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-extrabold uppercase tracking-wider ${earlyBird ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm' : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-sm'}`}>
+                            {pct}% OFF
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-baseline gap-2">
+                        <p className={`text-4xl sm:text-5xl font-extrabold flex items-baseline tracking-tight ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
+                          <IndianRupee className="h-7 w-7 sm:h-8 sm:w-8" />
+                          {effectivePrice.toLocaleString()}
+                        </p>
+                        <span className="text-sm text-gray-500 font-medium">/ person</span>
+                      </div>
+                      {hasDiscount && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-800 px-3 py-1.5 rounded-full text-sm font-bold">
+                          <Sparkles className="h-3.5 w-3.5 text-green-600" />
+                          You save ₹{savings.toLocaleString()} instantly
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {showSeatLock && (
                   <div className="mt-4 flex items-center gap-2 text-sm sm:text-base text-gray-700">
                     <Lock className="h-4 w-4 text-purple-500 flex-shrink-0" />
@@ -785,24 +812,40 @@ export default function TripDetailPage() {
                 );
               })()}
 
-              {/* Book Button */}
+              {/* Book Button — premium CTA */}
               <button
                 onClick={handleBookNow}
                 disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
-                className={`w-full py-4 sm:py-5 rounded-xl font-bold text-lg sm:text-xl transition-all ${
+                className={`group relative w-full py-4 sm:py-5 rounded-2xl font-extrabold text-lg sm:text-xl transition-all overflow-hidden ${
                   !trip.is_active || availableSpots === 0 || trip.booking_disabled
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 hover:shadow-lg active:scale-[0.99] shadow-md'
+                    : 'bg-gradient-to-r from-purple-600 via-purple-700 to-fuchsia-700 text-white hover:shadow-2xl hover:shadow-purple-500/40 active:scale-[0.98] shadow-lg shadow-purple-500/30'
                 }`}
               >
-                {trip.booking_disabled
-                  ? 'Bookings Closed'
-                  : !trip.is_active
-                  ? 'Not Available'
-                  : availableSpots === 0
-                  ? 'Sold Out'
-                  : 'Book this trip'}
+                {!(!trip.is_active || availableSpots === 0 || trip.booking_disabled) && (
+                  <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/25 to-transparent" aria-hidden></span>
+                )}
+                <span className="relative flex items-center justify-center gap-2">
+                  {trip.booking_disabled
+                    ? 'Bookings Closed'
+                    : !trip.is_active
+                    ? 'Not Available'
+                    : availableSpots === 0
+                    ? 'Sold Out'
+                    : (
+                      <>
+                        Book this trip
+                        <ArrowLeft className="h-5 w-5 rotate-180 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                </span>
               </button>
+              {!(!trip.is_active || availableSpots === 0 || trip.booking_disabled) && (
+                <div className="mt-3 flex items-center justify-center gap-1.5 text-xs sm:text-sm text-gray-600 font-medium">
+                  <Lock className="h-3.5 w-3.5 text-green-600" />
+                  <span>Secure checkout · Razorpay</span>
+                </div>
+              )}
               <p className="text-center text-xs sm:text-sm text-gray-500 mt-3 leading-relaxed">
                 You won&apos;t be charged yet. By booking you agree to our{' '}
                 <Link href="/terms" className="text-purple-600 underline hover:text-purple-700">Terms</Link>
@@ -834,15 +877,25 @@ export default function TripDetailPage() {
                 </div>
               )}
 
-              {/* Trust strip */}
-              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-3 text-sm text-gray-700">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-green-600 flex-shrink-0" />
-                  <span>Secure payment</span>
+              {/* Trust strip — real honest commitments */}
+              <div className="mt-6 pt-6 border-t border-gray-100 space-y-2.5 text-sm">
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <Shield className="h-4 w-4 text-green-700" />
+                  </div>
+                  <span>Free cancellation up to 7 days before</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                  <span>Instant confirmation</span>
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <Check className="h-4 w-4 text-green-700" />
+                  </div>
+                  <span>Stays personally vetted by our team</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <Phone className="h-4 w-4 text-green-700" />
+                  </div>
+                  <span>24/7 trip support on WhatsApp</span>
                 </div>
               </div>
                 </>
@@ -894,34 +947,48 @@ export default function TripDetailPage() {
               {earlyBird.status}
             </div>
           )}
-          <div className="px-3 py-2.5 flex items-center gap-2.5">
+          <div className="px-3 py-3 flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[10px] text-gray-500 leading-tight">{showSeatLock ? 'Lock from' : 'From'}</p>
-                {(earlyBird || trip.original_price > trip.discounted_price) && (
-                  <p className="text-[10px] text-gray-400 line-through leading-tight">
-                    ₹{(earlyBird ? trip.discounted_price : trip.original_price).toLocaleString()}
-                  </p>
-                )}
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="text-[10px] text-gray-500 leading-tight uppercase tracking-wider font-semibold">{showSeatLock ? 'Lock from' : 'From'}</p>
+                {(earlyBird || trip.original_price > trip.discounted_price) && (() => {
+                  const origMobile = earlyBird ? trip.discounted_price : trip.original_price;
+                  const eff = showSeatLock ? trip.seat_lock_price! : effectivePrice;
+                  const pctMobile = origMobile > 0 ? Math.round(((origMobile - eff) / origMobile) * 100) : 0;
+                  return (
+                    <>
+                      <p className="text-[10px] text-gray-400 line-through leading-tight">
+                        ₹{origMobile.toLocaleString()}
+                      </p>
+                      {pctMobile > 0 && (
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${earlyBird ? 'bg-amber-500 text-white' : 'bg-green-500 text-white'}`}>
+                          {pctMobile}% OFF
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div className="flex items-baseline gap-1 leading-tight">
-                <p className={`text-xl font-bold flex items-baseline ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
+                <p className={`text-2xl font-extrabold flex items-baseline tracking-tight ${earlyBird ? 'text-amber-700' : 'text-gray-900'}`}>
                   <IndianRupee className="h-4 w-4" />
                   {(showSeatLock ? trip.seat_lock_price! : effectivePrice).toLocaleString()}
                 </p>
-                <span className="text-[10px] text-gray-500">
+                <span className="text-[10px] text-gray-500 font-medium">
                   {showSeatLock ? '/lock' : '/person'}
                 </span>
               </div>
-              <p className="text-[9px] text-gray-400 leading-tight mt-0.5">By booking you agree to terms</p>
+              <p className="text-[9px] text-green-700 font-semibold leading-tight mt-0.5 flex items-center gap-0.5">
+                <Lock className="h-2.5 w-2.5" /> Secure checkout
+              </p>
             </div>
             <button
               onClick={handleBookNow}
               disabled={!trip.is_active || availableSpots === 0 || trip.booking_disabled}
-              className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center gap-1.5 transition-all ${
+              className={`flex-shrink-0 px-6 py-3.5 rounded-2xl font-extrabold text-base shadow-lg flex items-center gap-2 transition-all ${
                 !trip.is_active || availableSpots === 0 || trip.booking_disabled
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white active:scale-95'
+                  : 'bg-gradient-to-r from-purple-600 via-purple-700 to-fuchsia-700 text-white active:scale-95 shadow-purple-500/40'
               }`}
             >
               {trip.booking_disabled
