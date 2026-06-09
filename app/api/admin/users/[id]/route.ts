@@ -71,11 +71,23 @@ export async function GET(
       .order('created_at', { ascending: false })
       .limit(50);
 
+    // If the user was referred, fetch the referrer's profile
+    let referrer: { id: string; full_name?: string; first_name?: string; last_name?: string; email?: string; phone?: string; referral_code?: string } | null = null;
+    if (userProfile.referred_by) {
+      const { data: ref } = await adminClient
+        .from('profiles')
+        .select('id, full_name, first_name, last_name, email, phone, referral_code')
+        .eq('id', userProfile.referred_by)
+        .single();
+      if (ref) referrer = ref;
+    }
+
     return NextResponse.json({
       user: userProfile,
       authUser,
       bookings: bookings || [],
       activities: activities || [],
+      referrer,
     });
   } catch (error: any) {
     console.error('Error fetching user details:', error);

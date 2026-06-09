@@ -22,6 +22,7 @@ export default function AdminUserDetailsPage() {
   const [authUser, setAuthUser] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [referrer, setReferrer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'activity'>('overview');
@@ -83,6 +84,7 @@ export default function AdminUserDetailsPage() {
       setAuthUser(data.authUser);
       setBookings(data.bookings || []);
       setActivities(data.activities || []);
+      setReferrer(data.referrer || null);
       setEditForm(data.user);
 
       setLoading(false);
@@ -528,12 +530,76 @@ export default function AdminUserDetailsPage() {
                   {user.referred_by && (
                     <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referred By</p>
-                      <p className="font-bold text-gray-900 text-xs">
-                        <span className="font-mono">{user.referred_by.substring(0, 8)}...</span>
-                      </p>
+                      {referrer ? (
+                        <Link href={`/admin/users/${referrer.id}`} className="block hover:underline">
+                          <p className="font-bold text-gray-900 text-sm truncate">
+                            {referrer.full_name || `${referrer.first_name || ''} ${referrer.last_name || ''}`.trim() || '—'}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">{referrer.email || referrer.phone || ''}</p>
+                          {referrer.referral_code && <p className="text-[10px] font-mono text-green-700 mt-0.5">{referrer.referral_code}</p>}
+                        </Link>
+                      ) : (
+                        <p className="font-bold text-gray-900 text-xs">
+                          <span className="font-mono">{user.referred_by.substring(0, 8)}...</span>
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Login & session info */}
+            {authUser && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Login activity</h2>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+                  {authUser.last_sign_in_at && (
+                    <div>
+                      <dt className="text-xs text-gray-500">Last login</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {new Date(authUser.last_sign_in_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </dd>
+                    </div>
+                  )}
+                  {authUser.created_at && (
+                    <div>
+                      <dt className="text-xs text-gray-500">First seen</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {new Date(authUser.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </dd>
+                    </div>
+                  )}
+                  {authUser.email_confirmed_at && (
+                    <div>
+                      <dt className="text-xs text-gray-500">Email confirmed</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {new Date(authUser.email_confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </dd>
+                    </div>
+                  )}
+                  {(authUser.app_metadata?.provider || authUser.app_metadata?.providers?.[0]) && (
+                    <div>
+                      <dt className="text-xs text-gray-500">Sign-in method</dt>
+                      <dd className="font-semibold text-gray-900 capitalize">{authUser.app_metadata.provider || authUser.app_metadata.providers[0]}</dd>
+                    </div>
+                  )}
+                  {authUser.user_metadata?.ip && (
+                    <div>
+                      <dt className="text-xs text-gray-500">Last IP</dt>
+                      <dd className="font-mono text-xs text-gray-900">{authUser.user_metadata.ip}</dd>
+                    </div>
+                  )}
+                  {authUser.user_metadata?.location && (
+                    <div>
+                      <dt className="text-xs text-gray-500">Approx. location</dt>
+                      <dd className="font-semibold text-gray-900">{authUser.user_metadata.location}</dd>
+                    </div>
+                  )}
+                </dl>
+                <p className="text-[10px] text-gray-400 mt-3">
+                  Supabase Auth does not store IP / location history by default. Enable session capture in your auth hooks to populate those fields.
+                </p>
               </div>
             )}
           </>
@@ -829,154 +895,73 @@ export default function AdminUserDetailsPage() {
 
       {/* Edit User Modal */}
       {showEditModal && user && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gradient-to-br from-white via-purple-50/50 to-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-purple-100/50 animate-slide-up">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-5 flex items-center justify-between rounded-t-3xl">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Edit className="h-5 w-5" />
-                Edit User Details
-              </h2>
-              <button onClick={() => {
-                setShowEditModal(false);
-                setEditForm(user);
-              }} className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all">
-                <X className="h-6 w-6" />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setShowEditModal(false); setEditForm(user); }}>
+          <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 flex items-center justify-between z-10">
+              <h2 className="text-lg font-bold text-gray-900">Edit user</h2>
+              <button onClick={() => { setShowEditModal(false); setEditForm(user); }} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="h-5 w-5 text-gray-600" />
               </button>
             </div>
-            <div className="p-6 sm:p-8 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
-                  <input
-                    type="text"
-                    value={editForm?.first_name || ''}
-                    onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                    className="w-full px-4 py-3 border border-purple-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all bg-white/80"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    value={editForm?.last_name || ''}
-                    onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={editForm?.full_name || ''}
-                    onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="text"
-                    value={editForm?.phone || editForm?.phone_number || ''}
-                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value, phone_number: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">College/University</label>
-                  <input
-                    type="text"
-                    value={editForm?.college_name || editForm?.college || editForm?.university || ''}
-                    onChange={(e) => setEditForm({ ...editForm, college_name: e.target.value, college: e.target.value, university: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                  <input
-                    type="text"
-                    value={editForm?.student_id || ''}
-                    onChange={(e) => setEditForm({ ...editForm, student_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                  <select
-                    value={editForm?.gender || ''}
-                    onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  >
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="First name">
+                  <input type="text" value={editForm?.first_name || ''} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Last name">
+                  <input type="text" value={editForm?.last_name || ''} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Full name" className="sm:col-span-2">
+                  <input type="text" value={editForm?.full_name || ''} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Phone">
+                  <input type="text" value={editForm?.phone || editForm?.phone_number || ''} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value, phone_number: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Alternative phone">
+                  <input type="text" value={editForm?.alternative_number || ''} onChange={(e) => setEditForm({ ...editForm, alternative_number: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Gender">
+                  <select value={editForm?.gender || ''} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} className={inputCls}>
                     <option value="">Select</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={editForm?.date_of_birth ? editForm.date_of_birth.split('T')[0] : ''}
-                    onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
-                  <input
-                    type="text"
-                    value={editForm?.emergency_contact || ''}
-                    onChange={(e) => setEditForm({ ...editForm, emergency_contact: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Name</label>
-                  <input
-                    type="text"
-                    value={editForm?.emergency_contact_name || ''}
-                    onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Relation</label>
-                  <input
-                    type="text"
-                    value={editForm?.emergency_contact_relation || ''}
-                    onChange={(e) => setEditForm({ ...editForm, emergency_contact_relation: e.target.value })}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                    placeholder="e.g., Father, Mother, Friend"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                  <textarea
-                    value={editForm?.bio || ''}
-                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:border-purple-500 outline-none"
-                  />
+                </Field>
+                <Field label="Date of birth">
+                  <input type="date" value={editForm?.date_of_birth ? String(editForm.date_of_birth).split('T')[0] : ''} onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Aadhaar ID" className="sm:col-span-2">
+                  <input type="text" value={editForm?.aadhaar_id || ''} onChange={(e) => setEditForm({ ...editForm, aadhaar_id: e.target.value })} className={inputCls} placeholder="12 digit number" />
+                </Field>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Emergency contact</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Name">
+                    <input type="text" value={editForm?.emergency_contact_name || ''} onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })} className={inputCls} />
+                  </Field>
+                  <Field label="Phone">
+                    <input type="text" value={editForm?.emergency_contact || ''} onChange={(e) => setEditForm({ ...editForm, emergency_contact: e.target.value })} className={inputCls} />
+                  </Field>
+                  <Field label="Relation">
+                    <input type="text" value={editForm?.emergency_contact_relation || ''} onChange={(e) => setEditForm({ ...editForm, emergency_contact_relation: e.target.value })} className={inputCls} placeholder="Father, Mother…" />
+                  </Field>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditForm(user); // Reset form when closing
-                  }}
-                  className="px-4 py-2 border-2 border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateUser}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {actionLoading ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
+
+              <Field label="Bio">
+                <textarea value={editForm?.bio || ''} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} rows={3} className={inputCls + ' resize-none'} />
+              </Field>
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-5 py-4 flex justify-end gap-2">
+              <button onClick={() => { setShowEditModal(false); setEditForm(user); }} className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handleUpdateUser} disabled={actionLoading} className="px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                {actionLoading ? 'Saving…' : 'Save changes'}
+              </button>
             </div>
           </div>
         </div>
@@ -1208,6 +1193,17 @@ export default function AdminUserDetailsPage() {
   );
 }
 
+
+const inputCls = "w-full px-3 py-2 text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-colors";
+
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
