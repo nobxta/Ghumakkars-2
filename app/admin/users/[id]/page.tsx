@@ -336,8 +336,8 @@ export default function AdminUserDetailsPage() {
     return sum + (total - paid);
   }, 0);
 
-  const fullName: string = user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : '');
-  const initials: string = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  const fullName = String(user.full_name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : ''));
+  const initials = (fullName.trim() || user.email || 'U').split(' ').map((s: string) => s.charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
   return (
     <div className="min-h-screen pt-16 pb-24 bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20">
@@ -353,8 +353,7 @@ export default function AdminUserDetailsPage() {
           </Link>
           
           {/* Premium User Hero Card */}
-          <>
-              {/* Hero */}
+          {/* Hero */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
                 {/* Top gradient strip */}
                 <div className="h-16 sm:h-20 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 relative">
@@ -441,7 +440,7 @@ export default function AdminUserDetailsPage() {
               <Stat label="Spent" value={`₹${totalPaid.toLocaleString('en-IN')}`} sub="lifetime" />
               <Stat label="Wallet" value={`₹${parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}`} sub="balance" />
             </div>
-              </>
+        </div>
 
         {/* Tabs Navigation - Compact */}
         <div className="mb-4">
