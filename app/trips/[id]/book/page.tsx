@@ -458,7 +458,7 @@ export default function BookTripPage() {
               setPaymentOverlay('idle');
               setProcessingRazorpay(false);
               showToast('Payment successful! Your booking is confirmed.', 'success');
-              router.push(`/bookings/${bookingData.id}`);
+              router.push(`/booking-success/${bookingData.id}`);
             } catch (error: any) {
               console.error('Payment verification error:', error);
               setPaymentOverlay('idle');
@@ -635,7 +635,7 @@ export default function BookTripPage() {
       });
 
       showToast('Booking created! Admin will contact you to collect payment and confirm.', 'success');
-      router.push(`/bookings/${bookingData.id}`);
+      router.push(`/booking-success/${bookingData.id}`);
     } catch (error: any) {
       console.error('Error creating cash payment booking:', error);
       setError(error.message || 'Failed to create booking');
@@ -1001,7 +1001,7 @@ export default function BookTripPage() {
       // Update trip participants count (but don't increment until payment is verified)
       // We'll do this when admin confirms payment
 
-      router.push(`/bookings?success=true&booking_id=${bookingData.id}`);
+      router.push(`/booking-success/${bookingData.id}`);
     } catch (err: any) {
       console.error('Error creating booking:', err);
       setError(err.message || 'Failed to create booking. Please try again.');

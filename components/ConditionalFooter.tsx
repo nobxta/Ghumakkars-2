@@ -29,6 +29,7 @@ function shouldHideFooter(p: string): boolean {
   if (p.startsWith('/wallet')) return true;
   if (p.startsWith('/referral')) return true;
   if (p.startsWith('/bookings')) return true;
+  if (p.startsWith('/booking-success')) return true;
   return false;
 }
 
@@ -42,6 +43,7 @@ function shouldHideBottomNav(p: string): boolean {
   if (isCheckoutFlow(p)) return true;
   // Hide on trip detail too — the sticky Book Now bar already lives there
   if (/^\/trips\/[^/]+\/?$/.test(p)) return true;
+  if (p.startsWith('/booking-success')) return true;
   return false;
 }
 
