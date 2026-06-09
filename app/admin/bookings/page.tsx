@@ -465,52 +465,46 @@ export default function AdminBookingsPage() {
 
       {/* Search and Filters Section - Compact */}
       <div className="bg-white rounded-lg sm:rounded-xl border border-purple-200 shadow-sm p-2.5 sm:p-4">
-        <div className="flex flex-col lg:flex-row gap-2 sm:gap-3">
-          {/* Trip Filter */}
-          <div className="lg:w-64">
-            <select
-              value={selectedTripId}
-              onChange={(e) => {
-                setSelectedTripId(e.target.value);
-                setFilter('all'); // Reset status filter when trip changes
-              }}
-              className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium"
-            >
-              <option value="all">All Trips</option>
-              {trips.map((trip) => (
-                <option key={trip.id} value={trip.id}>
-                  {trip.title} - {trip.destination}
-                </option>
-              ))}
-            </select>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+          {/* Search Bar — grows */}
+          <div className="relative search-flex">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by customer, email, or booking ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-8 sm:pl-10 pr-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900"
+            />
           </div>
 
-          {/* Search Bar */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by customer, email, or booking ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 sm:pl-10 pr-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900"
-              />
-            </div>
-          </div>
+          {/* Trip Filter — large (long names) */}
+          <select
+            value={selectedTripId}
+            onChange={(e) => {
+              setSelectedTripId(e.target.value);
+              setFilter('all');
+            }}
+            className="filter-large px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium bg-white"
+          >
+            <option value="all">All Trips</option>
+            {trips.map((trip) => (
+              <option key={trip.id} value={trip.id}>
+                {trip.title} - {trip.destination}
+              </option>
+            ))}
+          </select>
 
-          {/* Sort Dropdown */}
-          <div className="lg:w-40">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
-              className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium"
-            >
-              <option value="date">Sort by Date</option>
-              <option value="amount">Sort by Amount</option>
-              <option value="status">Sort by Status</option>
-            </select>
-          </div>
+          {/* Sort — small */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
+            className="filter-small px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium bg-white"
+          >
+            <option value="date">Sort by Date</option>
+            <option value="amount">Sort by Amount</option>
+            <option value="status">Sort by Status</option>
+          </select>
         </div>
 
         {/* Quick Filter Pills - Compact */}

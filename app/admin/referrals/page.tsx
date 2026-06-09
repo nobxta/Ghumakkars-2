@@ -263,18 +263,18 @@ export default function AdminReferralsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border-2 border-purple-200 p-4 flex flex-col sm:flex-row gap-4">
+      <div className="bg-white rounded-xl border-2 border-purple-200 p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4">
         <input
           type="text"
           placeholder="Search by referrer, referred user, or code..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
+          className="search-flex px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
         />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
+          className="filter-small px-3 sm:px-4 py-2 sm:py-3 border border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all bg-white"
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>

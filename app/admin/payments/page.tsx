@@ -153,9 +153,9 @@ export default function AdminPaymentsPage() {
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4 mb-5 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-          <div className="relative sm:col-span-1">
+        {/* Filters — search grows, dropdowns sized to content */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:flex-wrap sm:items-center">
+          <div className="relative search-flex">
             <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q} onChange={(e) => setQ(e.target.value)}
@@ -163,7 +163,7 @@ export default function AdminPaymentsPage() {
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
             />
           </div>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="filter-small px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
             <option value="">All statuses</option>
             <option value="verified">Paid</option>
             <option value="partially_refunded">Partially Refunded</option>
@@ -172,7 +172,7 @@ export default function AdminPaymentsPage() {
             <option value="failed">Failed</option>
             <option value="rejected">Rejected</option>
           </select>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className="filter-small px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
             <option value="">All methods</option>
             <option value="upi">UPI</option>
             <option value="card">Card</option>

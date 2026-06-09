@@ -32,6 +32,27 @@ body {
   }
 }
 
+/* ─────────────────── Admin form-control sizing utilities ───────────────────
+   Filter controls should size to their content, not stretch to fill the row.
+   Search inputs are the exception — they grow into available space.
+   Native <select> menus inherit width from the trigger automatically. */
+@layer components {
+  .filter-small  { width: 140px; min-width: 140px; max-width: 180px; }
+  .filter-medium { width: 180px; min-width: 160px; max-width: 220px; }
+  .filter-large  { width: 220px; min-width: 180px; max-width: 240px; }
+  .search-flex   { flex: 1 1 280px; min-width: 220px; }
+
+  /* On small screens, filters fill the row when stacked vertically. */
+  @media (max-width: 639px) {
+    .filter-small,
+    .filter-medium,
+    .filter-large {
+      width: 100%;
+      max-width: none;
+    }
+  }
+}
+
 /* Mobile optimization */
 @media (max-width: 640px) {
   html {
