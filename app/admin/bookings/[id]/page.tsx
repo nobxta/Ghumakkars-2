@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { 
-  ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart, 
-  GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle, 
-  AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X
+import {
+  ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
+  GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
+  AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
+  Printer, Copy, FileText, Tag, Shield
 } from 'lucide-react';
 
 export default function AdminBookingDetailsPage() {
@@ -204,159 +205,204 @@ export default function AdminBookingDetailsPage() {
   const totalAmount = parseFloat(String(booking.total_price || 0));
   const paidAmount = parseFloat(String(booking.payment_amount || booking.final_amount || 0));
   const remainingAmount = totalAmount - paidAmount;
+  const status = booking.booking_status || 'pending';
+  const shortId = booking.id.substring(0, 8).toUpperCase();
+  const fmtDate = (d?: string) =>
+    d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
+  const fmtDateTime = (d?: string) =>
+    d ? new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const passengerName = booking.primary_passenger_name || (booking.profiles ? `${(booking.profiles.first_name || '')} ${(booking.profiles.last_name || '')}`.trim() : '') || 'N/A';
+  const passengerEmail = booking.primary_passenger_email || booking.profiles?.email || 'N/A';
+  const passengerPhone = booking.primary_passenger_phone || booking.profiles?.phone || 'N/A';
+
+  const copyId = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(booking.id);
+    }
+  };
 
   return (
-    <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Header */}
-        <div className="mb-6">
-          <Link 
-            href="/admin/bookings" 
-            className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 text-sm font-medium transition-colors"
+    <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/40 via-white to-white print:bg-white print:pt-0 print:pb-0">
+      {/* Print-only header */}
+      <div className="hidden print:block max-w-4xl mx-auto px-6 pt-6 pb-4 border-b border-gray-300">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-2xl font-extrabold text-gray-900">Ghumakkars</p>
+            <p className="text-xs text-gray-500">Trip Booking Receipt</p>
+          </div>
+          <div className="text-right text-xs text-gray-600">
+            <p>Printed on {new Date().toLocaleString('en-IN')}</p>
+            <p className="font-mono">Ref: {shortId}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 print:py-3">
+        {/* Top actions */}
+        <div className="mb-5 sm:mb-6 print:hidden flex items-center justify-between gap-2 flex-wrap">
+          <Link
+            href="/admin/bookings"
+            className="inline-flex items-center text-purple-700 hover:text-purple-900 text-sm font-semibold transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            <span>Back to All Bookings</span>
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            <span>All Bookings</span>
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Booking Details</h1>
-          <p className="text-sm text-gray-600">Booking ID: <span className="font-mono">{booking.id.substring(0, 8)}...</span></p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyId}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-semibold hover:border-purple-300 hover:text-purple-700 transition-colors"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Copy ID</span>
+            </button>
+            <button
+              onClick={() => typeof window !== 'undefined' && window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span>Print / PDF</span>
+            </button>
+          </div>
         </div>
 
-        {/* Trip Information */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 text-purple-600 mr-2" />
-            Trip Information
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Trip Title</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.trips?.title || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Destination</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.trips?.destination || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Start Date</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Calendar className="h-4 w-4 mr-1 text-purple-600" />
-                {booking.trips?.start_date ? new Date(booking.trips.start_date).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">End Date</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Calendar className="h-4 w-4 mr-1 text-purple-600" />
-                {booking.trips?.end_date ? new Date(booking.trips.end_date).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Participants</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Users className="h-4 w-4 mr-1 text-purple-600" />
-                {booking.number_of_participants || 1}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Booking Status</p>
-              <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(booking.booking_status || 'pending')}`}>
-                {getStatusIcon(booking.booking_status || 'pending')}
-                <span className="ml-1.5">
-                  {(booking.booking_status || 'pending') === 'seat_locked' 
-                    ? 'Seat Locked' 
-                    : (booking.booking_status || 'pending').charAt(0).toUpperCase() + (booking.booking_status || 'pending').slice(1).replace(/_/g, ' ')
-                  }
+        {/* Hero / receipt header */}
+        <div className="rounded-2xl overflow-hidden shadow-md border border-purple-100 bg-white mb-5 sm:mb-6 print:shadow-none print:border-gray-300">
+          <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-fuchsia-700 text-white p-5 sm:p-6 print:bg-purple-700 print:!text-white">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-wider text-purple-200 font-semibold mb-1">Booking Receipt</p>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold leading-tight truncate">
+                  {booking.trips?.title || 'Trip'}
+                </h1>
+                <p className="text-sm text-purple-100 mt-1 flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {booking.trips?.destination || 'N/A'}
+                </p>
+              </div>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white shadow-sm whitespace-nowrap ${
+                status === 'confirmed' ? 'text-green-700'
+                : status === 'seat_locked' ? 'text-orange-700'
+                : status === 'pending' ? 'text-yellow-700'
+                : 'text-red-700'
+              }`}>
+                {getStatusIcon(status)}
+                <span>
+                  {status === 'seat_locked' ? 'Seat Locked' : status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')}
                 </span>
               </span>
             </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Booking Date</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">
-                {new Date(booking.created_at).toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Booking ID</p>
-              <p className="font-semibold text-gray-900 font-mono text-xs break-all">{booking.id}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Primary Passenger */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <User className="h-5 w-5 text-purple-600 mr-2" />
-            Primary Passenger
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Name</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">
-                {booking.primary_passenger_name || (booking.profiles ? `${(booking.profiles.first_name || '')} ${(booking.profiles.last_name || '')}`.trim() : '') || 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Email</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center break-all">
-                <Mail className="h-4 w-4 mr-1 text-purple-600 flex-shrink-0" />
-                <span className="truncate">{booking.primary_passenger_email || booking.profiles?.email || 'N/A'}</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Phone</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Phone className="h-4 w-4 mr-1 text-purple-600" />
-                {booking.primary_passenger_phone || booking.profiles?.phone || 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Gender</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.primary_passenger_gender || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Age</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.primary_passenger_age || 'N/A'}</p>
-            </div>
-            {booking.college && (
+            <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">College</p>
-                <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                  <GraduationCap className="h-4 w-4 mr-1 text-purple-600" />
-                  {booking.college}
-                </p>
+                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Ref</p>
+                <p className="font-mono font-bold mt-0.5">{shortId}</p>
               </div>
-            )}
+              <div>
+                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Dates</p>
+                <p className="font-semibold mt-0.5 truncate">{fmtDate(booking.trips?.start_date)}{booking.trips?.end_date ? ` → ${fmtDate(booking.trips?.end_date)}` : ''}</p>
+              </div>
+              <div>
+                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Guests</p>
+                <p className="font-semibold mt-0.5">{booking.number_of_participants || 1}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment KPI strip */}
+          <div className="grid grid-cols-3 divide-x divide-gray-200 bg-white">
+            <div className="p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Total</p>
+              <p className="text-base sm:text-xl font-extrabold text-gray-900 mt-0.5 flex items-baseline justify-center">
+                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{totalAmount.toLocaleString('en-IN')}
+              </p>
+            </div>
+            <div className="p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Paid</p>
+              <p className="text-base sm:text-xl font-extrabold text-green-700 mt-0.5 flex items-baseline justify-center">
+                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{paidAmount.toLocaleString('en-IN')}
+              </p>
+            </div>
+            <div className="p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Due</p>
+              <p className={`text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{Math.max(0, remainingAmount).toLocaleString('en-IN')}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Additional Passengers */}
+        {/* Two-column grid on desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {/* Trip details */}
+          <SectionCard icon={<Calendar className="h-4 w-4 text-purple-700" />} title="Trip Details">
+            <Row label="Start" value={fmtDate(booking.trips?.start_date)} />
+            <Row label="End" value={fmtDate(booking.trips?.end_date)} />
+            <Row label="Booked on" value={fmtDateTime(booking.created_at)} />
+            <Row label="Booking ID" value={<span className="font-mono text-xs break-all">{booking.id}</span>} />
+          </SectionCard>
+
+          {/* Primary passenger */}
+          <SectionCard icon={<User className="h-4 w-4 text-purple-700" />} title="Primary Passenger">
+            <Row label="Name" value={passengerName} />
+            <Row label="Email" value={<span className="break-all">{passengerEmail}</span>} />
+            <Row label="Phone" value={<a href={`tel:${passengerPhone}`} className="text-purple-700 hover:underline">{passengerPhone}</a>} />
+            <Row label="Age / Gender" value={`${booking.primary_passenger_age || '—'} · ${booking.primary_passenger_gender || '—'}`} />
+            {booking.college && <Row label="College" value={booking.college} />}
+          </SectionCard>
+
+          {/* Emergency contact */}
+          {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+            <SectionCard icon={<Heart className="h-4 w-4 text-pink-600" />} title="Emergency Contact" iconBg="bg-pink-100">
+              <Row label="Name" value={booking.emergency_contact_name || 'N/A'} />
+              <Row label="Phone" value={
+                <a href={`tel:${booking.emergency_contact_phone}`} className="text-purple-700 hover:underline">
+                  {booking.emergency_contact_phone || 'N/A'}
+                </a>
+              } />
+            </SectionCard>
+          )}
+
+          {/* Discount/coupon (if any) */}
+          {booking.coupon_code && (
+            <SectionCard icon={<Tag className="h-4 w-4 text-green-700" />} title="Discount" iconBg="bg-green-100">
+              <Row label="Coupon" value={<span className="font-mono font-bold text-green-700">{booking.coupon_code}</span>} />
+              {booking.coupon_discount && (
+                <Row label="Saved" value={
+                  <span className="text-green-700 font-bold inline-flex items-baseline">
+                    <IndianRupee className="h-3.5 w-3.5" />{parseFloat(String(booking.coupon_discount)).toLocaleString('en-IN')}
+                  </span>
+                } />
+              )}
+            </SectionCard>
+          )}
+        </div>
+
+        {/* Additional passengers — full width */}
         {booking.passengers && booking.passengers.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-              <Users className="h-5 w-5 text-purple-600 mr-2" />
-              Additional Passengers ({booking.passengers.length})
-            </h2>
-            <div className="space-y-4">
-              {booking.passengers.map((passenger: any, index: number) => (
-                <div key={index} className="bg-purple-50 rounded-lg p-4 border border-purple-100">
-                  <p className="text-sm font-semibold text-gray-900 mb-2">Passenger {index + 1}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Name</p>
-                      <p className="text-sm font-medium text-gray-900">{passenger.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Phone</p>
-                      <p className="text-sm font-medium text-gray-900">{passenger.phone || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Age</p>
-                      <p className="text-sm font-medium text-gray-900">{passenger.age || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Gender</p>
-                      <p className="text-sm font-medium text-gray-900">{passenger.gender || 'N/A'}</p>
-                    </div>
+          <div className="mt-4 sm:mt-5 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
+                <Users className="h-4 w-4 text-purple-700" />
+              </div>
+              <h2 className="text-sm sm:text-base font-bold text-gray-900">Additional Passengers ({booking.passengers.length})</h2>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {booking.passengers.map((p: any, i: number) => (
+                <div key={i} className="px-4 sm:px-5 py-3 sm:py-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Passenger {i + 1}</p>
+                    <p className="font-bold text-gray-900 mt-0.5">{p.name || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Phone</p>
+                    <p className="text-gray-900 mt-0.5">{p.phone || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Age</p>
+                    <p className="text-gray-900 mt-0.5">{p.age || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Gender</p>
+                    <p className="text-gray-900 mt-0.5 capitalize">{p.gender || '—'}</p>
                   </div>
                 </div>
               ))}
@@ -364,173 +410,132 @@ export default function AdminBookingDetailsPage() {
           </div>
         )}
 
-        {/* Emergency Contact */}
-        {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-              <Heart className="h-5 w-5 text-purple-600 mr-2" />
-              Emergency Contact
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Name</p>
-                <p className="font-semibold text-gray-900 text-sm sm:text-base">{booking.emergency_contact_name || 'N/A'}</p>
+        {/* Payment timeline */}
+        {booking.payment_transactions && booking.payment_transactions.length > 0 && (
+          <div className="mt-4 sm:mt-5 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
+                <CreditCard className="h-4 w-4 text-purple-700" />
+              </div>
+              <h2 className="text-sm sm:text-base font-bold text-gray-900">Payment Timeline</h2>
+            </div>
+            <div className="p-4 sm:p-5 space-y-3">
+              {booking.payment_transactions
+                .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map((t: any, i: number) => {
+                  const isVerified = t.payment_status === 'verified';
+                  const isRejected = t.payment_status === 'rejected';
+                  const tone = isVerified ? 'green' : isRejected ? 'red' : 'yellow';
+                  return (
+                    <div
+                      key={t.id}
+                      className={`rounded-xl border p-3 sm:p-4 ${
+                        isVerified ? 'border-green-200 bg-green-50/60'
+                        : isRejected ? 'border-red-200 bg-red-50/60'
+                        : 'border-yellow-200 bg-yellow-50/60'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span className={`text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-md bg-white border ${
+                            isVerified ? 'border-green-200 text-green-700'
+                            : isRejected ? 'border-red-200 text-red-700'
+                            : 'border-yellow-200 text-yellow-700'
+                          }`}>
+                            #{i + 1} · {t.payment_type === 'seat_lock' ? 'Seat Lock' : t.payment_type === 'remaining' ? 'Remaining' : 'Full Payment'}
+                          </span>
+                          <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                            isVerified ? 'bg-green-600 text-white'
+                            : isRejected ? 'bg-red-600 text-white'
+                            : 'bg-yellow-500 text-white'
+                          }`}>
+                            {t.payment_status}
+                          </span>
+                        </div>
+                        <p className="font-extrabold text-gray-900 flex items-baseline whitespace-nowrap">
+                          <IndianRupee className="h-4 w-4" />{parseFloat(String(t.amount)).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="space-y-1 text-xs sm:text-sm text-gray-700">
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-500 font-medium min-w-[80px]">Txn ID:</span>
+                          <span className="font-mono break-all">{t.transaction_id}</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-500 font-medium min-w-[80px]">Paid at:</span>
+                          <span>{fmtDateTime(t.created_at)}</span>
+                        </div>
+                        {t.payment_reviewed_at && (
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500 font-medium min-w-[80px]">Reviewed:</span>
+                            <span>{fmtDateTime(t.payment_reviewed_at)}</span>
+                          </div>
+                        )}
+                        {t.rejection_reason && (
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500 font-medium min-w-[80px]">Reason:</span>
+                            <span className="text-red-700 font-semibold">{t.rejection_reason}</span>
+                          </div>
+                        )}
+                      </div>
+                      {t.payment_status === 'pending' && (
+                        <button
+                          onClick={() => openTransactionModal(t)}
+                          className="mt-3 w-full sm:w-auto px-4 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-bold hover:bg-purple-700 transition-colors print:hidden"
+                        >
+                          Review payment
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Seat lock deadline */}
+        {status === 'seat_locked' && booking.trips?.start_date && (
+          <div className="mt-4 sm:mt-5 bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-orange-700" />
               </div>
               <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Phone</p>
-                <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                  <Phone className="h-4 w-4 mr-1 text-purple-600" />
-                  {booking.emergency_contact_phone || 'N/A'}
+                <p className="text-sm font-bold text-orange-900 mb-1">Remaining payment deadline</p>
+                <p className="text-sm text-orange-800">
+                  Must be paid before <strong>{fmtDate(new Date(new Date(booking.trips.start_date).setDate(new Date(booking.trips.start_date).getDate() - 5)).toISOString())}</strong>
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Payment Summary */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <CreditCard className="h-5 w-5 text-purple-600 mr-2" />
-            Payment Summary
-          </h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-                <p className="font-semibold text-gray-900 text-lg flex items-center">
-                  <IndianRupee className="h-5 w-5" />
-                  {totalAmount.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Amount Paid</p>
-                <p className="font-semibold text-green-600 text-lg flex items-center">
-                  <IndianRupee className="h-5 w-5" />
-                  {paidAmount.toLocaleString()}
-                </p>
-              </div>
-              {remainingAmount > 0 && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
-                  <p className="font-semibold text-orange-600 text-lg flex items-center">
-                    <IndianRupee className="h-5 w-5" />
-                    {remainingAmount.toLocaleString()}
-                  </p>
-                </div>
-              )}
-              {booking.coupon_code && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Coupon Applied</p>
-                  <p className="font-semibold text-green-600">{booking.coupon_code}</p>
-                  {booking.coupon_discount && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Discount: ₹{parseFloat(String(booking.coupon_discount)).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Payment Transactions Timeline */}
-            {booking.payment_transactions && booking.payment_transactions.length > 0 && (
-              <div className="mt-6">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Payment Timeline</p>
-                <div className="space-y-3">
-                  {booking.payment_transactions
-                    .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                    .map((transaction: any, index: number) => (
-                      <div 
-                        key={transaction.id} 
-                        className={`p-4 rounded-xl border-2 ${
-                          transaction.payment_status === 'verified' 
-                            ? 'bg-green-50 border-green-200' 
-                            : transaction.payment_status === 'rejected'
-                            ? 'bg-red-50 border-red-200'
-                            : 'bg-yellow-50 border-yellow-200'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <span className="text-xs font-semibold px-2 py-1 rounded bg-white">
-                                {index + 1}. {transaction.payment_type === 'seat_lock' ? 'Seat Lock Payment' : transaction.payment_type === 'remaining' ? 'Remaining Payment' : 'Full Payment'}
-                              </span>
-                              <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                                transaction.payment_status === 'verified' 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : transaction.payment_status === 'rejected'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                              }`}>
-                                {transaction.payment_status}
-                              </span>
-                            </div>
-                            <div className="space-y-1 text-sm">
-                              <div>
-                                <span className="text-gray-600">Transaction ID: </span>
-                                <span className="font-mono font-semibold text-gray-900">{transaction.transaction_id}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Amount: </span>
-                                <span className="font-semibold text-gray-900 flex items-center inline-flex">
-                                  <IndianRupee className="h-3 w-3" />
-                                  {parseFloat(String(transaction.amount)).toLocaleString()}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Payment Date: </span>
-                                <span className="text-gray-900">
-                                  {new Date(transaction.created_at).toLocaleString()}
-                                </span>
-                              </div>
-                              {transaction.payment_reviewed_at && (
-                                <div>
-                                  <span className="text-gray-600">Reviewed: </span>
-                                  <span className="text-gray-900">
-                                    {new Date(transaction.payment_reviewed_at).toLocaleString()}
-                                  </span>
-                                </div>
-                              )}
-                              {transaction.rejection_reason && (
-                                <div>
-                                  <span className="text-gray-600">Rejection Reason: </span>
-                                  <span className="text-red-700">{transaction.rejection_reason}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {transaction.payment_status === 'pending' && (
-                            <button
-                              onClick={() => openTransactionModal(transaction)}
-                              className="ml-4 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 transition-colors"
-                            >
-                              Review
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Payment Deadline for Seat Lock */}
-            {booking.booking_status === 'seat_locked' && booking.trips?.start_date && (
-              <div className="mt-4 bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-orange-900 mb-1">Remaining Payment Deadline</p>
-                    <p className="text-sm text-orange-700">
-                      Remaining amount must be paid before: {new Date(new Date(booking.trips.start_date).setDate(new Date(booking.trips.start_date).getDate() - 5)).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Print footer */}
+        <div className="hidden print:block mt-8 pt-4 border-t border-gray-300 text-xs text-gray-500 text-center">
+          <p>Generated from Ghumakkars Admin · support@ghumakkars.in</p>
         </div>
       </div>
+
+      {/* Print CSS — hide chrome, force light backgrounds for ink */}
+      <style jsx global>{`
+        @media print {
+          @page { margin: 14mm; size: A4; }
+          html, body { background: white !important; }
+          nav, header, footer, [role="navigation"] { display: none !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:bg-white { background: white !important; }
+          .print\\:!text-white { color: white !important; }
+          .print\\:shadow-none { box-shadow: none !important; }
+          .print\\:border-gray-300 { border-color: #d1d5db !important; }
+          .print\\:bg-purple-700 { background: #6b21a8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print\\:py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+          .print\\:pt-0 { padding-top: 0 !important; }
+          .print\\:pb-0 { padding-bottom: 0 !important; }
+          .print\\:block { display: block !important; }
+          a { color: #1f2937 !important; text-decoration: none !important; }
+          .lg\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+      `}</style>
 
       {/* Payment Review Modal */}
       {showPaymentModal && selectedTransaction && (
@@ -620,6 +625,37 @@ export default function AdminBookingDetailsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionCard({
+  icon,
+  title,
+  iconBg = 'bg-purple-100',
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  iconBg?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none">
+      <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+        <div className={`w-7 h-7 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
+        <h2 className="text-sm sm:text-base font-bold text-gray-900">{title}</h2>
+      </div>
+      <dl className="px-4 sm:px-5 py-2 sm:py-3 divide-y divide-gray-100">{children}</dl>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="py-2 sm:py-2.5 flex items-start gap-3">
+      <dt className="text-xs sm:text-sm text-gray-500 font-medium min-w-[88px] sm:min-w-[100px] flex-shrink-0">{label}</dt>
+      <dd className="text-xs sm:text-sm font-semibold text-gray-900 min-w-0 flex-1">{value}</dd>
     </div>
   );
 }
