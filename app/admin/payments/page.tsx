@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Search, Filter, IndianRupee, CreditCard, RefreshCcw, Eye, X, Check,
-  CheckCircle2, AlertCircle, Clock, ArrowLeft, Copy
+  CheckCircle2, AlertCircle, Clock, ArrowLeft, Copy, Download, ExternalLink
 } from 'lucide-react';
 
 interface Payment {
@@ -116,6 +116,26 @@ export default function AdminPaymentsPage() {
   };
 
   const copy = (s: string) => { navigator.clipboard?.writeText(s); setToast({ type: 'success', msg: 'Copied' }); };
+
+  const syncFromRazorpay = async () => {
+    if (!selected) return;
+    setDetail(null);
+    try {
+      const r = await fetch(`/api/admin/payments/${selected.id}/sync`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Sync failed');
+      setToast({ type: 'success', msg: 'Synced from Razorpay' });
+      // reload detail + list
+      const d = await fetch(`/api/admin/payments/${selected.id}`); const dj = await d.json();
+      if (d.ok) setDetail(dj);
+      load();
+    } catch (e: any) {
+      setToast({ type: 'error', msg: e.message });
+      // try reloading detail anyway
+      const d = await fetch(`/api/admin/payments/${selected.id}`); const dj = await d.json();
+      if (d.ok) setDetail(dj);
+    }
+  };
 
   return (
     <div className="min-h-screen pt-16 pb-20 bg-gradient-to-b from-purple-50/40 via-white to-white">
@@ -245,43 +265,92 @@ export default function AdminPaymentsPage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setSelected(null); setDetail(null); }}>
           <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="text-lg sm:text-xl font-extrabold text-gray-900">Payment Details</h2>
-              <button onClick={() => { setSelected(null); setDetail(null); }} className="p-2 hover:bg-gray-100 rounded-lg"><X className="h-5 w-5" /></button>
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-extrabold text-gray-900 truncate">Payment Details</h2>
+                <p className="text-xs text-gray-500 font-mono truncate">{selected.razorpay_payment_id || selected.transaction_id}</p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button onClick={syncFromRazorpay} title="Re-sync from Razorpay" className="px-2 py-1.5 hover:bg-purple-50 text-purple-700 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <RefreshCcw className="h-3.5 w-3.5" /><span className="hidden sm:inline">Sync</span>
+                </button>
+                <a href={`https://dashboard.razorpay.com/app/payments/${selected.razorpay_payment_id || selected.transaction_id}`} target="_blank" rel="noopener noreferrer" title="Open in Razorpay" className="p-1.5 hover:bg-gray-100 rounded-lg">
+                  <ExternalLink className="h-4 w-4 text-gray-600" />
+                </a>
+                <button onClick={() => { setSelected(null); setDetail(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="h-5 w-5" /></button>
+              </div>
             </div>
 
             {!detail ? (
-              <div className="p-10 text-center text-gray-500">Loading details…</div>
+              <div className="p-10 text-center text-gray-500">
+                <div className="animate-spin rounded-full h-8 w-8 border-3 border-purple-200 border-t-purple-600 mx-auto mb-3"></div>
+                Loading details…
+              </div>
             ) : (
               <div className="p-4 sm:p-6 space-y-5">
-                <Sec title="Customer">
-                  <Row label="Name" value={detail.payment.customer_name || detail.payment.primary_passenger_name || '—'} />
-                  <Row label="Email" value={detail.payment.customer_email || detail.payment.primary_passenger_email || '—'} />
-                  <Row label="Phone" value={detail.payment.customer_phone || '—'} />
-                </Sec>
-
-                <Sec title="Payment">
-                  <Row label="Razorpay Payment ID" value={
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-mono text-xs">{detail.payment.razorpay_payment_id || detail.payment.transaction_id}</span>
-                      <button onClick={() => copy(detail.payment.razorpay_payment_id || detail.payment.transaction_id)}><Copy className="h-3 w-3 text-gray-400" /></button>
+                {/* Hero: amount + status */}
+                <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-2xl p-4 sm:p-5">
+                  <div className="flex items-baseline justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="text-3xl sm:text-4xl font-extrabold text-gray-900 flex items-baseline">
+                        <IndianRupee className="h-6 w-6 sm:h-7 sm:w-7" />{Number(detail.payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">{detail.payment.currency || 'INR'} · {detail.payment.captured ? 'Captured' : 'Not captured'}</p>
+                    </div>
+                    <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-extrabold border ${statusBadge(detail.payment.payment_status).cls}`}>
+                      {statusBadge(detail.payment.payment_status).label}
                     </span>
-                  } />
-                  <Row label="Order ID" value={<span className="font-mono text-xs">{detail.payment.razorpay_order_id || '—'}</span>} />
-                  <Row label="Amount" value={<span className="font-bold">{fmtINR(detail.payment.amount)} {detail.payment.currency}</span>} />
-                  <Row label="Refunded" value={fmtINR(detail.payment.amount_refunded || 0)} />
-                  <Row label="Status" value={<span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold border ${statusBadge(detail.payment.payment_status).cls}`}>{statusBadge(detail.payment.payment_status).label}</span>} />
-                  <Row label="Method" value={<span className="uppercase font-bold">{detail.payment.payment_method || detail.payment.payment_mode || '—'}</span>} />
-                  <Row label="Captured" value={detail.payment.captured ? 'Yes' : 'No'} />
-                  <Row label="Paid at" value={fmtDate(detail.payment.paid_at)} />
-                </Sec>
+                  </div>
+                  {Number(detail.payment.amount_refunded || 0) > 0 && (
+                    <p className="text-sm font-bold text-purple-700 mt-2">Refunded: {fmtINR(detail.payment.amount_refunded)}</p>
+                  )}
+                </div>
 
+                {/* Timeline (Razorpay-style) */}
+                <div>
+                  <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-2.5">Timeline</p>
+                  <Timeline payment={detail.payment} raw={detail.razorpay_raw} />
+                </div>
+
+                {/* Two-column details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <Sec title="Payment">
+                    <Row label="Payment ID" value={
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono text-xs truncate">{detail.payment.razorpay_payment_id || detail.payment.transaction_id}</span>
+                        <button onClick={() => copy(detail.payment.razorpay_payment_id || detail.payment.transaction_id)} className="flex-shrink-0"><Copy className="h-3 w-3 text-gray-400" /></button>
+                      </span>
+                    } />
+                    <Row label="Order ID" value={
+                      detail.payment.razorpay_order_id ? (
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-xs truncate">{detail.payment.razorpay_order_id}</span>
+                          <button onClick={() => copy(detail.payment.razorpay_order_id!)} className="flex-shrink-0"><Copy className="h-3 w-3 text-gray-400" /></button>
+                        </span>
+                      ) : '—'
+                    } />
+                    <Row label="Method" value={<span className="uppercase font-bold text-gray-900">{detail.payment.payment_method || detail.payment.payment_mode || '—'}</span>} />
+                    <Row label="Bank RRN" value={<span className="font-mono text-xs">{(detail.razorpay_raw as any)?.acquirer_data?.rrn || '—'}</span>} />
+                    <Row label="Paid at" value={fmtDate(detail.payment.paid_at)} />
+                  </Sec>
+
+                  <Sec title="Customer">
+                    <Row label="Name" value={detail.payment.customer_name || detail.payment.primary_passenger_name || '—'} />
+                    <Row label="Email" value={detail.payment.customer_email || detail.payment.primary_passenger_email || '—'} />
+                    <Row label="Phone" value={
+                      detail.payment.customer_phone ? (
+                        <a href={`tel:${detail.payment.customer_phone}`} className="text-purple-700">{detail.payment.customer_phone}</a>
+                      ) : '—'
+                    } />
+                  </Sec>
+                </div>
+
+                {/* Method-specific section */}
                 {(detail.payment.vpa || detail.payment.upi_provider) && (
                   <Sec title="UPI">
-                    {detail.payment.vpa && <Row label="VPA" value={detail.payment.vpa} />}
+                    {detail.payment.vpa && <Row label="VPA" value={<span className="font-mono">{detail.payment.vpa}</span>} />}
                     {detail.payment.upi_provider && <Row label="Provider" value={detail.payment.upi_provider} />}
                   </Sec>
                 )}
-
                 {(detail.payment.card_network || detail.payment.card_last4) && (
                   <Sec title="Card">
                     {detail.payment.card_network && <Row label="Network" value={detail.payment.card_network.toUpperCase()} />}
@@ -290,36 +359,33 @@ export default function AdminPaymentsPage() {
                     {detail.payment.card_issuer && <Row label="Issuer" value={detail.payment.card_issuer} />}
                   </Sec>
                 )}
-
                 {detail.payment.bank && <Sec title="Net Banking"><Row label="Bank" value={detail.payment.bank} /></Sec>}
                 {detail.payment.wallet && <Sec title="Wallet"><Row label="Wallet" value={detail.payment.wallet} /></Sec>}
 
-                <Sec title="Trip">
+                <Sec title="Booking & Trip">
                   <Row label="Trip" value={detail.payment.trip_title || '—'} />
                   <Row label="Destination" value={detail.payment.trip_destination || '—'} />
                   <Row label="Booking" value={
-                    <Link href={`/admin/bookings/${detail.payment.booking_id}`} className="text-purple-700 font-semibold underline">
-                      View booking
-                    </Link>
+                    <Link href={`/admin/bookings/${detail.payment.booking_id}`} className="text-purple-700 font-semibold underline">View booking →</Link>
                   } />
                 </Sec>
 
                 {/* Refund history */}
                 <div>
-                  <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-2">Refund History ({detail.refunds.length})</p>
+                  <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-2">Refunds ({detail.refunds.length})</p>
                   {detail.refunds.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No refunds yet.</p>
+                    <div className="bg-gray-50 rounded-xl p-4 text-center">
+                      <p className="text-sm text-gray-500">No refunds yet.</p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {detail.refunds.map(r => (
                         <div key={r.id} className="border border-gray-200 rounded-xl p-3 text-sm">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold">{fmtINR(r.amount)}</span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${r.status === 'processed' ? 'bg-green-100 text-green-700' : r.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {r.status}
-                            </span>
+                            <span className="font-bold text-gray-900">{fmtINR(r.amount)}</span>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${r.status === 'processed' ? 'bg-green-600 text-white' : r.status === 'failed' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white'}`}>{r.status}</span>
                           </div>
-                          <p className="text-xs text-gray-500 font-mono">{r.razorpay_refund_id}</p>
+                          <p className="text-xs text-gray-500 font-mono break-all">{r.razorpay_refund_id}</p>
                           {r.reason && <p className="text-xs text-gray-700 mt-1">Reason: {r.reason}</p>}
                           <p className="text-[10px] text-gray-400 mt-1">{fmtDate(r.created_at)}</p>
                         </div>
@@ -336,6 +402,13 @@ export default function AdminPaymentsPage() {
                   >
                     Initiate Refund
                   </button>
+                )}
+
+                {(!detail.payment.razorpay_order_id || !detail.payment.paid_at) && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                    <p className="font-bold mb-1">⚠️ Some fields missing</p>
+                    <p>This payment was created before rich Razorpay data was captured. Click the <strong>Sync</strong> button (top right) to fetch complete details from Razorpay.</p>
+                  </div>
                 )}
               </div>
             )}
@@ -367,6 +440,43 @@ export default function AdminPaymentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function Timeline({ payment, raw }: { payment: Payment; raw: any }) {
+  // Razorpay-style timeline derived from payment + raw data
+  const events: { label: string; at: string | null; status: 'done' | 'pending' }[] = [];
+  const createdTs = raw?.created_at ? new Date(raw.created_at * 1000).toISOString() : payment.created_at;
+  events.push({ label: 'Payment created', at: createdTs, status: 'done' });
+  // Authorized & captured: Razorpay marks both at the same time for instant methods
+  if (payment.captured || raw?.captured) {
+    events.push({ label: 'Payment authorized', at: payment.paid_at || createdTs, status: 'done' });
+    events.push({ label: 'Payment captured', at: payment.paid_at || createdTs, status: 'done' });
+  } else if (payment.payment_status === 'verified') {
+    events.push({ label: 'Payment authorized', at: payment.paid_at || createdTs, status: 'done' });
+  }
+  // Settlement estimate: T+2 business days (Razorpay default)
+  if (payment.captured || raw?.captured) {
+    const settleBy = new Date(new Date(payment.paid_at || createdTs).getTime() + 2 * 86400000).toISOString();
+    events.push({ label: 'Settlement (to be processed)', at: settleBy, status: 'pending' });
+  }
+  if (payment.payment_status === 'refunded') {
+    events.push({ label: 'Payment refunded', at: null, status: 'done' });
+  }
+  if (payment.payment_status === 'partially_refunded') {
+    events.push({ label: 'Partial refund issued', at: null, status: 'done' });
+  }
+
+  return (
+    <ol className="relative border-l-2 border-gray-200 ml-2 pl-5 space-y-3.5">
+      {events.map((e, i) => (
+        <li key={i} className="relative">
+          <span className={`absolute -left-[27px] top-1 h-3.5 w-3.5 rounded-full ring-4 ring-white ${e.status === 'done' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+          <p className="text-sm font-semibold text-gray-900">{e.label}</p>
+          <p className="text-xs text-gray-500">{e.at ? fmtDate(e.at) : '—'}</p>
+        </li>
+      ))}
+    </ol>
   );
 }
 

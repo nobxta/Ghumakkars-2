@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift } from 'lucide-react';
+import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift, CreditCard } from 'lucide-react';
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
     { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/admin/trips', icon: MapPin, label: 'Trips' },
     { href: '/admin/bookings', icon: Calendar, label: 'Bookings' },
+    { href: '/admin/payments', icon: CreditCard, label: 'Payments' },
     { href: '/admin/users', icon: Users, label: 'Users' },
     { href: '/admin/coupons', icon: Tag, label: 'Coupons' },
     { href: '/admin/referrals', icon: Gift, label: 'Referrals' },
