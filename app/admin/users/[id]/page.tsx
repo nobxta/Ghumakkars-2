@@ -440,7 +440,6 @@ export default function AdminUserDetailsPage() {
                   </div>
                 </div>
               </div>
-            </div>
 
             {/* Stats — three cards only, parent metrics only */}
             <div className="grid grid-cols-3 gap-3 mb-4">
