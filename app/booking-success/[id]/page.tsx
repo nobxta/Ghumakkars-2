@@ -13,6 +13,8 @@ interface Booking {
   total_price?: number;
   amount_paid?: number;
   final_amount?: number;
+  coupon_code?: string | null;
+  coupon_discount?: number | string | null;
   trips?: {
     title?: string;
     destination?: string;
@@ -48,7 +50,7 @@ export default function BookingSuccessPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount,
+        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, coupon_code, coupon_discount,
                  trips:trip_id (title, destination, start_date, end_date)`)
         .eq('id', bookingId)
         .single();
@@ -131,8 +133,13 @@ export default function BookingSuccessPage() {
   const Icon = theme.Icon;
   const trip = booking.trips;
   const shortId = booking.id.slice(0, 8).toUpperCase();
-  const totalAmount = parseFloat(String(booking.total_price || 0));
-  const paidAmount = parseFloat(String(booking.amount_paid || booking.final_amount || 0));
+  // The "total to pay" after coupon is final_amount, NOT total_price
+  const originalPrice = parseFloat(String(booking.total_price || 0));
+  const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
+  const paidAmount = parseFloat(String(booking.amount_paid || 0));
+  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, originalPrice - finalAmount);
+  // Remaining = amount still owed against what user actually has to pay (the discounted total)
+  const remainingAmount = Math.max(0, finalAmount - paidAmount);
 
   return (
     <div className={`fixed inset-0 z-50 bg-gradient-to-br ${theme.bgFrom} ${theme.bgVia} ${theme.bgTo} overflow-y-auto`}>
@@ -214,17 +221,25 @@ export default function BookingSuccessPage() {
           )}
 
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mt-2">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Amount paid</span>
               <span className="font-extrabold text-lg flex items-baseline text-gray-900">
                 <IndianRupee className="h-4 w-4" />{paidAmount.toLocaleString('en-IN')}
               </span>
             </div>
-            {totalAmount > 0 && totalAmount > paidAmount && (
-              <div className="flex items-center justify-between text-xs text-orange-700 mt-1">
+            {couponDiscount > 0 && booking.coupon_code && (
+              <div className="flex items-center justify-between text-xs text-green-700 mt-2 pt-2 border-t border-gray-200">
+                <span className="font-semibold">You saved with {booking.coupon_code}</span>
+                <span className="font-bold flex items-baseline">
+                  <IndianRupee className="h-3 w-3" />{couponDiscount.toLocaleString('en-IN')}
+                </span>
+              </div>
+            )}
+            {remainingAmount > 0 && (
+              <div className="flex items-center justify-between text-xs text-orange-700 mt-2 pt-2 border-t border-gray-200">
                 <span className="font-semibold">Remaining</span>
                 <span className="font-bold flex items-baseline">
-                  <IndianRupee className="h-3 w-3" />{(totalAmount - paidAmount).toLocaleString('en-IN')}
+                  <IndianRupee className="h-3 w-3" />{remainingAmount.toLocaleString('en-IN')}
                 </span>
               </div>
             )}

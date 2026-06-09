@@ -202,9 +202,14 @@ export default function AdminBookingDetailsPage() {
     return null;
   }
 
-  const totalAmount = parseFloat(String(booking.total_price || 0));
-  const paidAmount = parseFloat(String(booking.payment_amount || booking.final_amount || 0));
-  const remainingAmount = totalAmount - paidAmount;
+  // total_price = original price, final_amount = price after coupon
+  // The user only owes final_amount. Don't show remaining for unpaid coupon discount.
+  const originalPrice = parseFloat(String(booking.total_price || 0));
+  const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
+  const paidAmount = parseFloat(String(booking.payment_amount || booking.amount_paid || 0));
+  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, originalPrice - finalAmount);
+  const totalAmount = finalAmount; // what the customer actually owes
+  const remainingAmount = Math.max(0, finalAmount - paidAmount);
   const status = booking.booking_status || 'pending';
   const shortId = booking.id.substring(0, 8).toUpperCase();
   const fmtDate = (d?: string) =>
@@ -310,10 +315,13 @@ export default function AdminBookingDetailsPage() {
           {/* Payment KPI strip */}
           <div className="grid grid-cols-3 divide-x divide-gray-200 bg-white">
             <div className="p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Total</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Payable</p>
               <p className="text-base sm:text-xl font-extrabold text-gray-900 mt-0.5 flex items-baseline justify-center">
-                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{totalAmount.toLocaleString('en-IN')}
+                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{finalAmount.toLocaleString('en-IN')}
               </p>
+              {couponDiscount > 0 && (
+                <p className="text-[10px] text-gray-400 line-through mt-0.5">₹{originalPrice.toLocaleString('en-IN')}</p>
+              )}
             </div>
             <div className="p-3 sm:p-4 text-center">
               <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Paid</p>
@@ -322,10 +330,21 @@ export default function AdminBookingDetailsPage() {
               </p>
             </div>
             <div className="p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Due</p>
-              <p className={`text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center ${remainingAmount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{Math.max(0, remainingAmount).toLocaleString('en-IN')}
-              </p>
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">{remainingAmount > 0 ? 'Due' : 'Saved'}</p>
+              {remainingAmount > 0 ? (
+                <p className="text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center text-orange-600">
+                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{remainingAmount.toLocaleString('en-IN')}
+                </p>
+              ) : couponDiscount > 0 ? (
+                <p className="text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center text-green-700">
+                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{couponDiscount.toLocaleString('en-IN')}
+                </p>
+              ) : (
+                <p className="text-base sm:text-xl font-extrabold mt-0.5 text-gray-400">—</p>
+              )}
+              {!remainingAmount && couponDiscount > 0 && booking.coupon_code && (
+                <p className="text-[10px] text-green-700 font-semibold mt-0.5">{booking.coupon_code}</p>
+              )}
             </div>
           </div>
         </div>
