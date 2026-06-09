@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { IMG } from '@/lib/image';
 import { MapPin, Clock, Users, IndianRupee, Tag, ArrowRight, Search, Filter, Calendar, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 
 interface Trip {
@@ -66,7 +67,7 @@ export default function TripsPage() {
       // Fetch active trips
       const { data: activeData, error: activeError } = await supabase
         .from('trips')
-        .select('*')
+        .select('id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,created_at,updated_at')
         .or('is_active.eq.true,status.eq.active,status.eq.scheduled')
         .order('created_at', { ascending: false });
 
@@ -75,7 +76,7 @@ export default function TripsPage() {
       // Fetch past trips (completed, cancelled, postponed) — only those with show_on_user_side = true (RLS)
       const { data: pastData, error: pastError } = await supabase
         .from('trips')
-        .select('*')
+        .select('id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,created_at,updated_at')
         .in('status', ['completed', 'cancelled', 'postponed'])
         .order('updated_at', { ascending: false })
         .limit(20);
@@ -259,7 +260,7 @@ export default function TripsPage() {
                   >
                     {/* Image */}
                     {displayImage ? (
-                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-48 sm:h-56 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-48 sm:h-56 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${IMG.cardLarge(displayImage)})` }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
                       </Link>
                     ) : (
@@ -402,7 +403,7 @@ export default function TripsPage() {
                     className="bg-white border border-gray-200 rounded-xl overflow-hidden opacity-90 hover:opacity-100 transition-opacity"
                   >
                     {displayImage ? (
-                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-40 sm:h-48 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${displayImage})` }}>
+                      <Link href={`/trips/${trip.slug || trip.id}`} className="block relative h-40 sm:h-48 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${IMG.cardLarge(displayImage)})` }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
                         <div className={`absolute top-3 right-3 ${badgeClass} text-white px-3 py-1 text-xs font-bold rounded-full shadow flex items-center space-x-1`}>
                           <BadgeIcon className="h-3 w-3" />

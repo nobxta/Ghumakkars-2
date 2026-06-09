@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { IMG } from '@/lib/image';
 import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon, Phone } from 'lucide-react';
 
 interface ItineraryDay {
@@ -315,7 +316,7 @@ export default function TripDetailPage() {
           >
             {/* Clone of last image */}
             <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImages[heroImages.length - 1]})` }}></div>
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(heroImages[heroImages.length - 1])})` }}></div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
             </div>
             {heroImages.map((img, i) => (
@@ -325,13 +326,13 @@ export default function TripDetailPage() {
                 className="no-min-touch relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
                 style={{ minWidth: 0, minHeight: 0 }}
               >
-                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img})` }}></div>
+                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(img)})` }}></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
               </button>
             ))}
             {/* Clone of first image */}
             <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImages[0]})` }}></div>
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(heroImages[0])})` }}></div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
             </div>
           </div>
@@ -944,7 +945,7 @@ export default function TripDetailPage() {
             <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
           <img
-            src={galleryImages[galleryIndex]}
+            src={IMG.lightbox(galleryImages[galleryIndex])}
             alt={`${trip.title} ${galleryIndex + 1}`}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
