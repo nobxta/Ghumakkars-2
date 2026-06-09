@@ -23,6 +23,7 @@ interface Payment {
   payment_type: string | null;
   captured: boolean;
   vpa: string | null;
+  upi_provider: string | null;
   card_network: string | null;
   card_type: string | null;
   card_last4: string | null;
