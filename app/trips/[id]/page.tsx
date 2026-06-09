@@ -10,6 +10,7 @@ interface ItineraryDay {
   day?: number;
   title: string;
   description: string;
+  activities?: string[];
 }
 
 interface Trip {
@@ -546,9 +547,25 @@ export default function TripDetailPage() {
                                 </div>
                                 {isOpen ? <ChevronUp className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 flex-shrink-0 ml-2" /> : <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 text-gray-400 flex-shrink-0 ml-2" />}
                               </div>
-                              {isOpen && day.description && (
-                                <div className="px-4 sm:px-5 pb-4 sm:pb-5">
-                                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">{day.description}</p>
+                              {isOpen && (day.description || (Array.isArray((day as any).activities) && (day as any).activities.filter((a: string) => a && a.trim()).length > 0)) && (
+                                <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-3">
+                                  {day.description && (
+                                    <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">{day.description}</p>
+                                  )}
+                                  {Array.isArray((day as any).activities) && (day as any).activities.filter((a: string) => a && a.trim()).length > 0 && (
+                                    <ul className="space-y-2 pt-1">
+                                      {((day as any).activities as string[])
+                                        .filter((a) => a && a.trim())
+                                        .map((activity, ai) => (
+                                          <li key={ai} className="flex items-start gap-2.5 text-sm sm:text-base text-gray-700">
+                                            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
+                                              <Check className="h-3 w-3 text-purple-700" />
+                                            </div>
+                                            <span className="leading-relaxed">{activity}</span>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  )}
                                 </div>
                               )}
                             </button>
