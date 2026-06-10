@@ -162,62 +162,108 @@ const destinationsData: Record<string, {
     ]
   },
   'mussorie': {
-    name: 'Mussorie',
+    name: 'Mussoorie',
     slug: 'mussorie',
-    image: 'https://hblimg.mmtcdn.com/content/hubble/img/destimg/mmt/destination/m_Mussorrie_main_tv_destination_img_1_l_639_958.jpg?w=800&h=600&fit=crop',
-    description: 'Known as the "Queen of Hills", Mussorie is a charming hill station in Uttarakhand offering colonial architecture, beautiful waterfalls, and panoramic views of the Himalayan ranges.',
+    image: 'https://hblimg.mmtcdn.com/content/hubble/img/destimg/mmt/destination/m_Mussorrie_main_tv_destination_img_1_l_639_958.jpg',
+    description: 'Known as the "Queen of the Hills", Mussoorie is a charming hill station in Uttarakhand offering colonial architecture, beautiful waterfalls, and panoramic views of the Himalayan ranges.',
     location: 'Uttarakhand, India',
-    bestTime: 'March to June, September to November',
+    bestTime: 'March to June, September to February',
     culture: {
       title: 'Colonial & Himalayan Heritage',
-      description: 'Mussorie reflects a unique blend of British colonial architecture and Garhwali culture. The town has preserved its colonial charm with heritage buildings, churches, and libraries while maintaining strong local traditions.',
+      description: "Mussoorie's culture is influenced by Garhwali traditions, colonial history, and modern tourism. The town's heritage buildings, churches, old libraries, and local markets reflect its rich significance as a British-era hill station.",
       highlights: [
-        'Colonial-era architecture and churches',
-        'Garhwali folk culture and traditions',
-        'Temple visits and religious festivals',
-        'Local handicrafts and woolen items',
-        'Literary heritage and old libraries',
-        'Traditional Garhwali music and dance'
+        'Traditional Garhwali hospitality',
+        'Colonial-era architecture',
+        'Local handicrafts and souvenirs',
+        'Historic churches and heritage buildings',
+        'Seasonal festivals and cultural events',
+        'Traditional Uttarakhand cuisine'
       ]
     },
     bestThings: {
       title: 'Best Things to Do',
       items: [
-        {
-          icon: Camera,
-          name: 'Scenic Spots',
-          description: 'Visit Kempty Falls, Gun Hill, Lal Tibba, Cloud End, and Camel\'s Back Road'
-        },
-        {
-          icon: Mountain,
-          name: 'Nature Trails',
-          description: 'Trekking, nature walks, cable car rides, and bird watching'
-        },
-        {
-          icon: Utensils,
-          name: 'Local Food',
-          description: 'Try Garhwali thali, Kumaoni dishes, Tibetan momos, and street food at Mall Road'
-        },
-        {
-          icon: Sunrise,
-          name: 'Heritage Sites',
-          description: 'Christ Church, Library Bazaar, and colonial bungalows'
-        }
+        { icon: Camera, name: 'Scenic Viewpoints', description: 'Gun Hill, Lal Tibba, and Camel\'s Back Road for panoramic Himalayan views' },
+        { icon: Mountain, name: 'Nature & Adventure', description: 'Ropeway rides, trekking trails, ziplining, and waterfall exploration' },
+        { icon: Utensils, name: 'Cafés & Local Food', description: 'Garhwali thali, Bal Mithai, momos, and cosy Landour cafés' },
+        { icon: Sunrise, name: 'Heritage Walks', description: 'Mall Road, colonial bungalows, old churches, and Landour\'s old-world charm' }
       ]
     },
     gallery: [
-      'https://hblimg.mmtcdn.com/content/hubble/img/destimg/mmt/destination/m_Mussorrie_main_tv_destination_img_1_l_639_958.jpg?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=800&h=600&fit=crop'
+      'https://img.avianexperiences.com/attraction/68948e9d-be4b-4f88-8f61-e42de809c639',
+      'https://s7ap1.scene7.com/is/image/incredibleindia/gun-hill-top-mussourie-uttarakhand-1-attr-hero?qlt=82&ts=1727352381893',
+      'https://media.holidify.com/images/cmsuploads/compressed/uk-mussoorie-camels-back-road-01_20241205154031.jpg',
+      'https://i0.wp.com/stampedmoments.com/wp-content/uploads/2025/07/landour-street.jpg?fit=1024%2C768&ssl=1',
+      'https://mussoorietourism.co.in/images/tourist-places/company-garden-mussoorie/company-garden-mussoorie-tourism-holidays-closed-on-timings.jpg'
     ],
     tips: [
-      'Best visited during spring and autumn for pleasant weather',
-      'Carry an umbrella during monsoon season',
-      'Enjoy the Mall Road for shopping and local food',
-      'Visit during off-season for fewer crowds',
-      'Wear comfortable shoes for walking'
+      'Carry warm clothing even during summer evenings.',
+      'Wear comfortable walking shoes — there\'s a lot to explore on foot.',
+      'Book hotels in advance during weekends and holidays.',
+      'Start sightseeing early to avoid traffic congestion.',
+      'Keep cash handy for local purchases.',
+      'Respect local customs and environmental guidelines.',
+      'Avoid peak hours around Mall Road and Kempty Falls.'
     ],
-    nearbyDestinations: ['Landour', 'Dehradun', 'Rishikesh', 'Haridwar']
+    nearbyDestinations: ['Landour', 'Dhanaulti', 'Dehradun', 'Kanatal', 'Chakrata', 'Tehri Lake', 'George Everest Peak', 'Surkanda Devi Temple'],
+    altitude: '~2,000 m above sea level',
+    nearestAirport: 'Jolly Grant, Dehradun (~60 km)',
+    idealDuration: '2 to 3 days',
+    intro: [
+      'Popularly known as the "Queen of the Hills", Mussoorie is one of India\'s most iconic hill stations, nestled in the picturesque Garhwal Himalayas of Uttarakhand. Perched at around 2,000 metres above sea level, this charming mountain town offers breathtaking Himalayan views, colonial-era architecture, scenic walking trails, waterfalls, and a peaceful escape from city life.',
+      'Located just a short drive from Dehradun, Mussoorie attracts honeymooners, families, solo travellers, photographers, and adventure enthusiasts all year round. Whether you want mist-covered mountains, vibrant cafés, nature walks, or stunning viewpoints, Mussoorie delivers an unforgettable Himalayan experience.'
+    ],
+    whyVisit: {
+      text: 'Mussoorie perfectly blends natural beauty, colonial heritage, and modern tourism facilities — panoramic snow-capped peaks, lush green valleys, waterfalls, bustling markets, and charming cafés.',
+      highlights: [
+        'Spectacular Himalayan mountain views',
+        'Famous Mall Road shopping and cafés',
+        'Beautiful waterfalls and nature trails',
+        'Colonial-era architecture and heritage sites',
+        'Ropeway rides and scenic viewpoints',
+        'A romantic getaway for couples',
+        'Pleasant weather most of the year',
+        'Easy access from Delhi and Dehradun'
+      ]
+    },
+    topPlaces: [
+      { name: 'Kempty Falls', description: 'One of Mussoorie\'s most famous attractions, surrounded by scenic hills and lush greenery. About 15 km from town, it\'s a favourite picnic spot for a refreshing mountain experience.', image: 'https://img.avianexperiences.com/attraction/68948e9d-be4b-4f88-8f61-e42de809c639' },
+      { name: 'Gun Hill', description: 'The second-highest peak in Mussoorie, offering stunning panoramic views of the Garhwal Himalayas and Doon Valley. Reach the viewpoint via an exciting ropeway ride from Mall Road.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/gun-hill-top-mussourie-uttarakhand-1-attr-hero?qlt=82&ts=1727352381893' },
+      { name: 'Lal Tibba', description: 'Located in Landour, Lal Tibba is the highest viewpoint in the region. On clear days you can see snow-covered Himalayan peaks through observation telescopes.', image: 'https://themanorhousehomestays.com/wp-content/uploads/2026/03/scscdw.png' },
+      { name: 'Mall Road', description: 'The heart of Mussoorie — lined with cafés, restaurants, bakeries, and souvenir shops. Perfect for evening strolls, shopping, and soaking up the lively atmosphere.', image: 'https://img.avianexperiences.com/attractions/f7842913-c82c-4be2-b5d5-2841824f7d42' },
+      { name: 'Camel\'s Back Road', description: 'Known for peaceful walking trails and spectacular sunset views, this serene route offers an escape from the crowds with stunning mountain vistas.', image: 'https://media.holidify.com/images/cmsuploads/compressed/uk-mussoorie-camels-back-road-01_20241205154031.jpg' },
+      { name: 'Landour', description: 'A charming colonial town next to Mussoorie, famous for its peaceful atmosphere, heritage buildings, scenic cafés, and old-world charm.', image: 'https://i0.wp.com/stampedmoments.com/wp-content/uploads/2025/07/landour-street.jpg?fit=1024%2C768&ssl=1' },
+      { name: 'Company Garden', description: 'A beautifully maintained garden with colourful flowers, boating, and recreational activities — a popular spot for families.', image: 'https://mussoorietourism.co.in/images/tourist-places/company-garden-mussoorie/company-garden-mussoorie-tourism-holidays-closed-on-timings.jpg' }
+    ],
+    adventure: {
+      text: 'Mussoorie offers plenty of outdoor activities for adventure lovers and nature enthusiasts, plus excellent nature walks and birdwatching in the surrounding hills.',
+      activities: [
+        'Ropeway ride to Gun Hill',
+        'Trekking and hiking trails',
+        'Ziplining and adventure activities',
+        'Nature photography',
+        'Mountain biking',
+        'Camping experiences',
+        'Horse riding',
+        'Waterfall exploration'
+      ]
+    },
+    food: {
+      text: 'A visit to Mussoorie is incomplete without exploring its food culture. The cafés of Mussoorie and Landour are especially loved for their scenic views and cosy atmosphere.',
+      dishes: ['Garhwali Thali', 'Kafuli', 'Aloo Ke Gutke', 'Chainsoo', 'Bal Mithai', 'Momos & Tibetan food', 'Fresh bakery products', 'Local mountain tea']
+    },
+    seasons: [
+      { name: 'Summer', months: 'March to June', points: ['Pleasant weather', 'Ideal for sightseeing', 'Great for family vacations', 'Adventure activities in full swing'] },
+      { name: 'Monsoon', months: 'July to September', points: ['Lush green landscapes', 'Beautiful cloud-covered mountains', 'Fewer crowds', 'Occasional road disruptions'] },
+      { name: 'Winter', months: 'October to February', points: ['Cold temperatures', 'Chance of snowfall', 'Romantic atmosphere', 'Clear Himalayan views'] }
+    ],
+    faqs: [
+      { q: 'Why is Mussoorie called the Queen of the Hills?', a: 'Mussoorie earned the title for its stunning mountain scenery, pleasant climate, colonial charm, and popularity as one of India\'s most beautiful hill stations.' },
+      { q: 'Is 2 days enough for Mussoorie?', a: 'Yes. A 2 to 3-day trip is enough to cover major attractions like Mall Road, Gun Hill, Kempty Falls, Landour, and Lal Tibba.' },
+      { q: 'Does Mussoorie receive snowfall?', a: 'Yes. Snowfall usually occurs during December and January, drawing visitors from across India.' },
+      { q: 'Is Mussoorie suitable for family trips?', a: 'Absolutely. Mussoorie has family-friendly attractions, scenic viewpoints, gardens, waterfalls, and comfortable stays.' },
+      { q: 'What is the nearest airport and railway station?', a: 'The nearest airport is Jolly Grant Airport in Dehradun, and Dehradun Railway Station is the nearest major railhead.' }
+    ]
   },
   'kasol': {
     name: 'Kasol',
