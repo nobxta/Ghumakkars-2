@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Camera, Utensils, Mountain, Waves, Sunrise, Calendar, Users, Star, ArrowRight, Heart, Share2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Camera, Utensils, Mountain, Waves, Sunrise, Calendar, Users, Star, ArrowRight, Heart, Share2, Plane, TrendingUp, Clock, Check, Snowflake, Sun, CloudRain, ChevronDown } from 'lucide-react';
 import ScrollAnimation from '@/components/ScrollAnimation';
 
 const destinationsData: Record<string, {
@@ -29,11 +29,22 @@ const destinationsData: Record<string, {
   gallery: string[];
   tips: string[];
   nearbyDestinations: string[];
+  // Optional rich article content (only some destinations have it)
+  intro?: string[];
+  whyVisit?: { text: string; highlights: string[] };
+  topPlaces?: { name: string; description: string; image?: string }[];
+  adventure?: { text: string; activities: string[]; treks?: string[] };
+  food?: { text: string; dishes: string[] };
+  seasons?: { name: string; months: string; points: string[] }[];
+  faqs?: { q: string; a: string }[];
+  altitude?: string;
+  nearestAirport?: string;
+  idealDuration?: string;
 }> = {
   'manali': {
     name: 'Manali',
     slug: 'manali',
-    image: 'https://www.tripstorz.com/_astro/houses-surrounded-by-green-trees-in-manali-during-daytime.DAktkgeM_90jep.jpg?w=800&h=600&fit=crop',
+    image: 'https://d2rdhxfof4qmbb.cloudfront.net/wp-content/uploads/2024/09/Manali_City.jpg',
     description: 'Nestled in the Pir Panjal and Dhauladhar ranges of the Himalayas, Manali is a breathtaking hill station that offers stunning landscapes, adventure activities, and rich cultural experiences.',
     location: 'Himachal Pradesh, India',
     bestTime: 'March to June, October to February',
@@ -75,18 +86,80 @@ const destinationsData: Record<string, {
       ]
     },
     gallery: [
-      'https://www.tripstorz.com/_astro/houses-surrounded-by-green-trees-in-manali-during-daytime.DAktkgeM_90jep.jpg?w=800&h=600&fit=crop',
-      'https://www.tusktravel.com/blog/wp-content/uploads/2021/02/Solang-Valley-Manali.jpg?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop'
+      'https://s7ap1.scene7.com/is/image/incredibleindia/hidimba-temple-manali-himachal-pradesh-1-musthead-hero?qlt=82&ts=1726730732148',
+      'https://discoverkullumanali.in/wp-content/uploads/2020/11/Solang-valley-in-Manali-1089x530.jpg',
+      'https://s7ap1.scene7.com/is/image/incredibleindia/rohtang-pass-manali-himachal-pradesh-1-attr-hero?qlt=82&ts=1726730701545',
+      'https://apnayatra.com/wp-content/uploads/2025/03/Jogini-Waterfalls-Manali-3.jpg',
+      'https://d2rdhxfof4qmbb.cloudfront.net/wp-content/uploads/2024/09/Manali_City.jpg'
     ],
     tips: [
-      'Carry warm clothes as temperatures can drop significantly',
-      'Book adventure activities in advance during peak season',
-      'Respect local customs and traditions',
-      'Try local Himachali cuisine for authentic experience',
-      'Carry cash as ATMs may be limited in remote areas'
+      'Carry warm clothing throughout the year — even summer evenings get cold.',
+      'Book hotels and activities early during peak season (May–June, Dec–Jan).',
+      'Keep valid ID proof handy for permits and hotel check-ins.',
+      'Stay hydrated when travelling to higher altitudes like Rohtang.',
+      'Respect local customs and religious sites.',
+      'Carry some cash when visiting remote areas — ATMs are limited.',
+      'Check weather conditions before heading to Rohtang Pass.'
     ],
-    nearbyDestinations: ['Solang Valley', 'Rohtang Pass', 'Kasol', 'Kullu']
+    nearbyDestinations: ['Solang Valley', 'Rohtang Pass', 'Sissu', 'Kasol', 'Tosh', 'Kullu', 'Naggar', 'Jibhi', 'Tirthan Valley'],
+    altitude: '~2,050 m above sea level',
+    nearestAirport: 'Bhuntar Airport (~50 km)',
+    idealDuration: '4 to 6 days',
+    intro: [
+      "Nestled in the heart of the Himalayas, Manali is one of India's most loved hill stations and a dream destination for nature lovers, adventure seekers, honeymooners, and backpackers. Surrounded by snow-capped peaks, dense pine forests, flowing rivers, and picturesque valleys, it's the perfect escape from busy city life.",
+      'Located in the Kullu district of Himachal Pradesh at roughly 2,050 metres above sea level, Manali is the gateway to iconic spots like Rohtang Pass, Solang Valley, Sissu, Atal Tunnel, and Leh-Ladakh. Whether you want thrilling adventure sports, peaceful mountain views, vibrant local culture, or a relaxed family holiday, Manali has something for everyone.'
+    ],
+    whyVisit: {
+      text: 'Manali combines breathtaking natural beauty with exciting outdoor experiences. From snow-covered landscapes in winter to lush green valleys in summer, every season offers a completely different charm.',
+      highlights: [
+        'Stunning Himalayan mountain views',
+        'Famous Solang Valley adventure activities',
+        'Scenic drives through Rohtang Pass and Atal Tunnel',
+        'Ancient temples and cultural landmarks',
+        'Riverside cafés and vibrant markets',
+        'Snowfall experiences in winter',
+        'Trekking routes for beginners and pros',
+        'A romantic getaway for couples'
+      ]
+    },
+    topPlaces: [
+      { name: 'Hadimba Devi Temple', description: 'Built amidst towering cedar forests, this iconic temple is known for its unique wooden architecture and peaceful surroundings. A must-visit in Manali.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/hidimba-temple-manali-himachal-pradesh-1-musthead-hero?qlt=82&ts=1726730732148' },
+      { name: 'Solang Valley', description: 'The adventure capital of Manali — paragliding, ziplining, ATV rides, skiing, snowboarding, and cable car experiences all in one stunning valley.', image: 'https://discoverkullumanali.in/wp-content/uploads/2020/11/Solang-valley-in-Manali-1089x530.jpg' },
+      { name: 'Rohtang Pass', description: 'At over 13,000 feet, Rohtang offers breathtaking panoramic views of glaciers, mountains and valleys. One of the most popular day trips from Manali.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/rohtang-pass-manali-himachal-pradesh-1-attr-hero?qlt=82&ts=1726730701545' },
+      { name: 'Jogini Waterfall', description: 'A scenic trek through pine forests and local villages leads to this beautiful waterfall — perfect for photography and nature lovers.', image: 'https://apnayatra.com/wp-content/uploads/2025/03/Jogini-Waterfalls-Manali-3.jpg' },
+      { name: 'Old Manali', description: 'Famous for its relaxed atmosphere, charming cafés, live music venues and backpacker culture — a completely different vibe from the main town.' },
+      { name: 'Manu Temple', description: 'Dedicated to Sage Manu, this historic temple is an important cultural and spiritual landmark set in the quiet surroundings of Old Manali.' }
+    ],
+    adventure: {
+      text: "Manali is one of India's leading adventure tourism destinations, with activities for every thrill level.",
+      activities: [
+        'Paragliding in Solang Valley',
+        'River rafting on the Beas River',
+        'Skiing and snowboarding in winter',
+        'Mountain biking trails',
+        'Ziplining and rope activities',
+        'ATV rides',
+        'Camping under the stars',
+        'Himalayan trekking expeditions'
+      ],
+      treks: ['Hampta Pass Trek', 'Bhrigu Lake Trek', 'Beas Kund Trek', 'Chandrakhani Pass Trek']
+    },
+    food: {
+      text: 'A trip to Manali is incomplete without experiencing local Himachali cuisine. The cafés of Old Manali also serve a wide range of international dishes.',
+      dishes: ['Himachali Dham', 'Sidu', 'Babru', 'Trout Fish', 'Madra', 'Chha Gosht', 'Local apple cider & apple products', 'Fresh mountain honey']
+    },
+    seasons: [
+      { name: 'Summer', months: 'March to June', points: ['Pleasant weather', 'Ideal for sightseeing', 'Peak adventure-sports season', 'Perfect for family vacations'] },
+      { name: 'Monsoon', months: 'July to September', points: ['Lush green landscapes', 'Fewer crowds', 'Occasional landslides & road disruptions'] },
+      { name: 'Winter', months: 'October to February', points: ['Snowfall season', 'Skiing & snow activities', 'Romantic atmosphere for couples', 'Spectacular mountain views'] }
+    ],
+    faqs: [
+      { q: 'Is Manali worth visiting?', a: "Yes. Manali is one of India's most scenic mountain destinations and offers a perfect mix of nature, adventure, culture and relaxation." },
+      { q: 'How many days are enough for Manali?', a: 'A 4 to 6-day trip is ideal for exploring the major attractions and nearby destinations.' },
+      { q: 'Does Manali receive snowfall?', a: 'Yes. Snowfall typically occurs between December and February.' },
+      { q: 'Is Manali suitable for family trips?', a: 'Absolutely. Families, couples, solo travellers and groups all enjoy Manali’s diverse experiences.' },
+      { q: 'What is the nearest airport to Manali?', a: 'Bhuntar Airport, around 50 km away, is the nearest airport.' }
+    ]
   },
   'mussorie': {
     name: 'Mussorie',
@@ -413,6 +486,23 @@ export default function DestinationDetailPage() {
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
+      {/* FAQ structured data for Google rich results */}
+      {destination.faqs && destination.faqs.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: destination.faqs.map((f) => ({
+                '@type': 'Question',
+                name: f.q,
+                acceptedAnswer: { '@type': 'Answer', text: f.a },
+              })),
+            }),
+          }}
+        />
+      )}
       {/* Hero Section */}
       <div className="relative h-96 md:h-[500px] lg:h-[600px] overflow-hidden">
         <div
@@ -448,12 +538,170 @@ export default function DestinationDetailPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        {/* Description */}
-        <ScrollAnimation className="mb-12">
-          <p className="text-lg md:text-xl text-gray-700 leading-relaxed max-w-4xl">
-            {destination.description}
-          </p>
+        {/* Description / Intro */}
+        <ScrollAnimation className="mb-10">
+          {destination.intro ? (
+            <div className="max-w-4xl space-y-4">
+              {destination.intro.map((para, i) => (
+                <p key={i} className="text-lg md:text-xl text-gray-700 leading-relaxed">{para}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-lg md:text-xl text-gray-700 leading-relaxed max-w-4xl">
+              {destination.description}
+            </p>
+          )}
         </ScrollAnimation>
+
+        {/* Quick facts strip */}
+        {(destination.altitude || destination.nearestAirport || destination.idealDuration) && (
+          <ScrollAnimation className="mb-12">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white rounded-2xl border border-purple-100 p-4 shadow-sm">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center mb-2"><Calendar className="h-5 w-5 text-purple-600" /></div>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Best time</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{destination.bestTime}</p>
+              </div>
+              {destination.altitude && (
+                <div className="bg-white rounded-2xl border border-purple-100 p-4 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center mb-2"><TrendingUp className="h-5 w-5 text-blue-600" /></div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Altitude</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{destination.altitude}</p>
+                </div>
+              )}
+              {destination.idealDuration && (
+                <div className="bg-white rounded-2xl border border-purple-100 p-4 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center mb-2"><Clock className="h-5 w-5 text-green-600" /></div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Ideal trip</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{destination.idealDuration}</p>
+                </div>
+              )}
+              {destination.nearestAirport && (
+                <div className="bg-white rounded-2xl border border-purple-100 p-4 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-fuchsia-100 flex items-center justify-center mb-2"><Plane className="h-5 w-5 text-fuchsia-600" /></div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Nearest airport</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{destination.nearestAirport}</p>
+                </div>
+              )}
+            </div>
+          </ScrollAnimation>
+        )}
+
+        {/* Why Visit */}
+        {destination.whyVisit && (
+          <ScrollAnimation className="mb-12">
+            <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 rounded-2xl border border-purple-100 p-8 md:p-10">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 tracking-tight">Why visit {destination.name}?</h2>
+              <p className="text-base md:text-lg text-gray-700 mb-6 leading-relaxed max-w-3xl">{destination.whyVisit.text}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {destination.whyVisit.highlights.map((h, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5"><Check className="h-3 w-3 text-white" /></div>
+                    <p className="text-gray-800">{h}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ScrollAnimation>
+        )}
+
+        {/* Top Places to Visit */}
+        {destination.topPlaces && destination.topPlaces.length > 0 && (
+          <ScrollAnimation className="mb-12">
+            <h2 className="text-3xl md:text-4xl font-light text-gray-900 mb-8 tracking-tight">Top places to visit</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {destination.topPlaces.map((place, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-purple-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group">
+                  {place.image && (
+                    <div className="h-48 overflow-hidden">
+                      <img src={place.image} alt={place.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    </div>
+                  )}
+                  <div className="p-5 sm:p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1.5 flex items-center gap-2"><MapPin className="h-4 w-4 text-purple-600 flex-shrink-0" />{place.name}</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">{place.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollAnimation>
+        )}
+
+        {/* Adventure activities */}
+        {destination.adventure && (
+          <ScrollAnimation className="mb-12">
+            <div className="bg-white rounded-2xl border-2 border-purple-100 shadow-xl p-8 md:p-10">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center"><Mountain className="h-5 w-5 text-orange-600" /></div>
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Adventure activities</h2>
+              </div>
+              <p className="text-base text-gray-700 mb-6 leading-relaxed max-w-3xl">{destination.adventure.text}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-6">
+                {destination.adventure.activities.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-gray-50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></div>
+                    <span className="text-sm text-gray-800">{a}</span>
+                  </div>
+                ))}
+              </div>
+              {destination.adventure.treks && destination.adventure.treks.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-2">Popular treks</p>
+                  <div className="flex flex-wrap gap-2">
+                    {destination.adventure.treks.map((t, i) => (
+                      <span key={i} className="px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 text-sm font-semibold">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollAnimation>
+        )}
+
+        {/* Food */}
+        {destination.food && (
+          <ScrollAnimation className="mb-12">
+            <div className="bg-white rounded-2xl border-2 border-purple-100 shadow-xl p-8 md:p-10">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center"><Utensils className="h-5 w-5 text-amber-600" /></div>
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Food to try</h2>
+              </div>
+              <p className="text-base text-gray-700 mb-6 leading-relaxed max-w-3xl">{destination.food.text}</p>
+              <div className="flex flex-wrap gap-2">
+                {destination.food.dishes.map((d, i) => (
+                  <span key={i} className="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-sm font-semibold">{d}</span>
+                ))}
+              </div>
+            </div>
+          </ScrollAnimation>
+        )}
+
+        {/* Seasons */}
+        {destination.seasons && destination.seasons.length > 0 && (
+          <ScrollAnimation className="mb-12">
+            <h2 className="text-3xl md:text-4xl font-light text-gray-900 mb-8 tracking-tight">Best time to visit</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {destination.seasons.map((s, i) => {
+                const Icon = s.name === 'Winter' ? Snowflake : s.name === 'Monsoon' ? CloudRain : Sun;
+                const tone = s.name === 'Winter' ? 'blue' : s.name === 'Monsoon' ? 'green' : 'amber';
+                return (
+                  <div key={i} className="bg-white rounded-2xl border border-purple-100 p-6 shadow-sm">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 ${tone === 'blue' ? 'bg-blue-100' : tone === 'green' ? 'bg-green-100' : 'bg-amber-100'}`}>
+                      <Icon className={`h-6 w-6 ${tone === 'blue' ? 'text-blue-600' : tone === 'green' ? 'text-green-600' : 'text-amber-600'}`} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">{s.name}</h3>
+                    <p className="text-xs text-gray-500 mb-3">{s.months}</p>
+                    <ul className="space-y-1.5">
+                      {s.points.map((p, j) => (
+                        <li key={j} className="text-sm text-gray-700 flex items-start gap-2"><Check className="h-3.5 w-3.5 text-purple-500 mt-0.5 flex-shrink-0" />{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollAnimation>
+        )}
 
         {/* Culture Section */}
         <ScrollAnimation className="mb-12">
@@ -563,6 +811,24 @@ export default function DestinationDetailPage() {
             </div>
           </ScrollAnimation>
         </div>
+
+        {/* FAQ */}
+        {destination.faqs && destination.faqs.length > 0 && (
+          <ScrollAnimation className="mb-12">
+            <h2 className="text-3xl md:text-4xl font-light text-gray-900 mb-8 tracking-tight">Frequently asked questions</h2>
+            <div className="space-y-3 max-w-3xl">
+              {destination.faqs.map((f, i) => (
+                <details key={i} className="group bg-white rounded-2xl border border-purple-100 overflow-hidden">
+                  <summary className="flex items-center justify-between gap-3 p-5 cursor-pointer list-none font-semibold text-gray-900 hover:bg-purple-50/50">
+                    {f.q}
+                    <ChevronDown className="h-5 w-5 text-purple-600 flex-shrink-0 group-open:rotate-180 transition-transform" />
+                  </summary>
+                  <div className="px-5 pb-5 text-gray-700 leading-relaxed">{f.a}</div>
+                </details>
+              ))}
+            </div>
+          </ScrollAnimation>
+        )}
 
         {/* CTA Section */}
         <ScrollAnimation>
