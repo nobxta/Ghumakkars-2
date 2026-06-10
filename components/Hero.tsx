@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Calendar, MapPin, TrendingUp, Shield } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 
 export default function Hero() {
   return (
@@ -32,58 +32,33 @@ export default function Hero() {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-12 sm:py-16 md:py-24 lg:py-32">
-        {/* Main Heading */}
-        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold mb-4 sm:mb-5 md:mb-6 lg:mb-8 text-gray-900 tracking-tight animate-fade-in leading-[1.1] sm:leading-tight px-2">
-          Go somewhere new
-          <span className="block mt-1 sm:mt-2 md:mt-3 font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+        {/* Main Heading — editorial serif */}
+        <h1 className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold mb-6 sm:mb-7 md:mb-8 text-gray-900 tracking-tight animate-fade-in leading-[1.05] px-2">
+          Your next travel story starts{' '}
+          <span className="italic font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
             this weekend.
           </span>
         </h1>
 
-        {/* Primary Description */}
-        <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-gray-700 mb-3 sm:mb-4 md:mb-5 lg:mb-6 max-w-3xl mx-auto px-2 sm:px-4 animate-fade-in-delay font-medium leading-relaxed">
-          We plan group trips to Manali, Goa, Rishikesh, Kashmir and 50+ places across India. You just show up.
+        {/* Description */}
+        <p className="text-base sm:text-lg md:text-xl text-gray-700 mb-8 sm:mb-10 max-w-2xl mx-auto px-2 sm:px-4 animate-fade-in-delay font-medium leading-relaxed">
+          Join verified group trips across India. Travel with like-minded people, not random tour buses.
         </p>
-
-        {/* Secondary Description */}
-        <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-600 mb-6 sm:mb-8 md:mb-10 lg:mb-12 max-w-2xl mx-auto px-2 sm:px-4 animate-fade-in-delay leading-relaxed">
-          Stays, transport, itinerary — all sorted. Pay upfront or lock your seat with a deposit. No hidden charges, we promise.
-        </p>
-
-        {/* Feature Pills */}
-        <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3 md:gap-4 mb-6 sm:mb-8 md:mb-10 lg:mb-12 px-2 sm:px-4 animate-fade-in-delay-2">
-          <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
-            <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Small Groups</span>
-          </div>
-          <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
-            <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Multiple Dates</span>
-          </div>
-          <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
-            <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">No Hidden Costs</span>
-          </div>
-          <div className="flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-sm px-3.5 sm:px-4 md:px-5 py-2 sm:py-2.5 rounded-full shadow-md hover:shadow-lg hover:border-purple-300 hover:bg-white transition-all duration-200">
-            <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" />
-            <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-800 tracking-wide">Vetted Stays</span>
-          </div>
-        </div>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 md:gap-4 justify-center items-center animate-fade-in-delay-2 px-2 sm:px-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center animate-fade-in-delay-2 px-2 sm:px-4">
           <a
             href="/trips"
-            className="group w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-700 text-white px-7 sm:px-8 md:px-10 py-3 sm:py-3.5 md:py-4 text-sm sm:text-base md:text-base font-semibold tracking-wide uppercase hover:from-purple-700 hover:to-purple-800 transition-all duration-200 inline-flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-100"
+            className="group w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-700 text-white px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base font-semibold tracking-wide hover:from-purple-700 hover:to-purple-800 transition-all duration-200 inline-flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-100"
           >
             <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-2 group-hover:animate-pulse" />
-            See Upcoming Trips
+            Explore Trips
           </a>
           <a
-            href="/auth/signup"
-            className="w-full sm:w-auto border-2 border-purple-600 text-purple-700 bg-white/90 backdrop-blur-sm px-7 sm:px-8 md:px-10 py-3 sm:py-3.5 md:py-4 text-sm sm:text-base md:text-base font-semibold tracking-wide uppercase hover:bg-purple-50 hover:border-purple-700 transition-all duration-200 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 active:scale-100"
+            href="/#about"
+            className="w-full sm:w-auto border-2 border-purple-600 text-purple-700 bg-white/90 backdrop-blur-sm px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base font-semibold tracking-wide hover:bg-purple-50 hover:border-purple-700 transition-all duration-200 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 active:scale-100"
           >
-            Create Free Account
+            How It Works
           </a>
         </div>
       </div>

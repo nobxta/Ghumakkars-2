@@ -30,6 +30,10 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Playfair Display — used for editorial hero headings */
+  .font-display {
+    font-family: var(--font-playfair), Georgia, 'Times New Roman', serif;
+  }
 }
 
 /* ─────────────────── Admin form-control sizing utilities ───────────────────
