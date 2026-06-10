@@ -137,7 +137,6 @@ export default function SignInClient() {
             const tokenHash = data.token_hash ?? (data.magicLink ? (() => { try { const u = new URL(data.magicLink); return u.searchParams.get('token_hash') ?? u.searchParams.get('token'); } catch { return null; } })() : null);
 
             // #region agent log
-            fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'SignInClient.tsx:verifyOtp',message:'before verifyOtp',data:{hasTokenHash:!!tokenHash,tokenHashLen:tokenHash?.length,hasMagicLink:!!data.magicLink},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
             // #endregion
 
             if (tokenHash) {
@@ -146,7 +145,6 @@ export default function SignInClient() {
               });
 
               // #region agent log
-              if (verifyError) fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'SignInClient.tsx:verifyOtp',message:'verifyOtp error',data:{errorMessage:verifyError?.message,errorCode:verifyError?.code},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
               // #endregion
 
               if (verifyError) throw verifyError;

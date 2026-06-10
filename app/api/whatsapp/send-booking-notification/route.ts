@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getWhatsAppService } from '@/lib/whatsapp';
+import { requireAdmin, isInternalRequest } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 
@@ -8,9 +9,17 @@ export const runtime = "nodejs";
  * Send WhatsApp notification for booking confirmation
  * POST /api/whatsapp/send-booking-notification
  * Body: { bookingId: string }
+ *
+ * Auth: internal secret (server-to-server, e.g. webhook) OR admin session.
+ * Without this gate, anyone could spam customers via our WhatsApp account.
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isInternalRequest(request)) {
+      const auth = await requireAdmin();
+      if (auth instanceof NextResponse) return auth;
+    }
+
     const { bookingId } = await request.json();
 
     if (!bookingId) {

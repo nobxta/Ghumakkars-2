@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWhatsAppService } from '@/lib/whatsapp';
+import { requireAdmin } from '@/lib/auth-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,11 @@ export const dynamic = 'force-dynamic';
  */
 async function handler() {
   try {
+    // Admin-only: the QR code in the response would let anyone hijack
+    // the WhatsApp session by scanning it first.
+    const auth = await requireAdmin();
+    if (auth instanceof NextResponse) return auth;
+
     const whatsapp = getWhatsAppService();
 
     if (!whatsapp.isPackageInstalled()) {

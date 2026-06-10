@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWhatsAppService } from '@/lib/whatsapp';
+import { requireAdmin } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic';
@@ -8,9 +9,15 @@ export const dynamic = 'force-dynamic';
  * Send test WhatsApp notification with mock booking details
  * POST /api/whatsapp/test-notification
  * Body: { phoneNumber: string, userName: string }
+ *
+ * Admin-only: prevents anyone using our WhatsApp account to message
+ * arbitrary phone numbers.
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if (auth instanceof NextResponse) return auth;
+
     const { phoneNumber, userName } = await request.json();
 
     if (!phoneNumber || !userName) {

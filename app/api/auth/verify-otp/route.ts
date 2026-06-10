@@ -107,7 +107,6 @@ export async function POST(request: NextRequest) {
       } catch {}
     }
     const queryKeys = actionLink ? Array.from(new URL(actionLink).searchParams.keys()) : [];
-    fetch('http://127.0.0.1:7245/ingest/bb06f43a-5249-47f3-a9d7-c841981aadc5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7d8f21'},body:JSON.stringify({sessionId:'7d8f21',location:'verify-otp/route.ts:response',message:'generateLink response',data:{hasActionLink:!!actionLink,queryParamKeys:queryKeys,hasHashedToken:!!hashedToken,hasFromUrl:!!fromUrl},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
     // #endregion
 
     const tokenHash = hashedToken ?? fromUrl ?? undefined;

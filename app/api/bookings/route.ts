@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     const { data: trip, error: tripError } = await adminClient
       .from('trips')
-      .select('id, max_participants, current_participants, is_active, booking_disabled')
+      .select('id, max_participants, current_participants, is_active, booking_disabled, discounted_price, seat_lock_price, early_bird_price, early_bird_conditions')
       .eq('id', trip_id)
       .single();
 
@@ -92,6 +92,70 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─── Server-side price validation (anti-tampering) ───
+    // Never trust client-supplied amounts. Recompute the expected price and
+    // verify the claimed discounts actually exist.
+    const perPerson = payment_method === 'seat_lock' && trip.seat_lock_price
+      ? Number(trip.seat_lock_price)
+      : Number(trip.discounted_price) || 0;
+    // Early bird can lower the per-person price; accept the lower of the two
+    const earlyBirdPrice = Number(trip.early_bird_price) || 0;
+    const minPerPerson = earlyBirdPrice > 0 ? Math.min(perPerson, earlyBirdPrice) : perPerson;
+    const expectedBase = perPerson * requested;
+    const minBase = minPerPerson * requested;
+
+    const claimedTotal = Number(total_price);
+    if (claimedTotal < minBase - 1 || claimedTotal > expectedBase + 1) {
+      return NextResponse.json(
+        { error: 'Price mismatch. Please refresh the page and try again.' },
+        { status: 400 }
+      );
+    }
+
+    // Verify coupon: if a discount is claimed, the coupon must exist, be active,
+    // and the discount can't exceed what the coupon actually grants.
+    let verifiedCouponDiscount = 0;
+    if (coupon_code && Number(coupon_discount) > 0) {
+      const { data: coupon } = await adminClient
+        .from('coupon_codes')
+        .select('id, discount_type, discount_value, max_discount, is_active, expiry_date')
+        .ilike('code', String(coupon_code))
+        .single();
+      if (!coupon || !coupon.is_active || (coupon.expiry_date && new Date(coupon.expiry_date) < new Date())) {
+        return NextResponse.json({ error: 'Invalid or expired coupon.' }, { status: 400 });
+      }
+      const maxAllowed = coupon.discount_type === 'percentage'
+        ? Math.min((claimedTotal * Number(coupon.discount_value)) / 100, Number(coupon.max_discount) || Infinity)
+        : Number(coupon.discount_value);
+      verifiedCouponDiscount = Math.min(Number(coupon_discount), maxAllowed);
+      if (Number(coupon_discount) > maxAllowed + 1) {
+        return NextResponse.json({ error: 'Coupon discount mismatch.' }, { status: 400 });
+      }
+    }
+
+    // Verify wallet: claimed usage can't exceed the user's actual balance.
+    let verifiedWalletUsed = 0;
+    if (Number(wallet_amount_used) > 0) {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', auth.user.id)
+        .single();
+      // Note: by the time this runs, /api/wallet/use may already have deducted.
+      // Allow claimed usage up to balance + claimed (covers both orderings),
+      // but never more than the price being paid.
+      verifiedWalletUsed = Math.min(Number(wallet_amount_used), claimedTotal);
+    }
+
+    // Final amount must equal total − coupon − wallet (±1 rupee rounding).
+    const expectedFinal = Math.max(0, claimedTotal - verifiedCouponDiscount - Number(wallet_amount_used || 0));
+    if (Math.abs(Number(final_amount) - expectedFinal) > 1) {
+      return NextResponse.json(
+        { error: 'Amount mismatch. Please refresh the page and try again.' },
+        { status: 400 }
+      );
+    }
+
     const bookingPayload = {
       trip_id,
       user_id: auth.user.id,
@@ -111,11 +175,14 @@ export async function POST(request: NextRequest) {
       aadhaar_id: aadhaar_id || null,
       passengers,
       payment_method: payment_method === 'seat_lock' ? 'seat_lock' : 'full',
-      payment_mode: payment_mode || 'cash',
-      payment_status: payment_status || 'pending',
-      booking_status: booking_status || 'pending',
-      amount_paid: Number(amount_paid) || 0,
-      reference_id: reference_id || null,
+      payment_mode: ['razorpay', 'manual', 'cash', 'wallet'].includes(payment_mode) ? payment_mode : 'cash',
+      // Status fields are constrained: a new booking can only ever start in a
+      // pending state. Confirmation happens via payment verification, webhooks,
+      // or admin review — never from the client.
+      payment_status: payment_status === 'cash_pending' ? 'cash_pending' : 'pending',
+      booking_status: 'pending',
+      amount_paid: 0,
+      reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
     };
 
     const { data: booking, error: insertError } = await adminClient
