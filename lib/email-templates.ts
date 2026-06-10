@@ -13,8 +13,8 @@ const BRAND = {
   domain: 'ghumakkars.in',
   url: 'https://ghumakkars.in',
   supportEmail: 'support@ghumakkars.in',
-  whatsapp: '+91 96218 86657',
-  whatsappLink: 'https://wa.me/919621886657',
+  whatsapp: '+91 82180 20972',
+  whatsappLink: 'https://wa.me/918218020972',
   instagram: 'https://instagram.com/ghumakkars.in',
   tagline: 'Group trips across India',
 };

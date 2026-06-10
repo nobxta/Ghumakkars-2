@@ -346,8 +346,8 @@ export default function BookingDetailsPage() {
   ];
 
   const whatsappLink = trip?.whatsapp_group_link;
-  const supportWhatsapp = 'https://wa.me/919621886657';
-  const supportPhone = 'tel:+919621886657';
+  const supportWhatsapp = 'https://wa.me/918218020972';
+  const supportPhone = 'tel:+918218020972';
 
   const copyBookingId = () => {
     navigator.clipboard?.writeText(booking.id);
@@ -450,7 +450,7 @@ export default function BookingDetailsPage() {
     </div>
   </div>
   <div class="footer">
-    Booked on ${new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · Support: support@ghumakkars.in · +91 96218 86657
+    Booked on ${new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · Support: support@ghumakkars.in · +91 82180 20972
   </div>
 </div>
 <script>setTimeout(() => { window.print(); }, 300);</script>

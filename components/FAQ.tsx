@@ -65,7 +65,7 @@ export default function FAQ() {
     const contactReason = reason === 'custom' ? customReason : reason;
     const whatsappMessage = `Hello! I'd like to get in touch.\n\n*Name:* ${name}\n*Email:* ${email}\n*Reason:* ${contactReason}\n*Message:* ${message}`;
     const encodedMessage = encodeURIComponent(whatsappMessage);
-    const whatsappUrl = `https://wa.me/918384826414?text=${encodedMessage}`;
+    const whatsappUrl = `https://wa.me/918218020972?text=${encodedMessage}`;
     
     window.open(whatsappUrl, '_blank');
   };

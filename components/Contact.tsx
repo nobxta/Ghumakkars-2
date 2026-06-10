@@ -60,7 +60,7 @@ export default function Contact() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-1">Phone</h4>
-                  <a href="tel:+918384826414" className="text-gray-600 hover:text-blue-600 transition-colors">+91 8384826414</a>
+                  <a href="tel:+918218020972" className="text-gray-600 hover:text-blue-600 transition-colors">+91 82180 20972</a>
                 </div>
               </div>
               <div className="flex items-start">

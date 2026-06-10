@@ -40,15 +40,15 @@ export default function ContactPage() {
           <ContactCard
             icon={<MessageCircle className="h-5 w-5 text-green-700" />}
             label="WhatsApp"
-            value="+91 96218 86657"
-            href="https://wa.me/919621886657"
+            value="+91 82180 20972"
+            href="https://wa.me/918218020972"
             iconBg="bg-green-100"
           />
           <ContactCard
             icon={<Phone className="h-5 w-5 text-purple-700" />}
             label="Phone"
-            value="+91 96218 86657"
-            href="tel:+919621886657"
+            value="+91 82180 20972"
+            href="tel:+918218020972"
           />
           <ContactCard
             icon={<Instagram className="h-5 w-5 text-pink-600" />}

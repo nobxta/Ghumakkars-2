@@ -26,7 +26,7 @@ export default function Footer() {
                  className="w-9 h-9 rounded-full bg-purple-100 hover:bg-purple-600 hover:text-white text-purple-700 flex items-center justify-center transition-colors" aria-label="Instagram">
                 <Instagram className="h-4 w-4" />
               </a>
-              <a href="https://wa.me/919621886657" target="_blank" rel="noopener noreferrer"
+              <a href="https://wa.me/918218020972" target="_blank" rel="noopener noreferrer"
                  className="w-9 h-9 rounded-full bg-green-100 hover:bg-green-600 hover:text-white text-green-700 flex items-center justify-center transition-colors" aria-label="WhatsApp">
                 <MessageCircle className="h-4 w-4" />
               </a>
@@ -70,11 +70,11 @@ export default function Footer() {
               </li>
               <li className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                <a href="https://wa.me/919621886657" target="_blank" rel="noopener noreferrer" className="hover:text-purple-600">+91 96218 86657</a>
+                <a href="https://wa.me/918218020972" target="_blank" rel="noopener noreferrer" className="hover:text-purple-600">+91 82180 20972</a>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                <a href="tel:+918384826414" className="hover:text-purple-600">+91 83848 26414</a>
+                <a href="tel:+918218020972" className="hover:text-purple-600">+91 82180 20972</a>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 mt-0.5 text-purple-500 flex-shrink-0" />

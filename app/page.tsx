@@ -82,8 +82,11 @@ export default function Home() {
     logo: `${siteUrl}/logo.png`,
     contactPoint: {
       '@type': 'ContactPoint',
+      telephone: '+918218020972',
       email: 'support@ghumakkars.in',
       contactType: 'customer support',
+      areaServed: 'IN',
+      availableLanguage: ['en', 'hi'],
     },
   };
 
