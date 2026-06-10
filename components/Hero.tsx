@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Calendar, MapPin, Sparkles, TrendingUp, Shield } from 'lucide-react';
+import { Users, Calendar, MapPin, TrendingUp, Shield } from 'lucide-react';
 
 export default function Hero() {
   return (
@@ -32,12 +32,6 @@ export default function Hero() {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-12 sm:py-16 md:py-24 lg:py-32">
-        {/* Badge */}
-        <div className="inline-flex items-center space-x-2 border border-purple-200/80 bg-white/90 backdrop-blur-md px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 mb-5 sm:mb-6 md:mb-8 animate-fade-in rounded-full shadow-md hover:shadow-lg transition-shadow">
-          <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4 md:w-4 text-purple-600" />
-          <span className="text-xs sm:text-sm md:text-sm font-semibold tracking-wider text-purple-700 uppercase">Trips from ₹2,999 &bull; Groups of 10-25</span>
-        </div>
-
         {/* Main Heading */}
         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold mb-4 sm:mb-5 md:mb-6 lg:mb-8 text-gray-900 tracking-tight animate-fade-in leading-[1.1] sm:leading-tight px-2">
           Go somewhere new
