@@ -290,6 +290,32 @@ export default function AdminBookingsPage() {
     setReviewing(false); // Reset reviewing state
   };
 
+  const handleDeleteBooking = async (booking: any) => {
+    const name = booking.primary_passenger_name || booking.profiles?.email || 'this booking';
+    const isCounted = ['confirmed', 'seat_locked'].includes(booking.booking_status);
+    const msg =
+      `Permanently delete the booking for "${name}"?\n\n` +
+      `• Trip: ${booking.trips?.title || '—'}\n` +
+      `• Status: ${booking.booking_status}\n` +
+      `• All payment records for this booking will also be deleted.\n` +
+      (isCounted ? `• ${booking.number_of_participants || 1} seat(s) will be freed on the trip.\n` : '') +
+      `\nThis cannot be undone. Use this only for spam or test bookings.`;
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Failed to delete booking');
+        return;
+      }
+      alert('Booking deleted');
+      fetchBookings();
+    } catch (e: any) {
+      alert('Error: ' + e.message);
+    }
+  };
+
   const openTransactionModal = (booking: any, transaction: any) => {
     setSelectedBooking(booking);
     setSelectedTransaction(transaction);
@@ -809,6 +835,13 @@ export default function AdminBookingsPage() {
                               <Phone className="h-3 w-3" /> Call
                             </a>
                           )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking); }}
+                            className="px-2 py-1 bg-red-50 text-red-600 rounded text-[10px] font-semibold hover:bg-red-100 flex items-center justify-center gap-1"
+                            title="Delete booking (spam / test)"
+                          >
+                            <XCircle className="h-3 w-3" /> Delete
+                          </button>
                         </div>
                       </div>
                     </td>

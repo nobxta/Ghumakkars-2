@@ -1093,7 +1093,7 @@ export default function BookTripPage() {
       <div className="flex items-center justify-between">
         {[
           { num: 1, label: 'Passenger Details' },
-          { num: 2, label: 'College Info' },
+          { num: 2, label: 'ID Verification' },
           { num: 3, label: 'Payment' },
         ].map((step, index) => {
           const isActive = currentStep === step.num;
@@ -1371,7 +1371,7 @@ export default function BookTripPage() {
                 <button
                   type="button"
                   onClick={addPassenger}
-                  disabled={totalPassengers >= trip.max_participants}
+                  disabled={!!trip.max_participants && trip.max_participants > 0 && totalPassengers >= trip.max_participants}
                   className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   <Plus className="h-4 w-4" />

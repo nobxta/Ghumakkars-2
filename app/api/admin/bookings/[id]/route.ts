@@ -69,3 +69,80 @@ export async function PATCH(
     );
   }
 }
+
+/**
+ * DELETE: permanently remove a booking (spam / test data).
+ * Cascades payment_transactions and decrements trip participant count
+ * if the booking had been counted (confirmed / seat_locked).
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = await requireAdmin();
+    if (auth instanceof NextResponse) return auth;
+
+    const id = params.id;
+    const adminClient = createAdminClient();
+
+    const { data: booking, error: fetchErr } = await adminClient
+      .from('bookings')
+      .select('id, trip_id, number_of_participants, booking_status')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !booking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    // Remove dependent payment records first (FK constraint)
+    const { error: txErr } = await adminClient
+      .from('payment_transactions')
+      .delete()
+      .eq('booking_id', id);
+    if (txErr) {
+      return NextResponse.json(
+        { error: 'Failed to delete payment records: ' + txErr.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: delErr } = await adminClient
+      .from('bookings')
+      .delete()
+      .eq('id', id);
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+
+    // If this booking was occupying seats, free them
+    if (booking.trip_id && ['confirmed', 'seat_locked'].includes(booking.booking_status)) {
+      const { data: trip } = await adminClient
+        .from('trips')
+        .select('current_participants')
+        .eq('id', booking.trip_id)
+        .single();
+      if (trip) {
+        await adminClient
+          .from('trips')
+          .update({
+            current_participants: Math.max(
+              0,
+              (trip.current_participants || 0) - (booking.number_of_participants || 1)
+            ),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', booking.trip_id);
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting booking:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
