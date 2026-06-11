@@ -62,13 +62,49 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section icon={<AlertTriangle className="h-5 w-5 text-purple-700" />} title="4. Traveler Conduct & Responsibilities">
+          <Section icon={<AlertTriangle className="h-5 w-5 text-purple-700" />} title="4. Traveler Conduct & Code of Behaviour">
+            <p className="mb-3">
+              Ghumakkars trips are group experiences. Every traveler agrees to the following code of
+              conduct as a condition of booking. <strong>Violation of any rule below may result in
+              immediate removal from the trip, denial of boarding, or cancellation of the ticket — in
+              all cases without any refund.</strong>
+            </p>
+
+            <p className="font-semibold text-gray-900 mb-2">Zero-tolerance rules</p>
+            <ul className="list-disc pl-5 space-y-1 text-gray-700 mb-4">
+              <li>
+                <strong>Fighting or physical altercations.</strong> Any traveler who fights with,
+                threatens, or physically confronts another traveler, staff member, or any third party
+                will be removed from the trip immediately, at any point of the journey, without refund.
+              </li>
+              <li>
+                <strong>Alcohol and drugs.</strong> Consumption, possession, or being under the
+                influence of alcohol, drugs, or any illegal substance during the trip is strictly
+                prohibited. Violation will lead to the trip being discontinued for that traveler and
+                their ticket being cancelled without refund.
+              </li>
+              <li>
+                <strong>Misbehaviour and harassment.</strong> Misbehaving with, harassing, abusing, or
+                making any traveler or staff member uncomfortable — verbally, physically, or otherwise —
+                gives Ghumakkars the full right to refuse to take that person on the trip, or to remove
+                them mid-trip, without refund.
+              </li>
+            </ul>
+
+            <p className="font-semibold text-gray-900 mb-2">General responsibilities</p>
+            <ul className="list-disc pl-5 space-y-1 text-gray-700 mb-4">
+              <li>Follow the instructions of trip leaders, guides and drivers at all times.</li>
+              <li>Respect local culture, environment, fellow travelers and Ghumakkars staff.</li>
+              <li>Be on time for departures, pickups and group activities.</li>
+              <li>Travelers are personally responsible for any damage caused to property, vehicles or accommodation, and must compensate for it directly.</li>
+            </ul>
+
+            <p className="font-semibold text-gray-900 mb-2">Enforcement</p>
             <ul className="list-disc pl-5 space-y-1 text-gray-700">
-              <li>Travelers must follow the instructions of trip leaders, guides and drivers at all times.</li>
-              <li>Consumption of alcohol, drugs or illegal substances during the trip is strictly prohibited unless explicitly permitted.</li>
-              <li>Travelers must respect local culture, environment, fellow travelers and Ghumakkars staff.</li>
-              <li>Ghumakkars reserves the right to remove any traveler from a trip without refund if their conduct endangers safety, disrupts the group or violates the law.</li>
-              <li>Travelers are personally responsible for any damage caused to property, vehicles or accommodation during the trip.</li>
+              <li>The trip leader&rsquo;s decision on conduct matters is final and binding during the trip.</li>
+              <li>A traveler removed for misconduct bears all costs of their own return travel, stay and any other expenses from the point of removal.</li>
+              <li>Ghumakkars may also refuse future bookings from travelers removed for misconduct.</li>
+              <li>Where conduct involves a potential crime, Ghumakkars may report the matter to local police.</li>
             </ul>
           </Section>
 
