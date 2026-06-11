@@ -299,10 +299,9 @@ export default function BookingDetailsPage() {
     ? booking.passengers.filter((p: any) => {
         if (!p) return false;
         if (p.is_primary === true) return false;
-        const pDigits = String(p.phone || '').replace(/\D/g, '');
         const pName = String(p.name || '').trim().toLowerCase();
-        const sameAsPrimary = (pDigits && primaryDigits && pDigits === primaryDigits) || (pName && primaryName && pName === primaryName);
-        return !sameAsPrimary;
+        // Dedup by NAME only — family members often share one phone number
+        return !(pName && primaryName && pName === primaryName);
       })
     : [];
 

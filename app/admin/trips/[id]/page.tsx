@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { 
   ArrowLeft, MapPin, Calendar, Users, IndianRupee, Edit, 
   CheckCircle, XCircle, Clock, Package, CreditCard, TrendingUp,
-  DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
+  DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, X, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
 } from 'lucide-react';
 
 export default function AdminTripDetailsPage() {
@@ -18,6 +18,12 @@ export default function AdminTripDetailsPage() {
   const supabase = createClient();
   
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [customExportOpen, setCustomExportOpen] = useState(false);
+  const [customFields, setCustomFields] = useState<Record<string, boolean>>({
+    name: true, phone: true, email: false, age: false, gender: true,
+    passengers: true, pax: true, status: true, total: false, paid: true, bookedOn: false,
+  });
+  const [customStatus, setCustomStatus] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending'>('all');
   const [trip, setTrip] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
@@ -194,10 +200,9 @@ export default function AdminTripDetailsPage() {
       subs.forEach((p: any) => {
         if (!p?.name) return;
         if (p.is_primary === true) return;
-        const pDigits = String(p.phone || '').replace(/\D/g, '');
         const pName = String(p.name || '').trim().toLowerCase();
-        const dup = (pDigits && primaryDigits && pDigits === primaryDigits) || (pName && primaryName && pName === primaryName);
-        if (dup) return;
+        // Dedup by NAME only — families share phone numbers
+        if (pName && primaryName && pName === primaryName) return;
         rows.push([i++, p.name, p.age || '', p.gender || '', p.phone || '', '', '', b.id.slice(0, 8).toUpperCase(), b.pickup_point || trip?.pickup_location || '']);
       });
     });
@@ -311,7 +316,7 @@ export default function AdminTripDetailsPage() {
         <td>${(b.booking_status || 'pending').replace('_', ' ')}</td>
         <td>${b.number_of_participants || 1}</td>
         <td>${getPaymentModeLabel(b.payment_mode)} / ${paymentLabel(b)}</td>
-        <td>${formatPassengersLine(b, 300)}</td>
+        <td>${formatPassengersMultiline(b).join('<br>')}</td>
         <td>${new Date(b.created_at).toLocaleString('en-IN')}</td>
       </tr>`).join('');
 
@@ -365,15 +370,115 @@ export default function AdminTripDetailsPage() {
       const n = (p?.name || '').trim();
       if (!n) return;
       if (p.is_primary === true) return;
-      const pDigits = String(p.phone || '').replace(/\D/g, '');
-      const dup = (pDigits && primaryDigits && pDigits === primaryDigits) || (n.toLowerCase() === primaryLower);
-      if (dup) return;
+      // Dedup by NAME only — family members often share one phone number,
+      // so phone-based dedup wrongly removes kids on the parent's number.
+      if (n.toLowerCase() === primaryLower) return;
       const a = p?.age != null ? String(p.age).trim() : '';
       const pg = g(p?.gender || '');
       parts.push(n + (a ? ` (${a})` : '') + (pg ? ` ${pg}` : ''));
     });
     const line = parts.join(', ');
     return line.length > maxLen ? line.substring(0, maxLen - 2) + '…' : line;
+  };
+
+  // One passenger per line — full list, no truncation. Primary first, deduped.
+  const formatPassengersMultiline = (b: any): string[] => {
+    const g = (v: string) => (v && String(v).toUpperCase().startsWith('F') ? 'F' : (v && String(v).toUpperCase().startsWith('M') ? 'M' : ''));
+    const lines: string[] = [];
+    const prof = b.profiles;
+    const fullName = prof ? `${prof.first_name || ''} ${prof.last_name || ''}`.trim() || prof.email : null;
+    const pName = b.primary_passenger_name || fullName || '-';
+    const pAge = b.primary_passenger_age != null ? String(b.primary_passenger_age) : '';
+    const pGender = g(b.primary_passenger_gender || '');
+    lines.push(pName + (pAge ? ` (${pAge})` : '') + (pGender ? ` ${pGender}` : ''));
+    const primaryDigits = String(b.primary_passenger_phone || '').replace(/\D/g, '');
+    const primaryLower = String(pName).trim().toLowerCase();
+    const arr = Array.isArray(b.passengers) ? b.passengers : [];
+    arr.forEach((p: any) => {
+      const n = (p?.name || '').trim();
+      if (!n) return;
+      if (p.is_primary === true) return;
+      const pDigits = String(p.phone || '').replace(/\D/g, '');
+      // Dedup: only skip when BOTH name and phone match the primary (siblings often share a parent's phone)
+      if (n.toLowerCase() === primaryLower && (!pDigits || !primaryDigits || pDigits === primaryDigits)) return;
+      const a = p?.age != null ? String(p.age).trim() : '';
+      const pg = g(p?.gender || '');
+      lines.push(n + (a ? ` (${a})` : '') + (pg ? ` ${pg}` : ''));
+    });
+    return lines;
+  };
+
+  /** Custom export — admin picks columns + status filter, output as CSV or printable page. */
+  const runCustomExport = (format: 'csv' | 'print') => {
+    const list = bookings.filter((b: any) => {
+      if (customStatus === 'all') return !['cancelled', 'rejected'].includes(b.booking_status);
+      return b.booking_status === customStatus;
+    });
+    if (list.length === 0) { alert('No bookings match the selected status.'); return; }
+
+    const _name = (b: any) => {
+      if (b.is_offline_booking || !b.user_id) return b.primary_passenger_name || '—';
+      const u = b.profiles;
+      return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
+    };
+    const _phone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
+    const _paid = (b: any) => {
+      if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
+      return (b.payment_transactions || [])
+        .filter((pt: any) => pt.payment_status === 'verified')
+        .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
+    };
+
+    const cols: { key: string; label: string; get: (b: any) => string }[] = [
+      { key: 'name', label: 'Name', get: _name },
+      { key: 'phone', label: 'Phone', get: _phone },
+      { key: 'email', label: 'Email', get: (b) => b.profiles?.email || b.primary_passenger_email || '—' },
+      { key: 'age', label: 'Age', get: (b) => (b.primary_passenger_age != null ? String(b.primary_passenger_age) : '—') },
+      { key: 'gender', label: 'Gender', get: (b) => b.primary_passenger_gender || '—' },
+      { key: 'passengers', label: 'Passengers', get: (b) => formatPassengersMultiline(b).join(format === 'csv' ? ' | ' : '<br>') },
+      { key: 'pax', label: 'Pax', get: (b) => String(b.number_of_participants || 1) },
+      { key: 'status', label: 'Status', get: (b) => (b.booking_status || 'pending').replace('_', ' ') },
+      { key: 'total', label: 'Total (₹)', get: (b) => parseFloat(String(b.final_amount || 0)).toFixed(0) },
+      { key: 'paid', label: 'Paid (₹)', get: (b) => _paid(b).toFixed(0) },
+      { key: 'bookedOn', label: 'Booked on', get: (b) => new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+    ];
+    const active = cols.filter((c) => customFields[c.key]);
+    if (active.length === 0) { alert('Select at least one column.'); return; }
+
+    if (format === 'csv') {
+      const rows = list.map((b: any, i: number) => [String(i + 1), ...active.map((c) => c.get(b).replace(/<br>/g, ' | '))]);
+      genericCSV(rows, ['#', ...active.map((c) => c.label)], `Custom-${customStatus}`);
+      return;
+    }
+
+    // Print version — one passenger per line via <br>
+    const w = window.open('', '_blank');
+    if (!w) return;
+    const head = ['#', ...active.map((c) => c.label)].map((h) => `<th>${h}</th>`).join('');
+    const body = list.map((b: any, i: number) =>
+      `<tr><td>${i + 1}</td>${active.map((c) => `<td>${c.get(b)}</td>`).join('')}</tr>`
+    ).join('');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${trip?.title || 'Trip'} — Custom export</title>
+<style>
+  body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px; color: #1a1a1a; font-size: 13px; }
+  .header { margin-bottom: 18px; padding: 16px 20px; background: #5e35b1; color: #fff; border-radius: 8px; }
+  .header h1 { margin: 0 0 4px 0; font-size: 20px; }
+  .header p { margin: 0; font-size: 12px; opacity: .9; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { border: 1px solid #d4d4d8; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #433866; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #f8f8fc; }
+  @page { margin: 12mm; }
+  @media print { body { padding: 0; } }
+</style></head><body>
+<div class="header">
+  <h1>${trip?.title || 'Trip'} — ${customStatus === 'all' ? 'All bookings' : customStatus.replace('_', ' ')}</h1>
+  <p>${trip?.destination || ''} • ${list.length} booking(s) • Generated ${new Date().toLocaleString('en-IN')}</p>
+</div>
+<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+<script>setTimeout(() => window.print(), 300);</script>
+</body></html>`);
+    w.document.close();
   };
 
   const downloadFullPDF = () => {
@@ -429,7 +534,7 @@ export default function AdminTripDetailsPage() {
         displayEmail(b),
         displayPhone(b),
         displayGender(b),
-        formatPassengersLine(b, 80),
+        formatPassengersMultiline(b).join('\n'),
         String(b.number_of_participants || 1),
         parseFloat(String(b.final_amount || 0)).toFixed(0),
         p.toFixed(0),
@@ -514,7 +619,7 @@ export default function AdminTripDetailsPage() {
       displayName(b),
       displayPhone(b),
       displayGender(b),
-      formatPassengersLine(b, 140),
+      formatPassengersMultiline(b).join('\n'),
     ]);
 
     autoTable(doc, {
@@ -1000,6 +1105,13 @@ export default function AdminTripDetailsPage() {
                           <p className="text-[11px] text-gray-500">Open browser print dialog</p>
                         </div>
                       </button>
+                      <button onClick={() => { setExportMenuOpen(false); setCustomExportOpen(true); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3 border-t border-gray-100">
+                        <Plus className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Custom export…</p>
+                          <p className="text-[11px] text-gray-500">Pick exactly which columns to include</p>
+                        </div>
+                      </button>
                     </div>
                   </>
                 )}
@@ -1109,6 +1221,75 @@ export default function AdminTripDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Custom Export modal */}
+      {customExportOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setCustomExportOpen(false)}>
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 flex items-center justify-between z-10">
+              <h2 className="text-lg font-bold text-gray-900">Custom export</h2>
+              <button onClick={() => setCustomExportOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Booking status</p>
+                <div className="flex flex-wrap gap-2">
+                  {([['all', 'All active'], ['confirmed', 'Confirmed'], ['seat_locked', 'Seat locked'], ['pending', 'Pending']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setCustomStatus(val)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                        customStatus === val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Columns to include</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['age', 'Age'],
+                    ['gender', 'Gender'], ['passengers', 'Passengers (one per line)'], ['pax', 'Pax count'],
+                    ['status', 'Booking status'], ['total', 'Total price'], ['paid', 'Paid amount'], ['bookedOn', 'Booking date'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:border-purple-300 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={!!customFields[key]}
+                        onChange={(e) => setCustomFields({ ...customFields, [key]: e.target.checked })}
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                      />
+                      <span className="text-gray-800">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-5 py-4 flex gap-2">
+              <button
+                onClick={() => { setCustomExportOpen(false); runCustomExport('csv'); }}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-1.5"
+              >
+                <Download className="h-4 w-4" /> Download CSV
+              </button>
+              <button
+                onClick={() => { setCustomExportOpen(false); runCustomExport('print'); }}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 flex items-center justify-center gap-1.5"
+              >
+                <Printer className="h-4 w-4" /> Print / PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
