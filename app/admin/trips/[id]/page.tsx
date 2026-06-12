@@ -959,99 +959,79 @@ export default function AdminTripDetailsPage() {
           </div>
         )}
 
-        {/* Revenue & Metrics Cards (batch-aware when a batch is selected) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch revenue' : 'Total Revenue'}</p>
-              <TrendingUp className="h-5 w-5 text-green-600" />
-            </div>
-            <p className="text-lg sm:text-2xl font-bold text-green-600 flex items-center">
-              <IndianRupee className="h-6 w-6" />
-              {(selectedBatch !== 'all' ? batchMetrics.revenue : (metrics?.totalRevenue || 0)).toLocaleString()}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">From verified payments</p>
-          </div>
-          <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch bookings' : 'Total Bookings'}</p>
-              <Package className="h-5 w-5 text-purple-600" />
-            </div>
-            <p className="text-lg sm:text-2xl font-bold text-purple-600">{selectedBatch !== 'all' ? batchMetrics.totalBookings : (metrics?.totalBookings || 0)}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              {selectedBatch !== 'all' ? batchMetrics.confirmedBookings : (metrics?.confirmedBookings || 0)} confirmed, {selectedBatch !== 'all' ? batchMetrics.pendingBookings : (metrics?.pendingBookings || 0)} pending
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch participants' : 'Total Participants'}</p>
-              <Users className="h-5 w-5 text-blue-600" />
-            </div>
-            <p className="text-lg sm:text-2xl font-bold text-blue-600">{selectedBatch !== 'all' ? batchMetrics.totalParticipants : (metrics?.totalParticipants || 0)}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              {trip.is_recurring && selectedBatch !== 'all'
-                ? `${batchMetrics.totalParticipants}/${trip.max_participants || '∞'} this departure`
-                : `${trip.current_participants || 0}/${trip.max_participants || 0} capacity`}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Avg Booking Value</p>
-              <DollarSign className="h-5 w-5 text-orange-600" />
-            </div>
-            <p className="text-lg sm:text-2xl font-bold text-orange-600 flex items-center">
-              <IndianRupee className="h-6 w-6" />
-              {selectedBatch !== 'all'
-                ? (batchMetrics.confirmedBookings > 0 ? Math.round(batchMetrics.revenue / batchMetrics.confirmedBookings) : 0)
-                : (metrics?.averageBookingValue?.toFixed(0) || '0')}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">Per confirmed booking</p>
-          </div>
+        {/* Compact stat strip (batch-aware) */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
+          {(() => {
+            const isBatch = selectedBatch !== 'all';
+            const rev = isBatch ? batchMetrics.revenue : (metrics?.totalRevenue || 0);
+            const bk = isBatch ? batchMetrics.totalBookings : (metrics?.totalBookings || 0);
+            const conf = isBatch ? batchMetrics.confirmedBookings : (metrics?.confirmedBookings || 0);
+            const pend = isBatch ? batchMetrics.pendingBookings : (metrics?.pendingBookings || 0);
+            const pax = isBatch ? batchMetrics.totalParticipants : (metrics?.totalParticipants || 0);
+            const avg = isBatch ? (conf > 0 ? Math.round(batchMetrics.revenue / conf) : 0) : (Number(metrics?.averageBookingValue || 0));
+            const cap = isBatch && trip.is_recurring ? `${pax}/${trip.max_participants || '∞'}` : `${trip.current_participants || 0}/${trip.max_participants || 0}`;
+            const Cell = ({ icon, label, value, sub }: any) => (
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-1.5 text-gray-500 mb-1">{icon}<span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span></div>
+                <p className="text-xl font-bold text-gray-900">{value}</p>
+                {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+              </div>
+            );
+            return (
+              <>
+                <Cell icon={<TrendingUp className="h-3.5 w-3.5 text-green-600" />} label={isBatch ? 'Batch revenue' : 'Revenue'} value={`₹${rev.toLocaleString()}`} sub="verified payments" />
+                <Cell icon={<Package className="h-3.5 w-3.5 text-purple-600" />} label="Bookings" value={bk} sub={`${conf} confirmed · ${pend} pending`} />
+                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} sub={`${cap} ${isBatch ? 'this departure' : 'capacity'}`} />
+                <Cell icon={<DollarSign className="h-3.5 w-3.5 text-orange-600" />} label="Avg value" value={`₹${avg.toLocaleString()}`} sub="per confirmed" />
+              </>
+            );
+          })()}
         </div>
 
-        {/* Trip Information */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 text-purple-600 mr-2" />
+        {/* Trip Information — compact */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-4 sm:mb-6">
+          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center">
+            <MapPin className="h-4 w-4 text-purple-600 mr-1.5" />
             Trip Information
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3">
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Destination</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{trip.destination}</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Destination</p>
+              <p className="font-semibold text-gray-900 text-sm">{trip.destination}</p>
+            </div>
+            {trip.is_recurring ? (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Schedule</p>
+                <p className="font-semibold text-gray-900 text-sm">Every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Start</p>
+                  <p className="font-semibold text-gray-900 text-sm">{trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">End</p>
+                  <p className="font-semibold text-gray-900 text-sm">{trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</p>
+                </div>
+              </>
+            )}
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Duration</p>
+              <p className="font-semibold text-gray-900 text-sm">{trip.duration_text || `${trip.duration_days || 0} days`}</p>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Start Date</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Calendar className="h-4 w-4 mr-1 text-purple-600" />
-                {trip.start_date ? new Date(trip.start_date).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">End Date</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base flex items-center">
-                <Calendar className="h-4 w-4 mr-1 text-purple-600" />
-                {trip.end_date ? new Date(trip.end_date).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Duration</p>
-              <p className="font-semibold text-gray-900 text-sm sm:text-base">{trip.duration_days || 0} days</p>
-            </div>
-            <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Price</p>
-              <p className="font-semibold text-purple-600 text-sm sm:text-base flex items-center">
-                <IndianRupee className="h-4 w-4" />
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Price</p>
+              <p className="font-semibold text-purple-600 text-sm flex items-center">
+                <IndianRupee className="h-3.5 w-3.5" />
                 {trip.discounted_price?.toLocaleString() || '0'}
                 {trip.original_price && trip.original_price > trip.discounted_price && (
-                  <span className="text-xs text-gray-500 line-through ml-2">
-                    ₹{trip.original_price.toLocaleString()}
-                  </span>
+                  <span className="text-[11px] text-gray-400 line-through ml-1.5">₹{trip.original_price.toLocaleString()}</span>
                 )}
               </p>
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-600 mb-1">Status</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Status</p>
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
                 trip.status === 'completed'
                   ? 'bg-blue-100 text-blue-700 border-blue-200'
