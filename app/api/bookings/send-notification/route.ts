@@ -195,6 +195,7 @@ export async function POST(request: NextRequest) {
             endDate: effEnd,
             totalAmount: booking.payment_amount || booking.final_amount,
             whatsappGroupLink: trip.whatsapp_group_link,
+            pickupPoint: booking.pickup_point || undefined,
           }
         );
 

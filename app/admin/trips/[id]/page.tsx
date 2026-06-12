@@ -22,7 +22,7 @@ export default function AdminTripDetailsPage() {
   const [customExportOpen, setCustomExportOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, boolean>>({
     name: true, phone: true, email: false, age: false, gender: true,
-    passengers: true, pax: true, status: true, total: false, paid: true, bookedOn: false,
+    passengers: true, pax: true, status: true, total: false, paid: true, bookedOn: false, pickup: false,
   });
   const [customStatus, setCustomStatus] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending'>('all');
   const [trip, setTrip] = useState<any>(null);
@@ -504,6 +504,7 @@ export default function AdminTripDetailsPage() {
       { key: 'total', label: 'Total (₹)', get: (b) => parseFloat(String(b.final_amount || 0)).toFixed(0) },
       { key: 'paid', label: 'Paid (₹)', get: (b) => _paid(b).toFixed(0) },
       { key: 'bookedOn', label: 'Booked on', get: (b) => new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+      { key: 'pickup', label: 'Pickup point', get: (b) => b.pickup_point || '—' },
     ];
     const active = cols.filter((c) => customFields[c.key]);
     if (active.length === 0) { alert('Select at least one column.'); return; }
@@ -1386,7 +1387,7 @@ export default function AdminTripDetailsPage() {
                   {([
                     ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['age', 'Age'],
                     ['gender', 'Gender'], ['passengers', 'Passengers (one per line)'], ['pax', 'Pax count'],
-                    ['status', 'Booking status'], ['total', 'Total price'], ['paid', 'Paid amount'], ['bookedOn', 'Booking date'],
+                    ['status', 'Booking status'], ['total', 'Total price'], ['paid', 'Paid amount'], ['bookedOn', 'Booking date'], ['pickup', 'Pickup point'],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:border-purple-300 cursor-pointer text-sm">
                       <input

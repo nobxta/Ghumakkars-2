@@ -74,6 +74,7 @@ export default function CreateTripPage() {
 
   // Step 5: Content
   const [highlights, setHighlights] = useState<string[]>(['']);
+  const [pickupPoints, setPickupPoints] = useState<string[]>(['']);
   const [itinerary, setItinerary] = useState<DayItinerary[]>([
     { day: 1, title: '', description: '', activities: [''] }
   ]);
@@ -438,6 +439,7 @@ export default function CreateTripPage() {
         image_url: coverImage,
         gallery_images: filteredGallery.length > 0 ? filteredGallery : null,
         highlights: filteredHighlights.length > 0 ? filteredHighlights : null,
+        pickup_points: pickupPoints.map(p => p.trim()).filter(Boolean).length > 0 ? pickupPoints.map(p => p.trim()).filter(Boolean) : null,
         day_wise_itinerary: itinerary,
         whatsapp_group_link: whatsappGroupLink || null,
         included_features: includedItems.filter(item => item.trim()),
@@ -937,6 +939,51 @@ export default function CreateTripPage() {
                 />
                 <p className="text-xs text-gray-500 mt-2">
                   How duration shows everywhere. Leave empty to auto-fill from trip dates.
+                </p>
+              </div>
+
+              {/* Pickup points */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Pickup Points <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPickupPoints([...pickupPoints, ''])}
+                    className="text-xs font-semibold text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add point
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {pickupPoints.map((point, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={point}
+                        onChange={(e) => {
+                          const next = [...pickupPoints];
+                          next[index] = e.target.value;
+                          setPickupPoints(next);
+                        }}
+                        placeholder="e.g. Delhi (ISBT Kashmere Gate)"
+                        className="flex-1 px-3 sm:px-4 py-2.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 text-sm"
+                      />
+                      {pickupPoints.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setPickupPoints(pickupPoints.filter((_, i) => i !== index))}
+                          className="px-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Travellers choose one of these at booking (e.g. Delhi, Chandigarh). Leave empty if there&rsquo;s a single fixed pickup.
                 </p>
               </div>
             </div>

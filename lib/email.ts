@@ -138,6 +138,7 @@ export async function sendBookingConfirmedEmail(
     endDate?: string;
     totalAmount: number;
     whatsappGroupLink?: string;
+    pickupPoint?: string;
   }
 ) {
   const dateRange = bookingDetails.endDate
@@ -155,6 +156,7 @@ export async function sendBookingConfirmedEmail(
       { label: 'Trip', value: bookingDetails.tripTitle },
       { label: 'Going to', value: bookingDetails.destination },
       { label: 'Dates', value: dateRange },
+      ...(bookingDetails.pickupPoint ? [{ label: 'Pickup', value: bookingDetails.pickupPoint }] : []),
       { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
       { label: 'Amount paid', value: fmtINR(bookingDetails.totalAmount), highlight: true },
     ],

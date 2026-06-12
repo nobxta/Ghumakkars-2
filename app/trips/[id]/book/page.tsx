@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, CheckCircle, MapPin } from 'lucide-react';
 import { nextOccurrences, formatDeparture, batchEndDate } from '@/lib/recurrence';
 
 interface Passenger {
@@ -27,6 +27,7 @@ interface Trip {
   recurrence_day?: number;
   recurrence_weeks_ahead?: number;
   duration_days?: number;
+  pickup_points?: string[];
 }
 
 // Removed college list — no longer needed
@@ -56,6 +57,7 @@ export default function BookTripPage() {
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [aadhaarId, setAadhaarId] = useState('');
   const [departureDate, setDepartureDate] = useState('');
+  const [pickupPoint, setPickupPoint] = useState('');
 
   // Additional Passengers
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -233,7 +235,7 @@ export default function BookTripPage() {
     try {
       const idOrSlug = String(params.id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days');
+      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, pickup_points');
       const { data, error } = isUuid
         ? await query.eq('id', idOrSlug).single()
         : await query.eq('slug', idOrSlug).single();
@@ -416,6 +418,7 @@ export default function BookTripPage() {
         booking_status: 'pending',
         amount_paid: 0,
         departure_date: trip.is_recurring ? departureDate : null,
+        pickup_point: pickupPoint || null,
       };
 
       const bookingRes = await fetch('/api/bookings', {
@@ -671,6 +674,7 @@ export default function BookTripPage() {
         amount_paid: 0,
         reference_id: null,
         departure_date: trip.is_recurring ? departureDate : null,
+        pickup_point: pickupPoint || null,
       };
 
       const cashBookingRes = await fetch('/api/bookings', {
@@ -736,6 +740,10 @@ export default function BookTripPage() {
       case 1:
         if (trip?.is_recurring && !departureDate) {
           setError('Please choose a departure date for this trip');
+          return false;
+        }
+        if (trip?.pickup_points && trip.pickup_points.length > 0 && !pickupPoint) {
+          setError('Please choose a pickup point');
           return false;
         }
         if (!primaryName || !primaryEmail || !primaryPhone || !primaryGender || !primaryAge) {
@@ -988,6 +996,7 @@ export default function BookTripPage() {
             booking_status: 'pending',
             amount_paid: 0,
             departure_date: trip.is_recurring ? departureDate : null,
+        pickup_point: pickupPoint || null,
           },
         ])
         .select()
@@ -1278,6 +1287,27 @@ export default function BookTripPage() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Pickup point dropdown */}
+            {trip?.pickup_points && trip.pickup_points.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center mb-3">
+                  <MapPin className="h-5 w-5 text-purple-600 mr-2" />
+                  <h3 className="text-lg font-semibold text-gray-900">Choose your pickup point</h3>
+                </div>
+                <select
+                  value={pickupPoint}
+                  onChange={(e) => setPickupPoint(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
+                >
+                  <option value="">Select a pickup point…</option>
+                  {trip.pickup_points.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-2">You&rsquo;ll be picked up from here. Exact time is shared before departure.</p>
               </div>
             )}
 

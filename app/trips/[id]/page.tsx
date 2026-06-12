@@ -874,8 +874,8 @@ export default function TripDetailPage() {
                 <Link href="/cancellation-policy" className="text-purple-600 underline hover:text-purple-700">Cancellation Policy</Link>.
               </p>
 
-              {/* Pickup + Booking deadline */}
-              {(trip.pickup_location || trip.booking_deadline_date) && (
+              {/* Pickup points + Booking deadline */}
+              {(((trip as any).pickup_points && (trip as any).pickup_points.length > 0) || trip.booking_deadline_date) && (
                 <div className="mt-6 pt-6 border-t border-gray-100 space-y-4 text-base">
                   {trip.booking_deadline_date && (
                     <div className="flex items-start justify-between gap-3">
@@ -886,13 +886,13 @@ export default function TripDetailPage() {
                       <span className="font-semibold text-gray-900">{formatDate(trip.booking_deadline_date, { day: 'numeric', month: 'short' })}</span>
                     </div>
                   )}
-                  {trip.pickup_location && (
+                  {(trip as any).pickup_points && (trip as any).pickup_points.length > 0 && (
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center text-gray-600">
+                      <div className="flex items-center text-gray-600 flex-shrink-0">
                         <MapPin className="h-5 w-5 mr-2 text-gray-400" />
-                        <span>Pickup</span>
+                        <span>Pickup{(trip as any).pickup_points.length > 1 ? ' options' : ''}</span>
                       </div>
-                      <span className="font-semibold text-gray-900 text-right">{trip.pickup_location}</span>
+                      <span className="font-semibold text-gray-900 text-right">{(trip as any).pickup_points.join(' · ')}</span>
                     </div>
                   )}
                 </div>

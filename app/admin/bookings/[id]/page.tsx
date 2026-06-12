@@ -353,8 +353,11 @@ export default function AdminBookingDetailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
           {/* Trip details */}
           <SectionCard icon={<Calendar className="h-4 w-4 text-purple-700" />} title="Trip Details">
-            <Row label="Start" value={fmtDate(booking.trips?.start_date)} />
-            <Row label="End" value={fmtDate(booking.trips?.end_date)} />
+            {booking.departure_date
+              ? <Row label="Departure" value={fmtDate(booking.departure_date)} />
+              : <Row label="Start" value={fmtDate(booking.trips?.start_date)} />}
+            {!booking.departure_date && <Row label="End" value={fmtDate(booking.trips?.end_date)} />}
+            {booking.pickup_point && <Row label="Pickup point" value={booking.pickup_point} />}
             <Row label="Booked on" value={fmtDateTime(booking.created_at)} />
             <Row label="Booking ID" value={<span className="font-mono text-xs break-all">{booking.id}</span>} />
           </SectionCard>

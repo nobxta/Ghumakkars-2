@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       amount_paid,
       reference_id,
       departure_date,
+      pickup_point,
     } = body;
 
     if (!trip_id || !number_of_participants || number_of_participants < 1) {
@@ -228,6 +229,7 @@ export async function POST(request: NextRequest) {
       amount_paid: 0,
       reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
       departure_date: validatedDeparture,
+      pickup_point: pickup_point ? String(pickup_point).slice(0, 200) : null,
     };
 
     const { data: booking, error: insertError } = await adminClient
