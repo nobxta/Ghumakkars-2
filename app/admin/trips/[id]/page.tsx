@@ -899,36 +899,70 @@ export default function AdminTripDetailsPage() {
             <span>Back to All Trips</span>
           </Link>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                {trip.title}
-              </h1>
-              <p className="text-sm text-gray-600 flex items-center">
-                <MapPin className="h-4 w-4 mr-1 text-purple-600" />
-                {trip.destination}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {trip.title}
+                </h1>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                  trip.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200'
+                    : trip.status === 'cancelled' ? 'bg-red-100 text-red-700 border-red-200'
+                    : trip.status === 'postponed' ? 'bg-orange-100 text-orange-700 border-orange-200'
+                    : trip.is_active ? 'bg-green-100 text-green-700 border-green-200'
+                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                }`}>
+                  {trip.status ? trip.status.charAt(0).toUpperCase() + trip.status.slice(1) : (trip.is_active ? 'Active' : 'Inactive')}
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="inline-flex items-center text-gray-600"><MapPin className="h-4 w-4 mr-1 text-purple-600" />{trip.destination}</span>
+                <span className="text-gray-300">•</span>
+                <span>{trip.is_recurring ? `Every ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}` : `${trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – ${trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}`}</span>
+                <span className="text-gray-300">•</span>
+                <span>{trip.duration_text || `${trip.duration_days || 0} days`}</span>
+                <span className="text-gray-300">•</span>
+                <span className="font-semibold text-purple-700">₹{trip.discounted_price?.toLocaleString() || '0'}</span>
               </p>
+              {trip.status === 'postponed' && trip.postponed_to_date && (
+                <p className="text-xs text-orange-600 font-medium mt-1">New date: {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+              )}
+              {trip.status === 'cancelled' && trip.cancellation_reason && (
+                <p className="text-xs text-red-600 mt-1">Reason: {trip.cancellation_reason}</p>
+              )}
             </div>
             <Link
               href={`/admin/trips/edit/${trip.id}`}
-              className="inline-flex items-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors flex-shrink-0"
             >
-              <Edit className="h-5 w-5" />
+              <Edit className="h-4 w-4" />
               <span>Edit Trip</span>
             </Link>
           </div>
         </div>
 
-        {/* Departure selector — recurring trips only (compact dropdown) */}
+        {/* Departure selector — recurring trips only */}
         {trip.is_recurring && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 mb-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 flex-shrink-0">
-              <Calendar className="h-4 w-4 text-purple-600" />
-              Departure
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 mb-6">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <Calendar className="h-5 w-5 text-purple-600 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">Viewing departure</p>
+                {selectedBatch === 'all' ? (
+                  <p className="text-base font-bold text-gray-900">Lifetime <span className="text-sm font-medium text-gray-500">· all departures · {batchList.reduce((s, b) => s + b.count, 0)} pax</span></p>
+                ) : selectedBatch === 'unscheduled' ? (
+                  <p className="text-base font-bold text-amber-700">No date set <span className="text-sm font-medium text-amber-600">· {unscheduledCount} pax with no chosen departure</span></p>
+                ) : (
+                  <p className="text-base font-bold text-gray-900">
+                    {formatDeparture(selectedBatch, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                    <span className="text-sm font-medium text-gray-500"> · {batchMetrics.totalParticipants} pax · ₹{batchMetrics.revenue.toLocaleString()}{selectedBatch < todayStr ? ' · past' : ''}</span>
+                  </p>
+                )}
+              </div>
             </div>
             <select
               value={selectedBatch}
               onChange={(e) => setSelectedBatch(e.target.value)}
-              className="px-3 py-2 rounded-lg text-sm font-semibold border border-gray-200 bg-white text-gray-900 outline-none focus:border-purple-400 cursor-pointer w-full sm:w-auto"
+              className="px-3 py-2 rounded-lg text-sm font-semibold border border-gray-200 bg-white text-gray-900 outline-none focus:border-purple-400 cursor-pointer w-full sm:w-auto flex-shrink-0"
             >
               <option value="all">Lifetime — all departures ({batchList.reduce((s, b) => s + b.count, 0)} pax)</option>
               {upcomingBatches.length > 0 && (
@@ -955,22 +989,6 @@ export default function AdminTripDetailsPage() {
                 </optgroup>
               )}
             </select>
-            {selectedBatch !== 'all' && (
-              <div className="text-xs text-gray-600 sm:ml-1">
-                {selectedBatch === 'unscheduled' ? (
-                  <span className="text-amber-700 font-medium">Bookings with no chosen departure date</span>
-                ) : (
-                  <>
-                    <span className="font-semibold text-gray-900">{formatDeparture(selectedBatch, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                    {selectedBatch < todayStr && <span className="text-gray-400"> · past</span>}
-                    <span className="mx-1.5 text-gray-300">•</span>
-                    {batchMetrics.totalParticipants} pax
-                    <span className="mx-1.5 text-gray-300">•</span>
-                    ₹{batchMetrics.revenue.toLocaleString()}
-                  </>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -987,24 +1005,29 @@ export default function AdminTripDetailsPage() {
             const filled = isBatch ? pax : (Number(trip.current_participants) || 0);
             const occPct = maxCap > 0 ? Math.min(100, Math.round((filled / maxCap) * 100)) : 0;
             const Cell = ({ icon, label, value, sub }: any) => (
-              <div className="px-4 py-3">
-                <div className="flex items-center gap-1.5 text-gray-500 mb-1">{icon}<span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span></div>
-                <p className="text-xl font-bold text-gray-900">{value}</p>
-                {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+              <div className="px-4 py-2.5">
+                <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span></div>
+                <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5">{icon}{value}</p>
+                {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
               </div>
             );
             return (
               <>
-                <Cell icon={<TrendingUp className="h-3.5 w-3.5 text-green-600" />} label={isBatch ? 'Batch revenue' : 'Revenue'} value={`₹${rev.toLocaleString()}`} sub="verified payments" />
+                <Cell icon={<TrendingUp className="h-3.5 w-3.5 text-green-600" />} label={isBatch ? 'Batch revenue' : 'Revenue'} value={`₹${rev.toLocaleString()}`} />
                 <Cell icon={<Package className="h-3.5 w-3.5 text-purple-600" />} label="Bookings" value={bk} sub={`${conf} confirmed · ${pend} pending`} />
-                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} sub={isBatch ? 'this departure' : 'all departures'} />
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-gray-500 mb-1"><Users className="h-3.5 w-3.5 text-orange-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Occupancy</span></div>
-                  <p className="text-xl font-bold text-gray-900">{maxCap > 0 ? `${occPct}%` : '—'}</p>
-                  <div className="mt-1.5 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${occPct >= 100 ? 'bg-green-500' : occPct >= 60 ? 'bg-purple-500' : 'bg-amber-400'}`} style={{ width: `${maxCap > 0 ? occPct : 0}%` }} />
-                  </div>
-                  <p className="text-[11px] text-gray-400 mt-1">{filled} / {maxCap || '∞'} seats</p>
+                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} />
+                <div className="px-4 py-2.5">
+                  <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Occupancy</span></div>
+                  {maxCap > 0 ? (
+                    <>
+                      <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />{filled} / {maxCap}<span className="text-xs font-semibold text-gray-400">· {occPct}%</span></p>
+                      <div className="mt-1 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${occPct >= 100 ? 'bg-green-500' : occPct >= 60 ? 'bg-purple-500' : 'bg-amber-400'}`} style={{ width: `${occPct}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />{filled}<span className="text-xs font-semibold text-gray-400">· Unlimited</span></p>
+                  )}
                 </div>
               </>
             );
@@ -1154,11 +1177,11 @@ export default function AdminTripDetailsPage() {
               <div className="relative">
                 <button
                   onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors"
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className="h-4 w-4 text-gray-500" />
                   Export
-                  <ChevronDown className={`h-4 w-4 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {exportMenuOpen && (
                   <>
@@ -1244,48 +1267,44 @@ export default function AdminTripDetailsPage() {
             )}
           </div>
 
-          {/* Search + filter pills */}
-          {bookings.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
-              <div className="relative flex-1">
-                <Eye className="hidden" />
-                <input
-                  value={bookingSearch}
-                  onChange={(e) => setBookingSearch(e.target.value)}
-                  placeholder="Search name, phone or booking ID…"
-                  className="w-full pl-3 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
-                />
+          {/* Search + status filter (sticky while scrolling) */}
+          {bookings.length > 0 && (() => {
+            const statusCount = (s: string) => bookings.filter((b: any) =>
+              s === 'cancelled'
+                ? ['cancelled', 'rejected'].includes(b.booking_status)
+                : b.booking_status === s
+            ).length;
+            const counts: Record<string, number> = {
+              all: bookings.length,
+              confirmed: statusCount('confirmed'),
+              seat_locked: statusCount('seat_locked'),
+              pending: statusCount('pending'),
+              cancelled: statusCount('cancelled'),
+            };
+            return (
+              <div className="sticky top-16 z-10 flex flex-col sm:flex-row sm:items-center gap-2 mb-3 bg-white/95 backdrop-blur-sm py-2 -mx-4 sm:-mx-5 px-4 sm:px-5 border-b border-gray-100">
+                <div className="relative w-full sm:w-72">
+                  <input
+                    value={bookingSearch}
+                    onChange={(e) => setBookingSearch(e.target.value)}
+                    placeholder="Search name, phone or ID…"
+                    className="w-full pl-3 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
+                  />
+                </div>
+                <select
+                  value={bookingFilter}
+                  onChange={(e) => setBookingFilter(e.target.value as typeof bookingFilter)}
+                  className="px-3 py-2 text-sm font-semibold border border-gray-200 rounded-lg bg-white text-gray-900 outline-none focus:border-purple-400 cursor-pointer w-full sm:w-auto"
+                >
+                  <option value="all">All statuses ({counts.all})</option>
+                  <option value="confirmed">Confirmed ({counts.confirmed})</option>
+                  <option value="seat_locked">Seat locked ({counts.seat_locked})</option>
+                  <option value="pending">Pending ({counts.pending})</option>
+                  <option value="cancelled">Cancelled ({counts.cancelled})</option>
+                </select>
               </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {(() => {
-                  const statusCount = (s: string) => bookings.filter((b: any) =>
-                    s === 'cancelled'
-                      ? ['cancelled', 'rejected'].includes(b.booking_status)
-                      : b.booking_status === s
-                  ).length;
-                  const counts: Record<string, number> = {
-                    all: bookings.length,
-                    confirmed: statusCount('confirmed'),
-                    seat_locked: statusCount('seat_locked'),
-                    pending: statusCount('pending'),
-                    cancelled: statusCount('cancelled'),
-                  };
-                  return ([['all','All'],['confirmed','Confirmed'],['seat_locked','Seat locked'],['pending','Pending'],['cancelled','Cancelled']] as const).map(([val,label]) => (
-                    <button
-                      key={val}
-                      onClick={() => setBookingFilter(val)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap transition-colors ${
-                        bookingFilter === val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
-                      }`}
-                    >
-                      {label}
-                      <span className={`ml-1.5 ${bookingFilter === val ? 'text-purple-200' : 'text-gray-400'}`}>{counts[val]}</span>
-                    </button>
-                  ));
-                })()}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Desktop table (lg+) */}
           {visibleBookings.length > 0 && (
@@ -1549,38 +1568,6 @@ export default function AdminTripDetailsPage() {
               )}
             </div>
           )}
-        </div>
-
-        {/* Trip details — compact strip (informational, kept below the actionable bookings) */}
-        <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-600 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
-          <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-purple-600" /><span className="font-semibold text-gray-900">{trip.destination}</span></span>
-          <span className="text-gray-300">•</span>
-          {trip.is_recurring ? (
-            <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4 text-gray-400" />Every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4 text-gray-400" />{trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – {trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
-          )}
-          <span className="text-gray-300">•</span>
-          <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" />{trip.duration_text || `${trip.duration_days || 0} days`}</span>
-          <span className="text-gray-300">•</span>
-          <span className="inline-flex items-center gap-1 font-semibold text-purple-700"><IndianRupee className="h-3.5 w-3.5" />{trip.discounted_price?.toLocaleString() || '0'}{trip.original_price && trip.original_price > trip.discounted_price && (<span className="text-[11px] text-gray-400 line-through ml-1 font-normal">₹{trip.original_price.toLocaleString()}</span>)}</span>
-          <span className="text-gray-300">•</span>
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-            trip.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200'
-              : trip.status === 'cancelled' ? 'bg-red-100 text-red-700 border-red-200'
-              : trip.status === 'postponed' ? 'bg-orange-100 text-orange-700 border-orange-200'
-              : trip.is_active ? 'bg-green-100 text-green-700 border-green-200'
-              : 'bg-gray-100 text-gray-700 border-gray-200'
-          }`}>
-            {trip.status ? trip.status.charAt(0).toUpperCase() + trip.status.slice(1) : (trip.is_active ? 'Active' : 'Inactive')}
-          </span>
-          {trip.status === 'postponed' && trip.postponed_to_date && (
-            <span className="text-xs text-orange-600 font-medium">New date: {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-          )}
-          {trip.status === 'cancelled' && trip.cancellation_reason && (
-            <span className="text-xs text-red-600">Reason: {trip.cancellation_reason}</span>
-          )}
-          <Link href={`/admin/trips/edit/${trip.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700"><Edit className="h-3.5 w-3.5" />Edit trip</Link>
         </div>
       </div>
 
