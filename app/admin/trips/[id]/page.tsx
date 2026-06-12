@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -48,6 +48,7 @@ export default function AdminTripDetailsPage() {
   const [savingDate, setSavingDate] = useState(false);
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingFilter, setBookingFilter] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending' | 'cancelled'>('all');
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     checkUser();
@@ -1100,25 +1101,23 @@ export default function AdminTripDetailsPage() {
           </div>
         </div>
 
-        {/* Add offline booking (face-to-face) — collapsible */}
-        <div className="bg-amber-50/80 border-2 border-amber-200 rounded-2xl p-4 sm:p-6 mb-6">
+        {/* Add offline booking (face-to-face) — collapsible compact bar */}
+        <div className={`bg-amber-50/80 border border-amber-200 rounded-xl mb-6 ${offlineOpen ? 'p-3 sm:p-4' : 'px-3 py-2'}`}>
           <button
             type="button"
             onClick={() => setOfflineOpen(o => !o)}
             className="w-full flex items-center justify-between text-left"
           >
-            <span className="text-lg font-bold text-gray-900 flex items-center">
-              <UserPlus className="h-5 w-5 text-amber-600 mr-2" />
+            <span className="text-sm font-semibold text-gray-800 flex items-center">
+              <UserPlus className="h-4 w-4 text-amber-600 mr-2" />
               Add offline booking
+              <span className="hidden sm:inline text-xs font-normal text-gray-500 ml-2">· booked face-to-face</span>
             </span>
-            <ChevronDown className={`h-5 w-5 text-amber-700 transition-transform ${offlineOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`h-4 w-4 text-amber-700 transition-transform ${offlineOpen ? 'rotate-180' : ''}`} />
           </button>
-          {!offlineOpen && (
-            <p className="text-sm text-gray-600 mt-2">Click to add someone who booked face-to-face (no website account).</p>
-          )}
           {offlineOpen && (
           <>
-          <p className="text-sm text-gray-600 mb-4 mt-3">Add someone who booked face-to-face (no website account). Only name and mobile required.</p>
+          <p className="text-xs text-gray-600 mb-4 mt-3">Only name and mobile are required. Everything else is optional.</p>
 
           {/* Departure batch selector for recurring trips */}
           {trip.is_recurring && typeof trip.recurrence_day === 'number' && (
@@ -1410,7 +1409,8 @@ export default function AdminTripDetailsPage() {
                       : (user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.email || 'User');
                     const displayPhone = isOffline ? (booking.primary_passenger_phone || booking.contact_phone || '—') : (user?.phone || '—');
                     return (
-                      <tr key={booking.id} className="hover:bg-gray-50/70">
+                      <Fragment key={booking.id}>
+                      <tr className="hover:bg-gray-50/70">
                         <td className="py-2.5 pr-3">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${isOffline ? 'bg-amber-500' : 'bg-purple-600'}`}>
@@ -1463,6 +1463,13 @@ export default function AdminTripDetailsPage() {
                         </td>
                         <td className="py-2.5 pl-3">
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setExpandedBookingId(expandedBookingId === booking.id ? null : booking.id)}
+                              className="p-1.5 rounded hover:bg-purple-50 text-gray-500"
+                              title="Show passengers"
+                            >
+                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expandedBookingId === booking.id ? 'rotate-180' : ''}`} />
+                            </button>
                             {!isOffline && (
                               <Link href={`/admin/users/${user?.id || booking.user_id}`} className="p-1.5 rounded hover:bg-purple-50 text-purple-600" title="Customer profile"><User className="h-3.5 w-3.5" /></Link>
                             )}
@@ -1470,6 +1477,28 @@ export default function AdminTripDetailsPage() {
                           </div>
                         </td>
                       </tr>
+                      {expandedBookingId === booking.id && (
+                        <tr className="bg-gray-50/60">
+                          <td colSpan={8} className="px-3 py-3">
+                            <p className="text-[11px] uppercase tracking-wide font-bold text-gray-500 mb-2">Passengers ({booking.number_of_participants || 1})</p>
+                            <div className="flex flex-wrap gap-2">
+                              {formatPassengersMultiline(booking).map((line: string, i: number) => (
+                                <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-xs text-gray-800">
+                                  {i === 0 && <span className="text-[9px] font-bold uppercase text-purple-600 mr-1.5">Lead</span>}
+                                  {line}
+                                </span>
+                              ))}
+                            </div>
+                            {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+                              <p className="text-xs text-gray-500 mt-2">Emergency: <span className="text-gray-800 font-medium">{booking.emergency_contact_name || '—'} · {booking.emergency_contact_phone || '—'}</span></p>
+                            )}
+                            {booking.pickup_point && (
+                              <p className="text-xs text-gray-500 mt-1">Pickup: <span className="text-gray-800 font-medium">{booking.pickup_point}</span></p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                     );
                   })}
                 </tbody>
