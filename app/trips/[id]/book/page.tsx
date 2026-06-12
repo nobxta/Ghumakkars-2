@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
+import { nextOccurrences, formatDeparture, batchEndDate } from '@/lib/recurrence';
 
 interface Passenger {
   name: string;
@@ -22,6 +23,10 @@ interface Trip {
   seat_lock_price?: number;
   max_participants: number;
   current_participants: number;
+  is_recurring?: boolean;
+  recurrence_day?: number;
+  recurrence_weeks_ahead?: number;
+  duration_days?: number;
 }
 
 // Removed college list — no longer needed
@@ -50,6 +55,7 @@ export default function BookTripPage() {
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [aadhaarId, setAadhaarId] = useState('');
+  const [departureDate, setDepartureDate] = useState('');
 
   // Additional Passengers
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -227,7 +233,7 @@ export default function BookTripPage() {
     try {
       const idOrSlug = String(params.id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions');
+      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days');
       const { data, error } = isUuid
         ? await query.eq('id', idOrSlug).single()
         : await query.eq('slug', idOrSlug).single();
@@ -409,6 +415,7 @@ export default function BookTripPage() {
         payment_status: 'pending',
         booking_status: 'pending',
         amount_paid: 0,
+        departure_date: trip.is_recurring ? departureDate : null,
       };
 
       const bookingRes = await fetch('/api/bookings', {
@@ -663,6 +670,7 @@ export default function BookTripPage() {
         booking_status: 'pending',
         amount_paid: 0,
         reference_id: null,
+        departure_date: trip.is_recurring ? departureDate : null,
       };
 
       const cashBookingRes = await fetch('/api/bookings', {
@@ -726,6 +734,10 @@ export default function BookTripPage() {
     }
     switch (step) {
       case 1:
+        if (trip?.is_recurring && !departureDate) {
+          setError('Please choose a departure date for this trip');
+          return false;
+        }
         if (!primaryName || !primaryEmail || !primaryPhone || !primaryGender || !primaryAge) {
           setError('Please fill in all primary passenger details');
           return false;
@@ -975,6 +987,7 @@ export default function BookTripPage() {
             payment_status: 'pending',
             booking_status: 'pending',
             amount_paid: 0,
+            departure_date: trip.is_recurring ? departureDate : null,
           },
         ])
         .select()
@@ -1230,6 +1243,43 @@ export default function BookTripPage() {
         {currentStep === 1 && (
           <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Passenger Details</h2>
+
+            {/* Departure date picker — recurring trips only */}
+            {trip?.is_recurring && typeof trip.recurrence_day === 'number' && (
+              <div className="mb-8">
+                <div className="flex items-center mb-3">
+                  <Calendar className="h-5 w-5 text-purple-600 mr-2" />
+                  <h3 className="text-lg font-semibold text-gray-900">Choose your departure date</h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-3">
+                  This trip departs every {formatDeparture(nextOccurrences(trip.recurrence_day, 1)[0], { weekday: 'long' })}. Pick the date you want to travel.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => {
+                    const selected = departureDate === d;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDepartureDate(d)}
+                        className={`px-3 py-3 rounded-xl border-2 text-left transition-all ${
+                          selected
+                            ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-100'
+                            : 'border-gray-200 hover:border-purple-300 bg-white'
+                        }`}
+                      >
+                        <p className={`text-sm font-bold ${selected ? 'text-purple-700' : 'text-gray-900'}`}>
+                          {formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          back {formatDeparture(batchEndDate(d, trip.duration_days), { day: 'numeric', month: 'short' })}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Primary Passenger */}
             <div className="mb-8">

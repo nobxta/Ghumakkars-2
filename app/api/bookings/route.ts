@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth-helpers';
+import { isValidDeparture } from '@/lib/recurrence';
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       booking_status,
       amount_paid,
       reference_id,
+      departure_date,
     } = body;
 
     if (!trip_id || !number_of_participants || number_of_participants < 1) {
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const { data: trip, error: tripError } = await adminClient
       .from('trips')
-      .select('id, max_participants, current_participants, is_active, booking_disabled, discounted_price, seat_lock_price, early_bird_price, early_bird_conditions')
+      .select('id, max_participants, current_participants, is_active, booking_disabled, discounted_price, seat_lock_price, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead')
       .eq('id', trip_id)
       .single();
 
@@ -82,14 +84,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const current = Number(trip.current_participants) || 0;
     const max = Number(trip.max_participants) || 0;
     const requested = Number(number_of_participants) || 1;
-    if (max > 0 && current + requested > max) {
-      return NextResponse.json(
-        { error: `Not enough seats. Only ${max - current} seat(s) left.` },
-        { status: 400 }
-      );
+
+    // ─── Recurring trips: validate the chosen departure + per-batch capacity ───
+    let validatedDeparture: string | null = null;
+    if (trip.is_recurring) {
+      if (!departure_date) {
+        return NextResponse.json(
+          { error: 'Please choose a departure date for this trip.' },
+          { status: 400 }
+        );
+      }
+      const weekday = Number(trip.recurrence_day);
+      const weeksAhead = Number(trip.recurrence_weeks_ahead) || 4;
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 ||
+          !isValidDeparture(String(departure_date), weekday, weeksAhead)) {
+        return NextResponse.json(
+          { error: 'That departure date is not available. Please pick one of the listed dates.' },
+          { status: 400 }
+        );
+      }
+      validatedDeparture = String(departure_date);
+
+      // Capacity is PER BATCH: count participants already booked for this departure.
+      if (max > 0) {
+        const { data: batchBookings } = await adminClient
+          .from('bookings')
+          .select('number_of_participants')
+          .eq('trip_id', trip_id)
+          .eq('departure_date', validatedDeparture)
+          .in('booking_status', ['confirmed', 'seat_locked', 'pending']);
+        const batchCount = (batchBookings || []).reduce(
+          (s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0
+        );
+        if (batchCount + requested > max) {
+          return NextResponse.json(
+            { error: `Not enough seats for that date. Only ${Math.max(0, max - batchCount)} seat(s) left on ${validatedDeparture}.` },
+            { status: 400 }
+          );
+        }
+      }
+    } else {
+      // Fixed-date trip: global capacity as before
+      const current = Number(trip.current_participants) || 0;
+      if (max > 0 && current + requested > max) {
+        return NextResponse.json(
+          { error: `Not enough seats. Only ${max - current} seat(s) left.` },
+          { status: 400 }
+        );
+      }
     }
 
     // ─── Server-side price validation (anti-tampering) ───
@@ -183,6 +227,7 @@ export async function POST(request: NextRequest) {
       booking_status: 'pending',
       amount_paid: 0,
       reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
+      departure_date: validatedDeparture,
     };
 
     const { data: booking, error: insertError } = await adminClient
