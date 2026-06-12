@@ -50,8 +50,8 @@ export default function BookingSuccessPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, coupon_code, coupon_discount,
-                 trips:trip_id (title, destination, start_date, end_date)`)
+        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, coupon_code, coupon_discount, departure_date,
+                 trips:trip_id (title, destination, start_date, end_date, is_recurring, duration_days)`)
         .eq('id', bookingId)
         .single();
       if (error) throw error;
@@ -208,15 +208,27 @@ export default function BookingSuccessPage() {
                   </p>
                 )}
               </div>
-              {trip.start_date && (
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>
-                    {new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {trip.end_date && ` → ${new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const dep = (booking as any).departure_date;
+                const start = (trip as any).is_recurring && dep ? dep : trip.start_date;
+                if (!start) return null;
+                let end = trip.end_date;
+                if ((trip as any).is_recurring && dep) {
+                  const [y, m, d] = dep.split('-').map(Number);
+                  const e = new Date(y, m - 1, d);
+                  e.setDate(e.getDate() + Math.max(0, ((trip as any).duration_days || 1) - 1));
+                  end = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+                }
+                return (
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <span>
+                      {new Date(start + (start.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      {end && ` → ${new Date(end + (end.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

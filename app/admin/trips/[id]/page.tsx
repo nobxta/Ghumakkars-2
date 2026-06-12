@@ -25,8 +25,9 @@ export default function AdminTripDetailsPage() {
   });
   const [customStatus, setCustomStatus] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending'>('all');
   const [trip, setTrip] = useState<any>(null);
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [offlineForm, setOfflineForm] = useState({
@@ -102,7 +103,7 @@ export default function AdminTripDetailsPage() {
       const data = await response.json();
       
       setTrip(data.trip);
-      setBookings(data.bookings || []);
+      setAllBookings(data.bookings || []);
       setMetrics(data.metrics);
 
       setLoading(false);
@@ -161,10 +162,47 @@ export default function AdminTripDetailsPage() {
     return 'Full';
   };
 
+  // Build the list of batches (distinct departure dates) for recurring trips.
+  const batchList: { date: string; count: number }[] = (() => {
+    if (!trip?.is_recurring) return [];
+    const map: Record<string, number> = {};
+    allBookings.forEach((b: any) => {
+      if (!b.departure_date) return;
+      if (['cancelled', 'rejected'].includes(b.booking_status)) return;
+      map[b.departure_date] = (map[b.departure_date] || 0) + (Number(b.number_of_participants) || 1);
+    });
+    return Object.entries(map)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  })();
+
+  // Everything below reads from the batch-filtered view.
+  const bookings = (trip?.is_recurring && selectedBatch !== 'all')
+    ? allBookings.filter((b: any) => b.departure_date === selectedBatch)
+    : allBookings;
+
   const confirmedBookings = bookings.filter((b: any) => b.booking_status === 'confirmed');
   const seatLockedBookings = bookings.filter((b: any) => b.booking_status === 'seat_locked');
   const pendingBookings = bookings.filter((b: any) => b.booking_status === 'pending');
   const cancelledRejectedBookings = bookings.filter((b: any) => ['rejected', 'cancelled'].includes(b.booking_status || ''));
+
+  // Recompute headline metrics from the filtered view so the stat cards
+  // and revenue reflect the selected batch.
+  const batchMetrics = {
+    totalBookings: bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status)).length,
+    confirmedBookings: confirmedBookings.length,
+    seatLockedBookings: seatLockedBookings.length,
+    pendingBookings: pendingBookings.length,
+    totalParticipants: bookings
+      .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
+      .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0),
+    revenue: bookings.reduce((s: number, b: any) => {
+      if (b.is_offline_booking || !b.user_id) return s + parseFloat(String(b.amount_paid || 0));
+      return s + (b.payment_transactions || [])
+        .filter((pt: any) => pt.payment_status === 'verified')
+        .reduce((x: number, pt: any) => x + parseFloat(String(pt.amount || 0)), 0);
+    }, 0),
+  };
 
   // ─────────────────────────── Operational exports ───────────────────────────
   const genericCSV = (rows: any[][], headers: string[], filename: string) => {
@@ -775,37 +813,70 @@ export default function AdminTripDetailsPage() {
           </div>
         </div>
 
-        {/* Revenue & Metrics Cards */}
+        {/* Batch selector — recurring trips only */}
+        {trip.is_recurring && (
+          <div className="bg-white rounded-xl border-2 border-purple-200 p-4 mb-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-purple-600" />
+                <span className="font-bold text-gray-900">Departure batch</span>
+                <span className="text-xs text-gray-500">(weekly trip)</span>
+              </div>
+              <select
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm font-semibold text-gray-900 focus:border-purple-500 outline-none"
+              >
+                <option value="all">All departures ({batchList.reduce((s, b) => s + b.count, 0)} pax)</option>
+                {batchList.map((b) => (
+                  <option key={b.date} value={b.date}>
+                    {new Date(b.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} — {b.count} pax
+                    {new Date(b.date + 'T00:00:00') < new Date(new Date().toDateString()) ? ' (past)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedBatch !== 'all' && (
+              <p className="text-xs text-purple-700 mt-2 font-medium">
+                Showing only bookings, revenue and exports for {new Date(selectedBatch + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Revenue & Metrics Cards (batch-aware when a batch is selected) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Total Revenue</p>
+              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch revenue' : 'Total Revenue'}</p>
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
             <p className="text-lg sm:text-2xl font-bold text-green-600 flex items-center">
               <IndianRupee className="h-6 w-6" />
-              {metrics?.totalRevenue?.toLocaleString() || '0'}
+              {(selectedBatch !== 'all' ? batchMetrics.revenue : (metrics?.totalRevenue || 0)).toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 mt-1">From verified payments</p>
           </div>
           <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Total Bookings</p>
+              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch bookings' : 'Total Bookings'}</p>
               <Package className="h-5 w-5 text-purple-600" />
             </div>
-            <p className="text-lg sm:text-2xl font-bold text-purple-600">{metrics?.totalBookings || 0}</p>
+            <p className="text-lg sm:text-2xl font-bold text-purple-600">{selectedBatch !== 'all' ? batchMetrics.totalBookings : (metrics?.totalBookings || 0)}</p>
             <p className="text-xs text-gray-500 mt-1">
-              {metrics?.confirmedBookings || 0} confirmed, {metrics?.pendingBookings || 0} pending
+              {selectedBatch !== 'all' ? batchMetrics.confirmedBookings : (metrics?.confirmedBookings || 0)} confirmed, {selectedBatch !== 'all' ? batchMetrics.pendingBookings : (metrics?.pendingBookings || 0)} pending
             </p>
           </div>
           <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Total Participants</p>
+              <p className="text-xs text-gray-600">{selectedBatch !== 'all' ? 'Batch participants' : 'Total Participants'}</p>
               <Users className="h-5 w-5 text-blue-600" />
             </div>
-            <p className="text-lg sm:text-2xl font-bold text-blue-600">{metrics?.totalParticipants || 0}</p>
+            <p className="text-lg sm:text-2xl font-bold text-blue-600">{selectedBatch !== 'all' ? batchMetrics.totalParticipants : (metrics?.totalParticipants || 0)}</p>
             <p className="text-xs text-gray-500 mt-1">
-              {trip.current_participants || 0}/{trip.max_participants || 0} capacity
+              {trip.is_recurring && selectedBatch !== 'all'
+                ? `${batchMetrics.totalParticipants}/${trip.max_participants || '∞'} this departure`
+                : `${trip.current_participants || 0}/${trip.max_participants || 0} capacity`}
             </p>
           </div>
           <div className="bg-white rounded-xl border-2 border-purple-100 p-4 shadow-lg">
@@ -815,7 +886,9 @@ export default function AdminTripDetailsPage() {
             </div>
             <p className="text-lg sm:text-2xl font-bold text-orange-600 flex items-center">
               <IndianRupee className="h-6 w-6" />
-              {metrics?.averageBookingValue?.toFixed(0) || '0'}
+              {selectedBatch !== 'all'
+                ? (batchMetrics.confirmedBookings > 0 ? Math.round(batchMetrics.revenue / batchMetrics.confirmedBookings) : 0)
+                : (metrics?.averageBookingValue?.toFixed(0) || '0')}
             </p>
             <p className="text-xs text-gray-500 mt-1">Per confirmed booking</p>
           </div>

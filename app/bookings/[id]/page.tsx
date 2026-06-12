@@ -103,6 +103,7 @@ export default function BookingDetailsPage() {
             end_date,
             duration_days,
             duration_text,
+            is_recurring,
             discounted_price,
             seat_lock_price,
             included_features,
@@ -286,10 +287,25 @@ export default function BookingDetailsPage() {
   const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const fmtDateShort = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
 
-  const daysUntil = trip?.start_date ? Math.max(0, Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / 86400000)) : 0;
+  // For recurring trips, the real travel dates come from the booking's chosen
+  // departure_date + the trip's duration, not the (null) trip start/end.
+  const computeEnd = (start: string, days?: number) => {
+    const [y, m, d] = start.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + Math.max(0, (days || 1) - 1));
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  const effectiveStart: string | undefined = (trip?.is_recurring && (booking as any).departure_date)
+    ? (booking as any).departure_date
+    : trip?.start_date;
+  const effectiveEnd: string | undefined = (trip?.is_recurring && (booking as any).departure_date)
+    ? computeEnd((booking as any).departure_date, trip?.duration_days)
+    : trip?.end_date;
+
+  const daysUntil = effectiveStart ? Math.max(0, Math.ceil((new Date(effectiveStart).getTime() - Date.now()) / 86400000)) : 0;
   const isUpcoming = daysUntil > 0;
   const isStartingSoon = daysUntil <= 7 && daysUntil > 0;
-  const isPast = trip?.end_date ? new Date(trip.end_date).getTime() < Date.now() : false;
+  const isPast = effectiveEnd ? new Date(effectiveEnd).getTime() < Date.now() : false;
 
   // Filter primary out of the passengers array — many old bookings stored
   // the primary as the first passenger entry too, causing the duplicate.
@@ -411,8 +427,8 @@ export default function BookingDetailsPage() {
   </div>
   <div class="body">
     <div class="row">
-      <div class="col"><p class="label">Departure</p><p class="value">${fmtDate(trip?.start_date)}</p></div>
-      <div class="col"><p class="label">Return</p><p class="value">${fmtDate(trip?.end_date)}</p></div>
+      <div class="col"><p class="label">Departure</p><p class="value">${fmtDate(effectiveStart)}</p></div>
+      <div class="col"><p class="label">Return</p><p class="value">${fmtDate(effectiveEnd)}</p></div>
       <div class="col"><p class="label">Duration</p><p class="value">${trip?.duration_text || (trip?.duration_days ? `${trip.duration_days} days` : '—')}</p></div>
       <div class="col"><p class="label">Travellers</p><p class="value">${booking.number_of_participants}</p></div>
     </div>
@@ -495,7 +511,7 @@ export default function BookingDetailsPage() {
               <MapPin className="h-4 w-4" />{trip?.destination || '—'}
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-white/70" />{fmtDateShort(trip?.start_date)} to {fmtDateShort(trip?.end_date)}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-white/70" />{fmtDateShort(effectiveStart)} to {fmtDateShort(effectiveEnd)}</span>
               <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-white/70" />{booking.number_of_participants} traveller{booking.number_of_participants > 1 ? 's' : ''}</span>
               <button onClick={copyBookingId} className="flex items-center gap-1.5 hover:text-white/100 text-white/85 font-mono text-xs">
                 <Copy className="h-3 w-3" />#{shortId}
@@ -569,7 +585,7 @@ export default function BookingDetailsPage() {
 
         {/* ─────────── OVERVIEW GRID ─────────── */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <InfoCard icon={<Calendar className="h-5 w-5 text-purple-600" />} label="Travel dates" value={`${fmtDateShort(trip?.start_date)} → ${fmtDateShort(trip?.end_date)}`} />
+          <InfoCard icon={<Calendar className="h-5 w-5 text-purple-600" />} label="Travel dates" value={`${fmtDateShort(effectiveStart)} → ${fmtDateShort(effectiveEnd)}`} />
           <InfoCard icon={<MapPin className="h-5 w-5 text-fuchsia-600" />} label="Destination" value={trip?.destination || '—'} />
           <InfoCard icon={<Users className="h-5 w-5 text-blue-600" />} label="Travellers" value={String(booking.number_of_participants)} />
           <InfoCard icon={<MapPin className="h-5 w-5 text-orange-600" />} label="Pickup point" value={'Shared 7 days before trip'} />

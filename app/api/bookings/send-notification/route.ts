@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
             destination,
             start_date,
             end_date,
+            is_recurring,
+            duration_days,
             discounted_price,
             whatsapp_group_link
           )
@@ -114,6 +116,17 @@ export async function POST(request: NextRequest) {
         { error: 'Missing user email for notification' },
         { status: 400 }
       );
+    }
+
+    // Effective travel dates: recurring trips use the booking's chosen departure.
+    const _dep = (booking as any).departure_date;
+    const effStart: string | null = (trip.is_recurring && _dep) ? _dep : trip.start_date;
+    let effEnd: string | null = trip.end_date;
+    if (trip.is_recurring && _dep) {
+      const [yy, mm, dd] = String(_dep).split('-').map(Number);
+      const e = new Date(yy, mm - 1, dd);
+      e.setDate(e.getDate() + Math.max(0, (trip.duration_days || 1) - 1));
+      effEnd = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
     }
 
     // Send appropriate email based on status
@@ -149,7 +162,7 @@ export async function POST(request: NextRequest) {
         const paidAmount = parseFloat(booking.payment_amount) || parseFloat(booking.final_amount) || 0;
         const remainingAmount = Math.max(0, fullTripPrice - paidAmount);
         
-        const startDate = new Date(trip.start_date);
+        const startDate = new Date(effStart || trip.start_date);
         const dueDate = new Date(startDate);
         dueDate.setDate(dueDate.getDate() - 5); // 5 days before departure
 
@@ -160,8 +173,8 @@ export async function POST(request: NextRequest) {
             bookingId: booking.id,
             tripTitle: trip.title,
             destination: trip.destination,
-            startDate: trip.start_date,
-            endDate: trip.end_date,
+            startDate: effStart || trip.start_date,
+            endDate: effEnd,
             seatLockAmount: paidAmount,
             remainingAmount: remainingAmount,
             dueDate: dueDate.toISOString().split('T')[0],
@@ -178,8 +191,8 @@ export async function POST(request: NextRequest) {
             bookingId: booking.id,
             tripTitle: trip.title,
             destination: trip.destination,
-            startDate: trip.start_date,
-            endDate: trip.end_date,
+            startDate: effStart || trip.start_date,
+            endDate: effEnd,
             totalAmount: booking.payment_amount || booking.final_amount,
             whatsappGroupLink: trip.whatsapp_group_link,
           }

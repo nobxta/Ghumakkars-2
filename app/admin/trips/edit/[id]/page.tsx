@@ -51,6 +51,11 @@ export default function EditTripPage() {
   const [maxSeats, setMaxSeats] = useState('');
   const [durationText, setDurationText] = useState('');
   const [currentParticipants, setCurrentParticipants] = useState(0);
+  // Recurring weekly trips
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceDay, setRecurrenceDay] = useState('5');
+  const [recurrenceWeeksAhead, setRecurrenceWeeksAhead] = useState('4');
+  const [recurringDurationDays, setRecurringDurationDays] = useState('3');
 
   // Step 4: Images
   const [coverImage, setCoverImage] = useState('');
@@ -100,6 +105,10 @@ export default function EditTripPage() {
       setMaxSeats(data.max_participants?.toString() || '');
       setDurationText(data.duration_text || '');
       setCurrentParticipants(data.current_participants || 0);
+      setIsRecurring(!!data.is_recurring);
+      if (data.recurrence_day != null) setRecurrenceDay(String(data.recurrence_day));
+      if (data.recurrence_weeks_ahead != null) setRecurrenceWeeksAhead(String(data.recurrence_weeks_ahead));
+      if (data.duration_days != null) setRecurringDurationDays(String(data.duration_days));
       
       // Format dates for input fields (YYYY-MM-DD)
       if (data.start_date) {
@@ -267,6 +276,13 @@ export default function EditTripPage() {
         }
         return true;
       case 3:
+        if (isRecurring) {
+          if (!recurringDurationDays || parseInt(recurringDurationDays) < 1) {
+            setError('Please set the trip length in days');
+            return false;
+          }
+          return true;
+        }
         if (!startDate || !endDate || !bookingDeadline) {
           setError('Please fill in all date and seat information');
           return false;
@@ -421,7 +437,9 @@ export default function EditTripPage() {
 
       const start = new Date(startDate);
       const end = new Date(endDate);
-      const durationDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const durationDays = isRecurring
+        ? (parseInt(recurringDurationDays) || 1)
+        : Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
       const filteredHighlights = highlights.filter(h => h.trim());
       const filteredGallery = galleryImages.filter(img => img.trim());
@@ -451,9 +469,12 @@ export default function EditTripPage() {
         max_participants: maxSeats ? parseInt(maxSeats) : null,
         duration_text: durationText.trim() || null,
         // Keep existing current_participants - don't reset it
-        start_date: startDate,
-        end_date: endDate,
-        booking_deadline_date: bookingDeadline,
+        start_date: isRecurring ? null : startDate,
+        end_date: isRecurring ? null : endDate,
+        booking_deadline_date: isRecurring ? null : bookingDeadline,
+        is_recurring: isRecurring,
+        recurrence_day: isRecurring ? parseInt(recurrenceDay) : null,
+        recurrence_weeks_ahead: isRecurring ? (parseInt(recurrenceWeeksAhead) || 4) : 4,
         cover_image_url: coverImage,
         image_url: coverImage,
         gallery_images: filteredGallery.length > 0 ? filteredGallery : null,
@@ -796,6 +817,42 @@ export default function EditTripPage() {
             </div>
 
             <div className="space-y-5">
+              {/* Recurring toggle */}
+              <div className="p-4 rounded-xl border-2 border-purple-200 bg-purple-50/50">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                  />
+                  <div>
+                    <span className="font-bold text-gray-900">🔁 Recurring weekly trip</span>
+                    <p className="text-xs text-gray-600">Departs the same weekday every week. Travellers pick their date at booking; seats count per departure.</p>
+                  </div>
+                </label>
+
+                {isRecurring && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Departs every</label>
+                      <select value={recurrenceDay} onChange={(e) => setRecurrenceDay(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none">
+                        {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d, i) => <option key={i} value={i}>{d}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Bookable weeks ahead</label>
+                      <input type="number" min="1" max="26" value={recurrenceWeeksAhead} onChange={(e) => setRecurrenceWeeksAhead(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Trip length (days)</label>
+                      <input type="number" min="1" max="30" value={recurringDurationDays} onChange={(e) => setRecurringDurationDays(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!isRecurring && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -805,7 +862,6 @@ export default function EditTripPage() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    required
                     className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
                 </div>
@@ -818,7 +874,6 @@ export default function EditTripPage() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    required
                     min={startDate}
                     className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                   />
@@ -829,7 +884,9 @@ export default function EditTripPage() {
                   )}
                 </div>
               </div>
+              )}
 
+              {!isRecurring && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Booking Deadline <span className="text-red-500">*</span>
@@ -838,7 +895,6 @@ export default function EditTripPage() {
                   type="date"
                   value={bookingDeadline}
                   onChange={(e) => setBookingDeadline(e.target.value)}
-                  required
                   max={startDate}
                   className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
                 />
@@ -846,6 +902,7 @@ export default function EditTripPage() {
                   Last date users can book this trip (must be before trip start)
                 </p>
               </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">

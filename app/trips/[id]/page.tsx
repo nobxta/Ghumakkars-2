@@ -244,6 +244,9 @@ export default function TripDetailPage() {
     d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
 
   // Pickup / Return date format — compact for stats card
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const isRecurring = !!(trip as any).is_recurring && (trip as any).recurrence_day != null;
+  const recurringLabel = isRecurring ? `Every ${DAY_NAMES[(trip as any).recurrence_day]}` : null;
   const pickupDay = formatDate(trip.start_date, { day: 'numeric', month: 'short' });
   const returnDay = trip.end_date ? formatDate(trip.end_date, { day: 'numeric', month: 'short' }) : null;
 
@@ -459,9 +462,9 @@ export default function TripDetailPage() {
                   <Calendar className="h-5 w-5 text-purple-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Dates</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">{isRecurring ? 'Departs' : 'Dates'}</p>
                   <p className="font-bold text-gray-900 text-sm sm:text-base mt-0.5 leading-tight truncate">
-                    {pickupDay}{returnDay && ` — ${returnDay}`}
+                    {isRecurring ? recurringLabel : <>{pickupDay}{returnDay && ` — ${returnDay}`}</>}
                   </p>
                 </div>
               </div>
