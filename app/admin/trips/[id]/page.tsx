@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -11,6 +11,7 @@ import {
   CheckCircle, XCircle, Clock, Package, CreditCard, TrendingUp,
   DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, X, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
 } from 'lucide-react';
+import { nextOccurrences, formatDeparture, toDateString } from '@/lib/recurrence';
 
 export default function AdminTripDetailsPage() {
   const params = useParams();
@@ -28,6 +29,7 @@ export default function AdminTripDetailsPage() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
   const [selectedBatch, setSelectedBatch] = useState<string>('all');
+  const batchDefaulted = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [offlineForm, setOfflineForm] = useState({
@@ -163,18 +165,41 @@ export default function AdminTripDetailsPage() {
   };
 
   // Build the list of batches (distinct departure dates) for recurring trips.
-  const batchList: { date: string; count: number }[] = (() => {
+  // Build batches: scheduled upcoming departures (from recurrence) merged with
+  // every departure that actually has bookings (past or future).
+  const todayStr = toDateString(new Date());
+  const batchList: { date: string; count: number; past: boolean }[] = (() => {
     if (!trip?.is_recurring) return [];
     const map: Record<string, number> = {};
+    // pax already booked per departure
     allBookings.forEach((b: any) => {
       if (!b.departure_date) return;
       if (['cancelled', 'rejected'].includes(b.booking_status)) return;
       map[b.departure_date] = (map[b.departure_date] || 0) + (Number(b.number_of_participants) || 1);
     });
+    // scheduled upcoming departures (even with 0 bookings) so admins can see "next batch"
+    if (typeof trip.recurrence_day === 'number') {
+      nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).forEach((d) => {
+        if (!(d in map)) map[d] = 0;
+      });
+    }
     return Object.entries(map)
-      .map(([date, count]) => ({ date, count }))
+      .map(([date, count]) => ({ date, count, past: date < todayStr }))
       .sort((a, b) => a.date.localeCompare(b.date));
   })();
+
+  const upcomingBatches = batchList.filter((b) => !b.past);
+  const pastBatches = batchList.filter((b) => b.past).sort((a, b) => b.date.localeCompare(a.date));
+  const nextBatchDate = upcomingBatches[0]?.date || '';
+
+  // Default to the next upcoming departure when the page first loads a recurring trip.
+  useEffect(() => {
+    if (trip?.is_recurring && selectedBatch === 'all' && nextBatchDate && !batchDefaulted.current) {
+      batchDefaulted.current = true;
+      setSelectedBatch(nextBatchDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.is_recurring, nextBatchDate]);
 
   // Everything below reads from the batch-filtered view.
   const bookings = (trip?.is_recurring && selectedBatch !== 'all')
@@ -816,29 +841,60 @@ export default function AdminTripDetailsPage() {
         {/* Batch selector — recurring trips only */}
         {trip.is_recurring && (
           <div className="bg-white rounded-xl border-2 border-purple-200 p-4 mb-6 shadow-sm">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-purple-600" />
-                <span className="font-bold text-gray-900">Departure batch</span>
-                <span className="text-xs text-gray-500">(weekly trip)</span>
-              </div>
-              <select
-                value={selectedBatch}
-                onChange={(e) => setSelectedBatch(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm font-semibold text-gray-900 focus:border-purple-500 outline-none"
-              >
-                <option value="all">All departures ({batchList.reduce((s, b) => s + b.count, 0)} pax)</option>
-                {batchList.map((b) => (
-                  <option key={b.date} value={b.date}>
-                    {new Date(b.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} — {b.count} pax
-                    {new Date(b.date + 'T00:00:00') < new Date(new Date().toDateString()) ? ' (past)' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="h-5 w-5 text-purple-600" />
+              <span className="font-bold text-gray-900">Departure batch</span>
+              <span className="text-xs text-gray-500">— weekly trip, every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</span>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Lifetime */}
+              <button
+                onClick={() => setSelectedBatch('all')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                  selectedBatch === 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                }`}
+              >
+                Lifetime ({batchList.reduce((s, b) => s + b.count, 0)} pax)
+              </button>
+
+              {/* Upcoming chips */}
+              {upcomingBatches.map((b, i) => (
+                <button
+                  key={b.date}
+                  onClick={() => setSelectedBatch(b.date)}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                    selectedBatch === b.date ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                  }`}
+                >
+                  {i === 0 && <span className={`mr-1 text-[10px] uppercase font-bold ${selectedBatch === b.date ? 'text-purple-200' : 'text-green-600'}`}>Next ·</span>}
+                  {formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+                  <span className={`ml-1 text-xs ${selectedBatch === b.date ? 'text-purple-200' : 'text-gray-400'}`}>({b.count})</span>
+                </button>
+              ))}
+
+              {/* Past dropdown */}
+              {pastBatches.length > 0 && (
+                <select
+                  value={pastBatches.some((b) => b.date === selectedBatch) ? selectedBatch : ''}
+                  onChange={(e) => e.target.value && setSelectedBatch(e.target.value)}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border outline-none cursor-pointer ${
+                    pastBatches.some((b) => b.date === selectedBatch) ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                  }`}
+                >
+                  <option value="">Past departures ▾</option>
+                  {pastBatches.map((b) => (
+                    <option key={b.date} value={b.date}>
+                      {formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} — {b.count} pax
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             {selectedBatch !== 'all' && (
-              <p className="text-xs text-purple-700 mt-2 font-medium">
-                Showing only bookings, revenue and exports for {new Date(selectedBatch + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.
+              <p className="text-xs text-purple-700 mt-3 font-medium">
+                Showing bookings, revenue and exports for {formatDeparture(selectedBatch, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{selectedBatch < todayStr ? ' (past departure)' : ''}.
               </p>
             )}
           </div>
