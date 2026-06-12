@@ -44,6 +44,8 @@ export default function AdminTripDetailsPage() {
   const [offlineSubmitting, setOfflineSubmitting] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
   const [editingAmountValue, setEditingAmountValue] = useState('');
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [savingDate, setSavingDate] = useState(false);
 
   useEffect(() => {
     checkUser();
@@ -789,6 +791,28 @@ export default function AdminTripDetailsPage() {
     }
   };
 
+  // Move a booking to a different departure batch (or assign one if unscheduled).
+  const handleChangeDeparture = async (bookingId: string, newDate: string) => {
+    setSavingDate(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ departure_date: newDate || null }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Update failed');
+      }
+      setEditingDateId(null);
+      await fetchTripDetails();
+    } catch (e: any) {
+      alert(e.message || 'Failed to change departure date');
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
@@ -1376,12 +1400,44 @@ export default function AdminTripDetailsPage() {
                           </p>
                         </div>
                         <div className="bg-blue-50 rounded-md p-2">
-                          <p className="text-xs text-gray-600 mb-0.5">{booking.departure_date ? 'Departs' : 'Booked'}</p>
-                          <p className="font-semibold text-gray-900 text-sm">
-                            {booking.departure_date
-                              ? formatDeparture(booking.departure_date, { weekday: 'short', day: '2-digit', month: 'short' })
-                              : new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                          </p>
+                          <p className="text-xs text-gray-600 mb-0.5">{trip.is_recurring ? 'Departs' : (booking.departure_date ? 'Departs' : 'Booked')}</p>
+                          {trip.is_recurring && typeof trip.recurrence_day === 'number' ? (
+                            editingDateId === booking.id ? (
+                              <select
+                                autoFocus
+                                disabled={savingDate}
+                                defaultValue={booking.departure_date || ''}
+                                onChange={(e) => handleChangeDeparture(booking.id, e.target.value)}
+                                onBlur={() => setEditingDateId(null)}
+                                className="w-full text-xs px-1.5 py-1 border border-purple-300 rounded bg-white text-gray-900"
+                              >
+                                <option value="">— No date —</option>
+                                {(() => {
+                                  const opts = nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4);
+                                  // keep the current value selectable even if it's a past date
+                                  if (booking.departure_date && !opts.includes(booking.departure_date)) opts.unshift(booking.departure_date);
+                                  return opts.map((d) => (
+                                    <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: '2-digit', month: 'short' })}</option>
+                                  ));
+                                })()}
+                              </select>
+                            ) : (
+                              <button
+                                onClick={() => setEditingDateId(booking.id)}
+                                className="font-semibold text-sm text-left hover:text-purple-700 hover:underline flex items-center gap-1"
+                                title="Click to change departure / move to another batch"
+                              >
+                                {booking.departure_date
+                                  ? formatDeparture(booking.departure_date, { weekday: 'short', day: '2-digit', month: 'short' })
+                                  : <span className="text-amber-600">Set date</span>}
+                                <Edit className="h-3 w-3 text-gray-400" />
+                              </button>
+                            )
+                          ) : (
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            </p>
+                          )}
                         </div>
                         <div className="bg-gray-50 rounded-md p-2">
                           <p className="text-xs text-gray-600 mb-0.5">Payment</p>

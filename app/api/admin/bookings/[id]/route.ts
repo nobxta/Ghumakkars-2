@@ -44,6 +44,20 @@ export async function PATCH(
       if (!Number.isNaN(n)) updates.number_of_participants = n;
     }
     if (body.passengers != null) updates.passengers = body.passengers;
+    // Move a booking to a different departure batch (or clear it).
+    if (body.departure_date !== undefined) {
+      const dep = body.departure_date;
+      if (dep === null || dep === '') {
+        updates.departure_date = null;
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(dep))) {
+        updates.departure_date = String(dep);
+      } else {
+        return NextResponse.json({ error: 'Invalid departure_date format' }, { status: 400 });
+      }
+    }
+    if (body.pickup_point !== undefined) {
+      updates.pickup_point = body.pickup_point ? String(body.pickup_point).slice(0, 200) : null;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
