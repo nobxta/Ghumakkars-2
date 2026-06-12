@@ -918,82 +918,58 @@ export default function AdminTripDetailsPage() {
           </div>
         </div>
 
-        {/* Batch selector — recurring trips only */}
+        {/* Departure selector — recurring trips only (compact dropdown) */}
         {trip.is_recurring && (
-          <div className="bg-white rounded-xl border-2 border-purple-200 p-4 mb-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="h-5 w-5 text-purple-600" />
-              <span className="font-bold text-gray-900">Departure batch</span>
-              <span className="text-xs text-gray-500">— weekly trip, every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 mb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 flex-shrink-0">
+              <Calendar className="h-4 w-4 text-purple-600" />
+              Departure
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Lifetime */}
-              <button
-                onClick={() => setSelectedBatch('all')}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                  selectedBatch === 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
-                }`}
-              >
-                Lifetime ({batchList.reduce((s, b) => s + b.count, 0)} pax)
-              </button>
-
-              {/* Upcoming chips */}
-              {upcomingBatches.map((b, i) => (
-                <button
-                  key={b.date}
-                  onClick={() => setSelectedBatch(b.date)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                    selectedBatch === b.date ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
-                  }`}
-                >
-                  {i === 0 && <span className={`mr-1 text-[10px] uppercase font-bold ${selectedBatch === b.date ? 'text-purple-200' : 'text-green-600'}`}>Next ·</span>}
-                  {formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short' })}
-                  <span className={`ml-1 text-xs ${selectedBatch === b.date ? 'text-purple-200' : 'text-gray-400'}`}>({b.count})</span>
-                </button>
-              ))}
-
-              {/* Unscheduled (bookings from before the trip was recurring) */}
-              {unscheduledCount > 0 && (
-                <button
-                  onClick={() => setSelectedBatch('unscheduled')}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                    selectedBatch === 'unscheduled' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300'
-                  }`}
-                  title="Bookings made before this trip became recurring (no chosen date)"
-                >
-                  No date set ({unscheduledCount})
-                </button>
-              )}
-
-              {/* Past dropdown */}
-              {pastBatches.length > 0 && (
-                <select
-                  value={pastBatches.some((b) => b.date === selectedBatch) ? selectedBatch : ''}
-                  onChange={(e) => e.target.value && setSelectedBatch(e.target.value)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border outline-none cursor-pointer ${
-                    pastBatches.some((b) => b.date === selectedBatch) ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
-                  }`}
-                >
-                  <option value="">Past departures ▾</option>
-                  {pastBatches.map((b) => (
+            <select
+              value={selectedBatch}
+              onChange={(e) => setSelectedBatch(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border border-gray-200 bg-white text-gray-900 outline-none focus:border-purple-400 cursor-pointer w-full sm:w-auto"
+            >
+              <option value="all">Lifetime — all departures ({batchList.reduce((s, b) => s + b.count, 0)} pax)</option>
+              {upcomingBatches.length > 0 && (
+                <optgroup label="Upcoming">
+                  {upcomingBatches.map((b, i) => (
                     <option key={b.date} value={b.date}>
-                      {formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} — {b.count} pax
+                      {i === 0 ? 'Next · ' : ''}{formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} ({b.count} pax)
                     </option>
                   ))}
-                </select>
+                </optgroup>
               )}
-            </div>
-
-            {selectedBatch === 'unscheduled' && (
-              <p className="text-xs text-amber-700 mt-3 font-medium">
-                These bookings were made before this trip became a weekly trip, so they have no chosen departure date. You can still see and export them here.
-              </p>
-            )}
-            {selectedBatch !== 'all' && selectedBatch !== 'unscheduled' && (
-              <p className="text-xs text-purple-700 mt-3 font-medium">
-                Showing bookings, revenue and exports for {formatDeparture(selectedBatch, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{selectedBatch < todayStr ? ' (past departure)' : ''}.
-              </p>
+              {pastBatches.length > 0 && (
+                <optgroup label="Past">
+                  {pastBatches.map((b) => (
+                    <option key={b.date} value={b.date}>
+                      {formatDeparture(b.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} ({b.count} pax)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {unscheduledCount > 0 && (
+                <optgroup label="Other">
+                  <option value="unscheduled">No date set ({unscheduledCount} pax)</option>
+                </optgroup>
+              )}
+            </select>
+            {selectedBatch !== 'all' && (
+              <div className="text-xs text-gray-600 sm:ml-1">
+                {selectedBatch === 'unscheduled' ? (
+                  <span className="text-amber-700 font-medium">Bookings with no chosen departure date</span>
+                ) : (
+                  <>
+                    <span className="font-semibold text-gray-900">{formatDeparture(selectedBatch, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    {selectedBatch < todayStr && <span className="text-gray-400"> · past</span>}
+                    <span className="mx-1.5 text-gray-300">•</span>
+                    {batchMetrics.totalParticipants} pax
+                    <span className="mx-1.5 text-gray-300">•</span>
+                    ₹{batchMetrics.revenue.toLocaleString()}
+                  </>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -1007,8 +983,9 @@ export default function AdminTripDetailsPage() {
             const conf = isBatch ? batchMetrics.confirmedBookings : (metrics?.confirmedBookings || 0);
             const pend = isBatch ? batchMetrics.pendingBookings : (metrics?.pendingBookings || 0);
             const pax = isBatch ? batchMetrics.totalParticipants : (metrics?.totalParticipants || 0);
-            const avg = isBatch ? (conf > 0 ? Math.round(batchMetrics.revenue / conf) : 0) : (Number(metrics?.averageBookingValue || 0));
-            const cap = isBatch && trip.is_recurring ? `${pax}/${trip.max_participants || '∞'}` : `${trip.current_participants || 0}/${trip.max_participants || 0}`;
+            const maxCap = Number(trip.max_participants) || 0;
+            const filled = isBatch ? pax : (Number(trip.current_participants) || 0);
+            const occPct = maxCap > 0 ? Math.min(100, Math.round((filled / maxCap) * 100)) : 0;
             const Cell = ({ icon, label, value, sub }: any) => (
               <div className="px-4 py-3">
                 <div className="flex items-center gap-1.5 text-gray-500 mb-1">{icon}<span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span></div>
@@ -1020,85 +997,18 @@ export default function AdminTripDetailsPage() {
               <>
                 <Cell icon={<TrendingUp className="h-3.5 w-3.5 text-green-600" />} label={isBatch ? 'Batch revenue' : 'Revenue'} value={`₹${rev.toLocaleString()}`} sub="verified payments" />
                 <Cell icon={<Package className="h-3.5 w-3.5 text-purple-600" />} label="Bookings" value={bk} sub={`${conf} confirmed · ${pend} pending`} />
-                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} sub={`${cap} ${isBatch ? 'this departure' : 'capacity'}`} />
-                <Cell icon={<DollarSign className="h-3.5 w-3.5 text-orange-600" />} label="Avg value" value={`₹${avg.toLocaleString()}`} sub="per confirmed" />
+                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} sub={isBatch ? 'this departure' : 'all departures'} />
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-1.5 text-gray-500 mb-1"><Users className="h-3.5 w-3.5 text-orange-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Occupancy</span></div>
+                  <p className="text-xl font-bold text-gray-900">{maxCap > 0 ? `${occPct}%` : '—'}</p>
+                  <div className="mt-1.5 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${occPct >= 100 ? 'bg-green-500' : occPct >= 60 ? 'bg-purple-500' : 'bg-amber-400'}`} style={{ width: `${maxCap > 0 ? occPct : 0}%` }} />
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">{filled} / {maxCap || '∞'} seats</p>
+                </div>
               </>
             );
           })()}
-        </div>
-
-        {/* Trip Information — compact */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-4 sm:mb-6">
-          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center">
-            <MapPin className="h-4 w-4 text-purple-600 mr-1.5" />
-            Trip Information
-          </h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Destination</p>
-              <p className="font-semibold text-gray-900 text-sm">{trip.destination}</p>
-            </div>
-            {trip.is_recurring ? (
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Schedule</p>
-                <p className="font-semibold text-gray-900 text-sm">Every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Start</p>
-                  <p className="font-semibold text-gray-900 text-sm">{trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">End</p>
-                  <p className="font-semibold text-gray-900 text-sm">{trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</p>
-                </div>
-              </>
-            )}
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Duration</p>
-              <p className="font-semibold text-gray-900 text-sm">{trip.duration_text || `${trip.duration_days || 0} days`}</p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Price</p>
-              <p className="font-semibold text-purple-600 text-sm flex items-center">
-                <IndianRupee className="h-3.5 w-3.5" />
-                {trip.discounted_price?.toLocaleString() || '0'}
-                {trip.original_price && trip.original_price > trip.discounted_price && (
-                  <span className="text-[11px] text-gray-400 line-through ml-1.5">₹{trip.original_price.toLocaleString()}</span>
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-0.5">Status</p>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                trip.status === 'completed'
-                  ? 'bg-blue-100 text-blue-700 border-blue-200'
-                  : trip.status === 'cancelled'
-                  ? 'bg-red-100 text-red-700 border-red-200'
-                  : trip.status === 'postponed'
-                  ? 'bg-orange-100 text-orange-700 border-orange-200'
-                  : trip.is_active
-                  ? 'bg-green-100 text-green-700 border-green-200'
-                  : 'bg-gray-100 text-gray-700 border-gray-200'
-              }`}>
-                {trip.status ? trip.status.charAt(0).toUpperCase() + trip.status.slice(1) : (trip.is_active ? 'Active' : 'Inactive')}
-              </span>
-              {trip.status === 'completed' && trip.completed_at && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Completed {new Date(trip.completed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              )}
-              {trip.status === 'postponed' && trip.postponed_to_date && (
-                <p className="text-xs text-orange-600 mt-1 font-medium">
-                  New date: {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              )}
-              {trip.status === 'cancelled' && trip.cancellation_reason && (
-                <p className="text-xs text-red-600 mt-1">Reason: {trip.cancellation_reason}</p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Add offline booking (face-to-face) — collapsible compact bar */}
@@ -1233,28 +1143,6 @@ export default function AdminTripDetailsPage() {
           )}
         </div>
 
-        {/* Booking stats summary — bookings + passengers */}
-        {bookings.length > 0 && (() => {
-          const pax = (list: any[]) => list.reduce((s, b) => s + (Number(b.number_of_participants) || 1), 0);
-          const Card = ({ cls, label, list }: { cls: string; label: string; list: any[] }) => (
-            <div className={`rounded-lg p-3 border ${cls}`}>
-              <p className="text-xs font-medium opacity-90">{label}</p>
-              <p className="text-lg font-bold mt-0.5">
-                {list.length} <span className="text-xs font-medium">booking{list.length === 1 ? '' : 's'}</span>
-              </p>
-              <p className="text-[11px] mt-0.5 opacity-80">{pax(list)} pax</p>
-            </div>
-          );
-          return (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <Card cls="bg-green-50 border-green-200 text-green-800" label="Confirmed" list={confirmedBookings} />
-              <Card cls="bg-orange-50 border-orange-200 text-orange-800" label="Seat locked" list={seatLockedBookings} />
-              <Card cls="bg-yellow-50 border-yellow-200 text-yellow-800" label="Pending" list={pendingBookings} />
-              <Card cls="bg-red-50 border-red-200 text-red-800" label="Cancelled / Rejected" list={cancelledRejectedBookings} />
-            </div>
-          );
-        })()}
-
         {/* Bookings Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -1369,17 +1257,32 @@ export default function AdminTripDetailsPage() {
                 />
               </div>
               <div className="flex items-center gap-1.5 overflow-x-auto">
-                {([['all','All'],['confirmed','Confirmed'],['seat_locked','Seat locked'],['pending','Pending'],['cancelled','Cancelled']] as const).map(([val,label]) => (
-                  <button
-                    key={val}
-                    onClick={() => setBookingFilter(val)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap transition-colors ${
-                      bookingFilter === val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {(() => {
+                  const statusCount = (s: string) => bookings.filter((b: any) =>
+                    s === 'cancelled'
+                      ? ['cancelled', 'rejected'].includes(b.booking_status)
+                      : b.booking_status === s
+                  ).length;
+                  const counts: Record<string, number> = {
+                    all: bookings.length,
+                    confirmed: statusCount('confirmed'),
+                    seat_locked: statusCount('seat_locked'),
+                    pending: statusCount('pending'),
+                    cancelled: statusCount('cancelled'),
+                  };
+                  return ([['all','All'],['confirmed','Confirmed'],['seat_locked','Seat locked'],['pending','Pending'],['cancelled','Cancelled']] as const).map(([val,label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setBookingFilter(val)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap transition-colors ${
+                        bookingFilter === val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      {label}
+                      <span className={`ml-1.5 ${bookingFilter === val ? 'text-purple-200' : 'text-gray-400'}`}>{counts[val]}</span>
+                    </button>
+                  ));
+                })()}
               </div>
             </div>
           )}
@@ -1646,6 +1549,38 @@ export default function AdminTripDetailsPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Trip details — compact strip (informational, kept below the actionable bookings) */}
+        <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-600 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+          <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4 text-purple-600" /><span className="font-semibold text-gray-900">{trip.destination}</span></span>
+          <span className="text-gray-300">•</span>
+          {trip.is_recurring ? (
+            <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4 text-gray-400" />Every {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}</span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4 text-gray-400" />{trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – {trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
+          )}
+          <span className="text-gray-300">•</span>
+          <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" />{trip.duration_text || `${trip.duration_days || 0} days`}</span>
+          <span className="text-gray-300">•</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-purple-700"><IndianRupee className="h-3.5 w-3.5" />{trip.discounted_price?.toLocaleString() || '0'}{trip.original_price && trip.original_price > trip.discounted_price && (<span className="text-[11px] text-gray-400 line-through ml-1 font-normal">₹{trip.original_price.toLocaleString()}</span>)}</span>
+          <span className="text-gray-300">•</span>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+            trip.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200'
+              : trip.status === 'cancelled' ? 'bg-red-100 text-red-700 border-red-200'
+              : trip.status === 'postponed' ? 'bg-orange-100 text-orange-700 border-orange-200'
+              : trip.is_active ? 'bg-green-100 text-green-700 border-green-200'
+              : 'bg-gray-100 text-gray-700 border-gray-200'
+          }`}>
+            {trip.status ? trip.status.charAt(0).toUpperCase() + trip.status.slice(1) : (trip.is_active ? 'Active' : 'Inactive')}
+          </span>
+          {trip.status === 'postponed' && trip.postponed_to_date && (
+            <span className="text-xs text-orange-600 font-medium">New date: {new Date(trip.postponed_to_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+          )}
+          {trip.status === 'cancelled' && trip.cancellation_reason && (
+            <span className="text-xs text-red-600">Reason: {trip.cancellation_reason}</span>
+          )}
+          <Link href={`/admin/trips/edit/${trip.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700"><Edit className="h-3.5 w-3.5" />Edit trip</Link>
         </div>
       </div>
 
