@@ -15,11 +15,14 @@ interface Booking {
   final_amount?: number;
   coupon_code?: string | null;
   coupon_discount?: number | string | null;
+  departure_date?: string | null;
   trips?: {
     title?: string;
     destination?: string;
     start_date?: string;
     end_date?: string;
+    is_recurring?: boolean;
+    duration_days?: number;
   };
 }
 

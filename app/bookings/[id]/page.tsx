@@ -20,6 +20,7 @@ interface Trip {
   end_date?: string;
   duration_days?: number;
   duration_text?: string;
+  is_recurring?: boolean;
   discounted_price?: number;
   seat_lock_price?: number;
   included_features?: string[];
@@ -57,6 +58,7 @@ interface Booking {
   passengers?: any[];
   created_at: string;
   rejection_reason?: string;
+  departure_date?: string;
   trips?: Trip;
 }
 
