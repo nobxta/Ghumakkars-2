@@ -1424,7 +1424,7 @@ export default function AdminTripDetailsPage() {
                             ) : (
                               <button
                                 onClick={() => setEditingDateId(booking.id)}
-                                className="font-semibold text-sm text-left hover:text-purple-700 hover:underline flex items-center gap-1"
+                                className="font-semibold text-sm text-gray-900 text-left hover:text-purple-700 hover:underline flex items-center gap-1"
                                 title="Click to change departure / move to another batch"
                               >
                                 {booking.departure_date
