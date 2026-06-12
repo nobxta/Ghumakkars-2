@@ -46,6 +46,8 @@ export default function AdminTripDetailsPage() {
   const [editingAmountValue, setEditingAmountValue] = useState('');
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
   const [savingDate, setSavingDate] = useState(false);
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [bookingFilter, setBookingFilter] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending' | 'cancelled'>('all');
 
   useEffect(() => {
     checkUser();
@@ -218,6 +220,20 @@ export default function AdminTripDetailsPage() {
     if (selectedBatch === 'unscheduled') return allBookings.filter((b: any) => !b.departure_date);
     return allBookings.filter((b: any) => b.departure_date === selectedBatch);
   })();
+
+  // Search + status filter applied to the (batch-filtered) bookings for the table.
+  const visibleBookings = bookings.filter((b: any) => {
+    if (bookingFilter !== 'all') {
+      if (bookingFilter === 'cancelled') { if (!['cancelled', 'rejected'].includes(b.booking_status)) return false; }
+      else if (b.booking_status !== bookingFilter) return false;
+    }
+    const q = bookingSearch.trim().toLowerCase();
+    if (!q) return true;
+    const name = (b.primary_passenger_name || `${b.profiles?.first_name || ''} ${b.profiles?.last_name || ''}` || b.profiles?.email || '').toLowerCase();
+    const phone = (b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '').toLowerCase();
+    const id = String(b.id || '').toLowerCase();
+    return name.includes(q) || phone.includes(q) || id.includes(q);
+  });
 
   const confirmedBookings = bookings.filter((b: any) => b.booking_status === 'confirmed');
   const seatLockedBookings = bookings.filter((b: any) => b.booking_status === 'seat_locked');
@@ -849,7 +865,7 @@ export default function AdminTripDetailsPage() {
 
   return (
     <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="mb-6">
           <Link 
@@ -1219,11 +1235,11 @@ export default function AdminTripDetailsPage() {
         )}
 
         {/* Bookings Section */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-purple-100 p-4 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
-              <Package className="h-5 w-5 text-purple-600 mr-2" />
-              All Bookings ({bookings.length})
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h2 className="text-base font-bold text-gray-900 flex items-center">
+              <Package className="h-4 w-4 text-purple-600 mr-2" />
+              Bookings <span className="text-gray-400 font-semibold ml-1">({visibleBookings.length})</span>
             </h2>
             {bookings.length > 0 && (
               <div className="relative">
@@ -1318,9 +1334,121 @@ export default function AdminTripDetailsPage() {
               </div>
             )}
           </div>
-          {bookings.length > 0 ? (
-            <div className="space-y-3">
-              {bookings.map((booking) => {
+
+          {/* Search + filter pills */}
+          {bookings.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Eye className="hidden" />
+                <input
+                  value={bookingSearch}
+                  onChange={(e) => setBookingSearch(e.target.value)}
+                  placeholder="Search name, phone or booking ID…"
+                  className="w-full pl-3 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto">
+                {([['all','All'],['confirmed','Confirmed'],['seat_locked','Seat locked'],['pending','Pending'],['cancelled','Cancelled']] as const).map(([val,label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setBookingFilter(val)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap transition-colors ${
+                      bookingFilter === val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Desktop table (lg+) */}
+          {visibleBookings.length > 0 && (
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-200">
+                    <th className="py-2 pr-3 font-semibold">Customer</th>
+                    <th className="py-2 px-3 font-semibold">Phone</th>
+                    <th className="py-2 px-3 font-semibold text-center">Pax</th>
+                    <th className="py-2 px-3 font-semibold">{trip.is_recurring ? 'Departs' : 'Booked'}</th>
+                    <th className="py-2 px-3 font-semibold">Payment</th>
+                    <th className="py-2 px-3 font-semibold">Status</th>
+                    <th className="py-2 pl-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {visibleBookings.map((booking: any) => {
+                    const isOffline = booking.is_offline_booking || !booking.user_id;
+                    const user = booking.profiles;
+                    const displayName = isOffline
+                      ? (booking.primary_passenger_name || 'Offline')
+                      : (user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.email || 'User');
+                    const displayPhone = isOffline ? (booking.primary_passenger_phone || booking.contact_phone || '—') : (user?.phone || '—');
+                    return (
+                      <tr key={booking.id} className="hover:bg-gray-50/70">
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${isOffline ? 'bg-amber-500' : 'bg-purple-600'}`}>
+                              {(displayName[0] || '?').toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-900 truncate flex items-center gap-1.5">
+                                {displayName}
+                                {isOffline && <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-amber-100 text-amber-700">Offline</span>}
+                                {booking.coupon_code && <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-green-100 text-green-700">{booking.coupon_code}</span>}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-gray-700 whitespace-nowrap">{displayPhone}</td>
+                        <td className="py-2.5 px-3 text-center font-semibold text-gray-900">{booking.number_of_participants || 1}</td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {trip.is_recurring && typeof trip.recurrence_day === 'number' ? (
+                            editingDateId === booking.id ? (
+                              <select autoFocus disabled={savingDate} defaultValue={booking.departure_date || ''}
+                                onChange={(e) => handleChangeDeparture(booking.id, e.target.value)} onBlur={() => setEditingDateId(null)}
+                                className="text-xs px-1.5 py-1 border border-purple-300 rounded bg-white text-gray-900">
+                                <option value="">— No date —</option>
+                                {(() => { const opts = nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4); if (booking.departure_date && !opts.includes(booking.departure_date)) opts.unshift(booking.departure_date); return opts.map((d) => <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: '2-digit', month: 'short' })}</option>); })()}
+                              </select>
+                            ) : (
+                              <button onClick={() => setEditingDateId(booking.id)} className="font-semibold text-gray-900 hover:text-purple-700 hover:underline flex items-center gap-1" title="Change departure">
+                                {booking.departure_date ? formatDeparture(booking.departure_date, { weekday: 'short', day: '2-digit', month: 'short' }) : <span className="text-amber-600">Set date</span>}
+                                <Edit className="h-3 w-3 text-gray-400" />
+                              </button>
+                            )
+                          ) : (
+                            <span className="text-gray-700">{new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-gray-600 text-xs whitespace-nowrap">{getPaymentModeLabel(booking.payment_mode)} / {isOffline ? 'Offline' : getPaymentMethodLabel(booking.payment_method)}</td>
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusColor(booking.booking_status || 'pending')}`}>
+                            {(booking.booking_status || 'pending') === 'seat_locked' ? 'Seat Locked' : (booking.booking_status || 'pending').charAt(0).toUpperCase() + (booking.booking_status || 'pending').slice(1).replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {!isOffline && (
+                              <Link href={`/admin/users/${user?.id || booking.user_id}`} className="p-1.5 rounded hover:bg-purple-50 text-purple-600" title="Customer profile"><User className="h-3.5 w-3.5" /></Link>
+                            )}
+                            <Link href={`/admin/bookings/${booking.id}`} className="p-1.5 rounded hover:bg-purple-50 text-purple-600" title="Booking details"><Eye className="h-3.5 w-3.5" /></Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Mobile cards (below lg) */}
+          {visibleBookings.length > 0 ? (
+            <div className="space-y-3 lg:hidden">
+              {visibleBookings.map((booking: any) => {
                 const isOffline = booking.is_offline_booking || !booking.user_id;
                 const user = booking.profiles;
                 const displayName = isOffline
@@ -1450,7 +1578,10 @@ export default function AdminTripDetailsPage() {
           ) : (
             <div className="text-center py-12">
               <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600">No bookings found</p>
+              <p className="text-gray-600">{bookingSearch || bookingFilter !== 'all' ? 'No bookings match your search or filter' : 'No bookings yet'}</p>
+              {(bookingSearch || bookingFilter !== 'all') && (
+                <button onClick={() => { setBookingSearch(''); setBookingFilter('all'); }} className="mt-2 text-sm text-purple-600 font-semibold hover:underline">Clear filters</button>
+              )}
             </div>
           )}
         </div>
