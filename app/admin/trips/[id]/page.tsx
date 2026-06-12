@@ -37,8 +37,10 @@ export default function AdminTripDetailsPage() {
     mobile: '',
     participants: 1,
     amount_paid: '',
+    departure_date: '',
     passengers: [{ name: '', age: '' }] as { name: string; age: string }[],
   });
+  const [offlineOpen, setOfflineOpen] = useState(false);
   const [offlineSubmitting, setOfflineSubmitting] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
   const [editingAmountValue, setEditingAmountValue] = useState('');
@@ -192,6 +194,13 @@ export default function AdminTripDetailsPage() {
   const pastBatches = batchList.filter((b) => b.past).sort((a, b) => b.date.localeCompare(a.date));
   const nextBatchDate = upcomingBatches[0]?.date || '';
 
+  // Bookings made before the trip became recurring have no departure_date.
+  // Surface them under an "Unscheduled" group so they don't disappear.
+  const unscheduledCount = trip?.is_recurring
+    ? allBookings.filter((b: any) => !b.departure_date && !['cancelled', 'rejected'].includes(b.booking_status))
+        .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0)
+    : 0;
+
   // Default to the next upcoming departure when the page first loads a recurring trip.
   useEffect(() => {
     if (trip?.is_recurring && selectedBatch === 'all' && nextBatchDate && !batchDefaulted.current) {
@@ -202,9 +211,11 @@ export default function AdminTripDetailsPage() {
   }, [trip?.is_recurring, nextBatchDate]);
 
   // Everything below reads from the batch-filtered view.
-  const bookings = (trip?.is_recurring && selectedBatch !== 'all')
-    ? allBookings.filter((b: any) => b.departure_date === selectedBatch)
-    : allBookings;
+  const bookings = (() => {
+    if (!trip?.is_recurring || selectedBatch === 'all') return allBookings;
+    if (selectedBatch === 'unscheduled') return allBookings.filter((b: any) => !b.departure_date);
+    return allBookings.filter((b: any) => b.departure_date === selectedBatch);
+  })();
 
   const confirmedBookings = bookings.filter((b: any) => b.booking_status === 'confirmed');
   const seatLockedBookings = bookings.filter((b: any) => b.booking_status === 'seat_locked');
@@ -727,6 +738,10 @@ export default function AdminTripDetailsPage() {
       alert('Please enter amount paid.');
       return;
     }
+    if (trip?.is_recurring && !offlineForm.departure_date) {
+      alert('Please choose a departure date for this booking.');
+      return;
+    }
     setOfflineSubmitting(true);
     try {
       const res = await fetch(`/api/admin/trips/${params.id}/offline-bookings`, {
@@ -737,6 +752,7 @@ export default function AdminTripDetailsPage() {
           mobile: offlineForm.mobile.trim(),
           participants: Math.max(1, parseInt(String(offlineForm.participants), 10) || 1),
           amount_paid: amount,
+          departure_date: trip?.is_recurring ? offlineForm.departure_date : null,
           passengers: offlineForm.passengers
             .filter(p => p.name.trim())
             .map(p => ({ name: p.name.trim(), age: p.age.trim() || undefined })),
@@ -746,7 +762,7 @@ export default function AdminTripDetailsPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to add offline booking');
       }
-      setOfflineForm({ name: '', mobile: '', participants: 1, amount_paid: '', passengers: [{ name: '', age: '' }] });
+      setOfflineForm({ name: '', mobile: '', participants: 1, amount_paid: '', departure_date: '', passengers: [{ name: '', age: '' }] });
       await fetchTripDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to add offline booking');
@@ -874,6 +890,19 @@ export default function AdminTripDetailsPage() {
                 </button>
               ))}
 
+              {/* Unscheduled (bookings from before the trip was recurring) */}
+              {unscheduledCount > 0 && (
+                <button
+                  onClick={() => setSelectedBatch('unscheduled')}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                    selectedBatch === 'unscheduled' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300'
+                  }`}
+                  title="Bookings made before this trip became recurring (no chosen date)"
+                >
+                  No date set ({unscheduledCount})
+                </button>
+              )}
+
               {/* Past dropdown */}
               {pastBatches.length > 0 && (
                 <select
@@ -893,7 +922,12 @@ export default function AdminTripDetailsPage() {
               )}
             </div>
 
-            {selectedBatch !== 'all' && (
+            {selectedBatch === 'unscheduled' && (
+              <p className="text-xs text-amber-700 mt-3 font-medium">
+                These bookings were made before this trip became a weekly trip, so they have no chosen departure date. You can still see and export them here.
+              </p>
+            )}
+            {selectedBatch !== 'all' && selectedBatch !== 'unscheduled' && (
               <p className="text-xs text-purple-700 mt-3 font-medium">
                 Showing bookings, revenue and exports for {formatDeparture(selectedBatch, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{selectedBatch < todayStr ? ' (past departure)' : ''}.
               </p>
@@ -1024,13 +1058,43 @@ export default function AdminTripDetailsPage() {
           </div>
         </div>
 
-        {/* Add offline booking (face-to-face) */}
+        {/* Add offline booking (face-to-face) — collapsible */}
         <div className="bg-amber-50/80 border-2 border-amber-200 rounded-2xl p-4 sm:p-6 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-            <UserPlus className="h-5 w-5 text-amber-600 mr-2" />
-            Add offline booking
-          </h2>
-          <p className="text-sm text-gray-600 mb-4">Add someone who booked face-to-face (no website account). Only name and mobile required.</p>
+          <button
+            type="button"
+            onClick={() => setOfflineOpen(o => !o)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <span className="text-lg font-bold text-gray-900 flex items-center">
+              <UserPlus className="h-5 w-5 text-amber-600 mr-2" />
+              Add offline booking
+            </span>
+            <ChevronDown className={`h-5 w-5 text-amber-700 transition-transform ${offlineOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {!offlineOpen && (
+            <p className="text-sm text-gray-600 mt-2">Click to add someone who booked face-to-face (no website account).</p>
+          )}
+          {offlineOpen && (
+          <>
+          <p className="text-sm text-gray-600 mb-4 mt-3">Add someone who booked face-to-face (no website account). Only name and mobile required.</p>
+
+          {/* Departure batch selector for recurring trips */}
+          {trip.is_recurring && typeof trip.recurrence_day === 'number' && (
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Departure date <span className="text-red-500">*</span></label>
+              <select
+                value={offlineForm.departure_date}
+                onChange={e => setOfflineForm(f => ({ ...f, departure_date: e.target.value }))}
+                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+              >
+                <option value="">Choose a departure…</option>
+                {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => (
+                  <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <form onSubmit={handleAddOffline} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
               <div>
@@ -1124,6 +1188,8 @@ export default function AdminTripDetailsPage() {
               </div>
             </div>
           </form>
+          </>
+          )}
         </div>
 
         {/* Booking stats summary */}
@@ -1310,9 +1376,11 @@ export default function AdminTripDetailsPage() {
                           </p>
                         </div>
                         <div className="bg-blue-50 rounded-md p-2">
-                          <p className="text-xs text-gray-600 mb-0.5">Date</p>
+                          <p className="text-xs text-gray-600 mb-0.5">{booking.departure_date ? 'Departs' : 'Booked'}</p>
                           <p className="font-semibold text-gray-900 text-sm">
-                            {new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            {booking.departure_date
+                              ? formatDeparture(booking.departure_date, { weekday: 'short', day: '2-digit', month: 'short' })
+                              : new Date(booking.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                           </p>
                         </div>
                         <div className="bg-gray-50 rounded-md p-2">

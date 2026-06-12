@@ -20,6 +20,7 @@ export async function POST(
       participants = 1,
       amount_paid,
       booking_date,
+      departure_date,
       passenger_details,
       passengers: passengersBody,
     } = body;
@@ -69,6 +70,7 @@ export async function POST(
       number_of_participants: numParticipants,
       total_price: amount,
       final_amount: amount,
+      departure_date: departure_date || null,
       booking_status: 'confirmed',
       payment_mode: 'cash',
       payment_status: 'paid',
