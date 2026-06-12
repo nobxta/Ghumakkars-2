@@ -69,32 +69,44 @@ export async function POST(request: NextRequest) {
     // Check if all payments for this booking are verified
     const { data: allPayments, error: paymentsError } = await adminClient
       .from('payment_transactions')
-      .select('payment_status, payment_type')
+      .select('payment_status, payment_type, amount')
       .eq('booking_id', bookingId);
 
     if (!paymentsError && allPayments) {
       const allVerified = allPayments.every(p => p.payment_status === 'verified');
       const hasRejected = allPayments.some(p => p.payment_status === 'rejected');
-      
-      // Fetch booking to get current state
+
+      // Fetch booking to get the true amount owed (final_amount already includes
+      // coupon/wallet discounts; fall back to discounted_price × pax).
       const { data: bookingData } = await adminClient
         .from('bookings')
-        .select('payment_method, payment_amount, trips(discounted_price)')
+        .select('payment_method, final_amount, number_of_participants, trips(discounted_price)')
         .eq('id', bookingId)
         .single();
 
       let bookingStatus = 'pending';
-      
+
       if (hasRejected) {
         bookingStatus = 'rejected';
       } else if (allVerified) {
-        // All payments verified - check if it's full payment or seat lock
-        const totalPaid = allPayments.reduce((sum, p) => sum + parseFloat(String(p.payment_status === 'verified' ? bookingData?.payment_amount : 0)), 0);
-        const tripsArray = bookingData?.trips;
-        const trip = Array.isArray(tripsArray) && tripsArray.length > 0 ? tripsArray[0] : null;
-        const fullPrice = (trip?.discounted_price || 0) * (booking?.number_of_participants || 1);
-        
-        if (booking?.payment_method === 'seat_lock' && totalPaid < fullPrice) {
+        // Sum the ACTUAL verified transaction amounts (not the booking field).
+        const totalPaid = allPayments
+          .filter(p => p.payment_status === 'verified')
+          .reduce((sum, p) => sum + parseFloat(String(p.amount || 0)), 0);
+
+        // Supabase returns a to-one relation as an object (sometimes an array).
+        const tripsRel: any = (bookingData as any)?.trips;
+        const trip = Array.isArray(tripsRel) ? tripsRel[0] : tripsRel;
+        const pax = Number((bookingData as any)?.number_of_participants || booking?.number_of_participants || 1);
+        // Full trip cost = discounted price × participants. For seat-lock bookings
+        // final_amount is only the DEPOSIT, so we must compare against the full
+        // trip cost (matches the user-side remaining-amount calculation).
+        const fullPrice = Number(trip?.discounted_price || 0) * pax;
+
+        // A seat-lock booking stays "seat_locked" until the full trip cost is
+        // paid; only then does it become "confirmed".
+        const method = (bookingData as any)?.payment_method || booking?.payment_method;
+        if (method === 'seat_lock' && fullPrice > 0 && totalPaid < fullPrice - 1) {
           bookingStatus = 'seat_locked';
         } else {
           bookingStatus = 'confirmed';

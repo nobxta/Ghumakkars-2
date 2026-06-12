@@ -206,11 +206,14 @@ export default function AdminTripDetailsPage() {
       .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
   };
   const bookingFull = (b: any): number => {
-    // final_amount already includes coupon/wallet discounts for the whole booking.
+    const pax = Number(b.number_of_participants) || 1;
+    const tripFull = (Number(trip?.discounted_price) || 0) * pax;
+    // Seat-lock bookings: final_amount is only the DEPOSIT, so the real cost
+    // is the full trip price (discounted × pax).
+    if (b.payment_method === 'seat_lock') return tripFull;
+    // Full-payment bookings: final_amount is the post-coupon total they owe.
     const fa = parseFloat(String(b.final_amount || 0));
-    if (fa > 0) return fa;
-    // Fallback: discounted per-person price × participants.
-    return (Number(trip?.discounted_price) || 0) * (Number(b.number_of_participants) || 1);
+    return fa > 0 ? fa : tripFull;
   };
   const bookingRemaining = (b: any): number => {
     if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;
