@@ -198,6 +198,25 @@ export default function AdminTripDetailsPage() {
   const pastBatches = batchList.filter((b) => b.past).sort((a, b) => b.date.localeCompare(a.date));
   const nextBatchDate = upcomingBatches[0]?.date || '';
 
+  // Per-booking money: what they paid, the full trip cost (after discount), and remaining.
+  const bookingPaid = (b: any): number => {
+    if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
+    return (b.payment_transactions || [])
+      .filter((pt: any) => pt.payment_status === 'verified')
+      .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
+  };
+  const bookingFull = (b: any): number => {
+    // final_amount already includes coupon/wallet discounts for the whole booking.
+    const fa = parseFloat(String(b.final_amount || 0));
+    if (fa > 0) return fa;
+    // Fallback: discounted per-person price × participants.
+    return (Number(trip?.discounted_price) || 0) * (Number(b.number_of_participants) || 1);
+  };
+  const bookingRemaining = (b: any): number => {
+    if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;
+    return Math.max(0, bookingFull(b) - bookingPaid(b));
+  };
+
   // Bookings made before the trip became recurring have no departure_date.
   // Surface them under an "Unscheduled" group so they don't disappear.
   const unscheduledCount = trip?.is_recurring
@@ -1212,27 +1231,27 @@ export default function AdminTripDetailsPage() {
           )}
         </div>
 
-        {/* Booking stats summary */}
-        {bookings.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-xs text-green-700 font-medium">Confirmed</p>
-              <p className="text-lg font-bold text-green-800">{confirmedBookings.length}</p>
+        {/* Booking stats summary — bookings + passengers */}
+        {bookings.length > 0 && (() => {
+          const pax = (list: any[]) => list.reduce((s, b) => s + (Number(b.number_of_participants) || 1), 0);
+          const Card = ({ cls, label, list }: { cls: string; label: string; list: any[] }) => (
+            <div className={`rounded-lg p-3 border ${cls}`}>
+              <p className="text-xs font-medium opacity-90">{label}</p>
+              <p className="text-lg font-bold mt-0.5">
+                {list.length} <span className="text-xs font-medium">booking{list.length === 1 ? '' : 's'}</span>
+              </p>
+              <p className="text-[11px] mt-0.5 opacity-80">{pax(list)} pax</p>
             </div>
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-              <p className="text-xs text-orange-700 font-medium">Seat locked</p>
-              <p className="text-lg font-bold text-orange-800">{seatLockedBookings.length}</p>
+          );
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <Card cls="bg-green-50 border-green-200 text-green-800" label="Confirmed" list={confirmedBookings} />
+              <Card cls="bg-orange-50 border-orange-200 text-orange-800" label="Seat locked" list={seatLockedBookings} />
+              <Card cls="bg-yellow-50 border-yellow-200 text-yellow-800" label="Pending" list={pendingBookings} />
+              <Card cls="bg-red-50 border-red-200 text-red-800" label="Cancelled / Rejected" list={cancelledRejectedBookings} />
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-xs text-yellow-700 font-medium">Pending</p>
-              <p className="text-lg font-bold text-yellow-800">{pendingBookings.length}</p>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-xs text-red-700 font-medium">Cancelled / Rejected</p>
-              <p className="text-lg font-bold text-red-800">{cancelledRejectedBookings.length}</p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Bookings Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
@@ -1374,6 +1393,7 @@ export default function AdminTripDetailsPage() {
                     <th className="py-2 px-3 font-semibold text-center">Pax</th>
                     <th className="py-2 px-3 font-semibold">{trip.is_recurring ? 'Departs' : 'Booked'}</th>
                     <th className="py-2 px-3 font-semibold">Payment</th>
+                    <th className="py-2 px-3 font-semibold text-right">Amount</th>
                     <th className="py-2 px-3 font-semibold">Status</th>
                     <th className="py-2 pl-3 font-semibold text-right">Actions</th>
                   </tr>
@@ -1424,10 +1444,19 @@ export default function AdminTripDetailsPage() {
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-gray-600 text-xs whitespace-nowrap">{getPaymentModeLabel(booking.payment_mode)} / {isOffline ? 'Offline' : getPaymentMethodLabel(booking.payment_method)}</td>
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <p className="font-semibold text-gray-900">₹{bookingPaid(booking).toLocaleString('en-IN')}</p>
+                          {bookingRemaining(booking) > 0 && (
+                            <p className="text-[11px] text-orange-600 font-medium">₹{bookingRemaining(booking).toLocaleString('en-IN')} due</p>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusColor(booking.booking_status || 'pending')}`}>
                             {(booking.booking_status || 'pending') === 'seat_locked' ? 'Seat Locked' : (booking.booking_status || 'pending').charAt(0).toUpperCase() + (booking.booking_status || 'pending').slice(1).replace(/_/g, ' ')}
                           </span>
+                          {bookingRemaining(booking) > 0 && booking.booking_status === 'confirmed' && (
+                            <p className="text-[10px] text-orange-600 font-semibold mt-0.5">balance pending</p>
+                          )}
                         </td>
                         <td className="py-2.5 pl-3">
                           <div className="flex items-center justify-end gap-1">
@@ -1548,10 +1577,11 @@ export default function AdminTripDetailsPage() {
                           )}
                         </div>
                         <div className="bg-gray-50 rounded-md p-2">
-                          <p className="text-xs text-gray-600 mb-0.5">Payment</p>
-                          <p className="font-semibold text-gray-900 text-xs">
-                            {getPaymentModeLabel(booking.payment_mode)} / {isOffline ? 'Offline' : getPaymentMethodLabel(booking.payment_method)}
-                          </p>
+                          <p className="text-xs text-gray-600 mb-0.5">Amount</p>
+                          <p className="font-semibold text-gray-900 text-xs">₹{bookingPaid(booking).toLocaleString('en-IN')}</p>
+                          {bookingRemaining(booking) > 0 && (
+                            <p className="text-[10px] text-orange-600 font-medium">₹{bookingRemaining(booking).toLocaleString('en-IN')} due</p>
+                          )}
                         </div>
                       </div>
 
