@@ -208,13 +208,19 @@ export default function AdminTripDetailsPage() {
   };
   const bookingFull = (b: any): number => {
     const pax = Number(b.number_of_participants) || 1;
-    const tripFull = (Number(trip?.discounted_price) || 0) * pax;
-    // Seat-lock bookings: final_amount is only the DEPOSIT, so the real cost
-    // is the full trip price (discounted × pax).
-    if (b.payment_method === 'seat_lock') return tripFull;
-    // Full-payment bookings: final_amount is the post-coupon total they owe.
+    // Gross trip cost before any discount (total_price), falling back to list price.
+    const gross = parseFloat(String(b.total_price || 0)) || (Number(trip?.discounted_price) || 0) * pax;
+    // Real amount owed = gross − coupon − wallet. This is what the customer
+    // actually has to pay, no matter how they pay it.
+    const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
+    const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
+    const owedAfterDiscount = Math.max(0, gross - coupon - wallet);
+    // Seat-lock: final_amount is only the DEPOSIT, so we must use the
+    // discount-adjusted full cost, not final_amount.
+    if (b.payment_method === 'seat_lock') return owedAfterDiscount;
+    // Full-payment: final_amount already equals gross − coupon − wallet.
     const fa = parseFloat(String(b.final_amount || 0));
-    return fa > 0 ? fa : tripFull;
+    return fa > 0 ? fa : owedAfterDiscount;
   };
   const bookingRemaining = (b: any): number => {
     if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;
@@ -273,7 +279,10 @@ export default function AdminTripDetailsPage() {
     totalParticipants: bookings
       .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
       .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0),
+    // Revenue counts only money we are actually keeping: cancelled/rejected
+    // bookings are treated as refunded and drop out of earnings.
     revenue: bookings.reduce((s: number, b: any) => {
+      if (['cancelled', 'rejected'].includes(b.booking_status)) return s;
       if (b.is_offline_booking || !b.user_id) return s + parseFloat(String(b.amount_paid || 0));
       return s + (b.payment_transactions || [])
         .filter((pt: any) => pt.payment_status === 'verified')

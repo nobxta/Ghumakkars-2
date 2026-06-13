@@ -24,6 +24,30 @@ export default function AdminBookingDetailsPage() {
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('fake_payment');
+  const [managing, setManaging] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+  const [cashMode, setCashMode] = useState<'cash' | 'upi'>('cash');
+
+  const manageBooking = async (payload: Record<string, unknown>, confirmMsg?: string) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    setManaging(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${(params as any).id}/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update booking');
+      await fetchBooking();
+      setCashAmount('');
+      alert(data.message || 'Done');
+    } catch (e: any) {
+      alert(e.message || 'Something went wrong');
+    } finally {
+      setManaging(false);
+    }
+  };
 
   const rejectionReasons = [
     { value: 'fake_payment', label: 'Fake Payment / Invalid Transaction ID' },
@@ -345,6 +369,98 @@ export default function AdminBookingDetailsPage() {
               {!remainingAmount && couponDiscount > 0 && booking.coupon_code && (
                 <p className="text-[10px] text-green-700 font-semibold mt-0.5">{booking.coupon_code}</p>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Manage booking (admin actions) — hidden when printing */}
+        <div className="bg-white rounded-2xl shadow-md border border-gray-200 mb-5 sm:mb-6 print:hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-purple-600" />
+            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Manage booking</h2>
+          </div>
+          <div className="p-5 space-y-5">
+            {/* Record an in-person payment */}
+            {!['cancelled', 'rejected'].includes(status) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Record a payment taken in person</p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="relative flex-1 sm:max-w-[200px]">
+                    <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="number"
+                      min="1"
+                      value={cashAmount}
+                      onChange={(e) => setCashAmount(e.target.value)}
+                      placeholder="Amount received"
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
+                    />
+                  </div>
+                  <select
+                    value={cashMode}
+                    onChange={(e) => setCashMode(e.target.value as 'cash' | 'upi')}
+                    className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-900 outline-none cursor-pointer"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                  </select>
+                  <button
+                    disabled={managing || !cashAmount}
+                    onClick={() => manageBooking({ action: 'record_payment', amount: cashAmount, mode: cashMode })}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    <Check className="h-4 w-4" />
+                    Record &amp; update
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Adds to the paid amount. If it covers the full balance ({remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')} due now` : 'fully paid'}), the booking is confirmed and a confirmation email goes out. Otherwise it stays seat-locked.
+                </p>
+              </div>
+            )}
+
+            {/* Change status */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Change status</p>
+              <div className="flex flex-wrap gap-2">
+                {status !== 'confirmed' && (
+                  <button
+                    disabled={managing}
+                    onClick={() => manageBooking({ action: 'set_status', status: 'confirmed' }, 'Mark this booking as CONFIRMED and email the traveller? This counts a seat even if the full amount is not recorded.')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    <CheckCircle className="h-4 w-4" /> Mark confirmed
+                  </button>
+                )}
+                {status !== 'seat_locked' && !['cancelled', 'rejected'].includes(status) && (
+                  <button
+                    disabled={managing}
+                    onClick={() => manageBooking({ action: 'set_status', status: 'seat_locked' }, 'Move this booking to SEAT LOCKED and email the traveller?')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                  >
+                    <Lock className="h-4 w-4" /> Seat locked
+                  </button>
+                )}
+                {!['cancelled', 'rejected'].includes(status) && (
+                  <button
+                    disabled={managing}
+                    onClick={() => manageBooking({ action: 'set_status', status: 'cancelled' }, 'CANCEL this booking? The seat is freed, the booking drops out of revenue, and a cancellation email is sent. Any refund must be issued separately in Razorpay.')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  >
+                    <XCircle className="h-4 w-4" /> Cancel booking
+                  </button>
+                )}
+                {['cancelled', 'rejected'].includes(status) && (
+                  <button
+                    disabled={managing}
+                    onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  >
+                    <Clock className="h-4 w-4" /> Reopen (pending)
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">Refunds are never automatic. Cancelling only frees the seat and notifies the traveller; issue the actual refund in Razorpay.</p>
             </div>
           </div>
         </div>

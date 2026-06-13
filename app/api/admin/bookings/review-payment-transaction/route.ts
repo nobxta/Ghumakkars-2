@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       // coupon/wallet discounts; fall back to discounted_price × pax).
       const { data: bookingData } = await adminClient
         .from('bookings')
-        .select('payment_method, final_amount, number_of_participants, trips(discounted_price)')
+        .select('payment_method, final_amount, total_price, coupon_discount, wallet_amount_used, number_of_participants, trips(discounted_price)')
         .eq('id', bookingId)
         .single();
 
@@ -98,10 +98,14 @@ export async function POST(request: NextRequest) {
         const tripsRel: any = (bookingData as any)?.trips;
         const trip = Array.isArray(tripsRel) ? tripsRel[0] : tripsRel;
         const pax = Number((bookingData as any)?.number_of_participants || booking?.number_of_participants || 1);
-        // Full trip cost = discounted price × participants. For seat-lock bookings
-        // final_amount is only the DEPOSIT, so we must compare against the full
-        // trip cost (matches the user-side remaining-amount calculation).
-        const fullPrice = Number(trip?.discounted_price || 0) * pax;
+        // Full trip cost AFTER the customer's discounts = total_price − coupon − wallet.
+        // (Falls back to list price × pax.) For seat-lock bookings final_amount is
+        // only the DEPOSIT, so we must compare paid against this discount-adjusted
+        // full cost — matches the admin-side remaining-amount calculation.
+        const gross = Number((bookingData as any)?.total_price || 0) || Number(trip?.discounted_price || 0) * pax;
+        const coupon = Number((bookingData as any)?.coupon_discount || 0);
+        const wallet = Number((bookingData as any)?.wallet_amount_used || 0);
+        const fullPrice = Math.max(0, gross - coupon - wallet);
 
         // A seat-lock booking stays "seat_locked" until the full trip cost is
         // paid; only then does it become "confirmed".

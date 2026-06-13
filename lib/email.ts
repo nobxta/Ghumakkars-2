@@ -269,6 +269,39 @@ export async function sendBookingRejectedEmail(
   });
 }
 
+export async function sendBookingCancelledEmail(
+  email: string,
+  userName: string,
+  bookingDetails: { bookingId: string; tripTitle: string; destination: string; reason?: string; refundNote?: string }
+) {
+  const opts = {
+    theme: 'warning' as const,
+    preheader: `Your booking for ${bookingDetails.tripTitle} has been cancelled.`,
+    title: 'Your booking is cancelled',
+    statusPill: 'Cancelled',
+    greeting: `Hey ${userName},`,
+    intro: `We've cancelled your booking for ${bookingDetails.tripTitle}, as requested.`,
+    details: [
+      { label: 'Trip', value: bookingDetails.tripTitle },
+      { label: 'Going to', value: bookingDetails.destination },
+      { label: 'Booking ID', value: shortId(bookingDetails.bookingId) },
+    ],
+    ...(bookingDetails.reason
+      ? { highlight: { label: 'Reason', lines: [bookingDetails.reason], tone: 'warning' as const } }
+      : {}),
+    cta: { label: 'See other trips', url: `${SITE_URL}/trips` },
+    outro: bookingDetails.refundNote
+      || `If you had paid anything, our team will sort out the refund as per the cancellation policy. Questions? Just reply to this email or message us on WhatsApp.`,
+  };
+  return send({
+    from: `"${FROM_NAME}" <${EMAIL_ALIASES.bookings}>`,
+    to: email,
+    subject: `Cancelled: your ${bookingDetails.tripTitle} booking`,
+    html: renderEmail(opts),
+    text: renderPlainText(opts),
+  });
+}
+
 export async function sendPaymentReminderEmail(
   email: string,
   userName: string,

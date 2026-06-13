@@ -76,13 +76,22 @@ export async function GET(
       b.booking_status === 'pending' || b.booking_status === 'seat_locked'
     ) || [];
 
-    const verifiedPayments = bookings?.flatMap((booking: any) => 
-      booking.payment_transactions?.filter((pt: any) => pt.payment_status === 'verified') || []
+    // Revenue excludes cancelled/rejected bookings (treated as refunded).
+    const earningBookings = bookings?.filter((b: any) =>
+      !['cancelled', 'rejected'].includes(b.booking_status)
     ) || [];
 
-    const totalRevenue = verifiedPayments.reduce((sum: number, pt: any) => 
-      sum + parseFloat(String(pt.amount || 0)), 0
+    const verifiedPayments = earningBookings.flatMap((booking: any) =>
+      booking.payment_transactions?.filter((pt: any) => pt.payment_status === 'verified') || []
     );
+
+    const offlineRevenue = earningBookings
+      .filter((b: any) => b.is_offline_booking || !b.user_id)
+      .reduce((sum: number, b: any) => sum + parseFloat(String(b.amount_paid || 0)), 0);
+
+    const totalRevenue = verifiedPayments.reduce((sum: number, pt: any) =>
+      sum + parseFloat(String(pt.amount || 0)), 0
+    ) + offlineRevenue;
 
     const totalParticipants = bookings?.reduce((sum: number, b: any) => 
       sum + (parseInt(String(b.number_of_participants || 1))), 0

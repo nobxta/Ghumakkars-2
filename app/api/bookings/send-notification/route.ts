@@ -5,7 +5,8 @@ import {
   sendBookingReceivedEmail,
   sendBookingConfirmedEmail,
   sendBookingRejectedEmail,
-  sendSeatLockConfirmedEmail
+  sendSeatLockConfirmedEmail,
+  sendBookingCancelledEmail
 } from '@/lib/email';
 
 export const runtime = "nodejs";
@@ -226,6 +227,19 @@ export async function POST(request: NextRequest) {
             tripTitle: trip.title,
             destination: trip.destination,
             reason: rejectionReason || 'Payment verification failed',
+          }
+        );
+        break;
+
+      case 'cancelled':
+        await sendBookingCancelledEmail(
+          userEmail,
+          userName || booking.primary_passenger_name,
+          {
+            bookingId: booking.id,
+            tripTitle: trip.title,
+            destination: trip.destination,
+            reason: rejectionReason || undefined,
           }
         );
         break;
