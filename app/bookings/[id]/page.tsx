@@ -340,11 +340,20 @@ export default function BookingDetailsPage() {
       })
     : [];
 
-  const totalAmount = parseFloat(String(booking.total_price || 0));
-  const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
+  const pax = Number(booking.number_of_participants) || 1;
+  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || 0;
+  const walletUsed = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
+  // Seat-lock bookings store only the DEPOSIT in total_price / final_amount, so
+  // the real trip price must come from list price × travellers.
+  const isSeatLockBooking = booking.payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(status);
+  const grossFull = (trip?.discounted_price || 0) * pax;
+  // "Trip price" = list total before coupon/wallet.
+  const totalAmount = isSeatLockBooking
+    ? grossFull
+    : (parseFloat(String(booking.total_price || 0)) || grossFull);
+  // Net amount actually owed after coupon + wallet.
+  const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed);
   const paidAmount = parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
-  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, totalAmount - finalAmount);
-  const walletUsed = parseFloat(String(booking.wallet_amount_used || 0));
 
   const maskPhone = (p?: string) => {
     if (!p) return '—';
