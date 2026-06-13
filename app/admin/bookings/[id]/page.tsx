@@ -27,6 +27,17 @@ export default function AdminBookingDetailsPage() {
   const [managing, setManaging] = useState(false);
   const [cashAmount, setCashAmount] = useState('');
   const [cashMode, setCashMode] = useState<'cash' | 'upi'>('cash');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelReasonPreset, setCancelReasonPreset] = useState('');
+
+  const cancelReasonPresets = [
+    'Customer requested cancellation',
+    'Payment not completed in time',
+    'Trip postponed / rescheduled',
+    'Duplicate or test booking',
+    'Traveller details could not be verified',
+  ];
 
   const manageBooking = async (payload: Record<string, unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -456,11 +467,7 @@ export default function AdminBookingDetailsPage() {
                 {!['cancelled', 'rejected'].includes(status) && (
                   <button
                     disabled={managing}
-                    onClick={() => {
-                      if (!window.confirm('CANCEL this booking? The seat is freed, the booking drops out of revenue, and a cancellation email is sent. Any refund must be issued separately in Razorpay.')) return;
-                      const reason = window.prompt('Reason for cancellation (shown in your records, optional):', '') || '';
-                      manageBooking({ action: 'set_status', status: 'cancelled', reason });
-                    }}
+                    onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setShowCancelModal(true); }}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
                   >
                     <XCircle className="h-4 w-4" /> Cancel booking
@@ -775,6 +782,71 @@ export default function AdminBookingDetailsPage() {
                   <p className="text-sm text-gray-600 mt-2">Processing...</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel booking modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => !managing && setShowCancelModal(false)}>
+          <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center"><XCircle className="h-5 w-5 text-red-600" /></div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Cancel this booking?</h2>
+                <p className="text-xs text-gray-500">{passengerName} · {booking.trips?.title || 'Trip'}</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Reason for cancellation</p>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {cancelReasonPresets.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => { setCancelReasonPreset(r); setCancelReason(r); }}
+                      className={`px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                        cancelReasonPreset === r ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => { setCancelReason(e.target.value); setCancelReasonPreset(''); }}
+                  rows={3}
+                  placeholder="Add or edit the reason (saved in your records and sent to the traveller)…"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none resize-none"
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
+                This frees the seat, removes the booking from revenue, and emails the traveller. <strong>Any refund must be issued separately in Razorpay</strong> — this does not move money.
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={managing}
+                  className="flex-1 px-4 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Keep booking
+                </button>
+                <button
+                  onClick={async () => {
+                    await manageBooking({ action: 'set_status', status: 'cancelled', reason: cancelReason.trim() });
+                    setShowCancelModal(false);
+                  }}
+                  disabled={managing || !cancelReason.trim()}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  <XCircle className="h-4 w-4" /> {managing ? 'Cancelling…' : 'Cancel booking'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
