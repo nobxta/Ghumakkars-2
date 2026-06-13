@@ -95,20 +95,46 @@ export default function AdminBookingsPage() {
     ).length,
   };
 
-  // Revenue: amount actually paid for non-cancelled bookings (uses amount_paid, not final_amount)
+  // Money actually received for a booking. Online bookings track it as
+  // verified payment transactions (UPI/manual you approved); offline bookings
+  // track it on amount_paid.
+  const paidOf = (b: any): number => {
+    if (b.is_offline_booking || !b.user_id) return parseFloat(b.amount_paid || 0);
+    const txnPaid = (b.payment_transactions || [])
+      .filter((p: any) => p.payment_status === 'verified')
+      .reduce((s: number, p: any) => s + parseFloat(p.amount || 0), 0);
+    return txnPaid || parseFloat(b.amount_paid || 0);
+  };
+
+  // Full amount owed after the customer's coupon + wallet discounts. For
+  // seat-lock bookings final_amount is only the deposit, so we use the
+  // discount-adjusted gross instead.
+  const fullOf = (b: any): number => {
+    const pax = Number(b.number_of_participants) || 1;
+    const gross = parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax;
+    const afterDiscount = Math.max(0, gross - parseFloat(b.coupon_discount || 0) - parseFloat(b.wallet_amount_used || 0));
+    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') return afterDiscount;
+    const fa = parseFloat(b.final_amount || 0);
+    return fa > 0 ? fa : afterDiscount;
+  };
+
+  // Revenue = money actually collected on active (non-cancelled) bookings,
+  // including the deposit on seat-locked bookings.
   const confirmedRevenue = bookings
     .filter(b => b.booking_status === 'confirmed')
-    .reduce((sum, b) => sum + parseFloat(b.amount_paid || b.final_amount || 0), 0);
+    .reduce((sum, b) => sum + paidOf(b), 0);
 
   const seatLockRevenue = bookings
     .filter(b => b.booking_status === 'seat_locked')
-    .reduce((sum, b) => sum + parseFloat(b.amount_paid || 0), 0);
+    .reduce((sum, b) => sum + paidOf(b), 0);
 
   const totalRevenue = confirmedRevenue + seatLockRevenue;
 
+  // Pending = balance still left to pay across all active bookings (e.g. the
+  // remaining amount on a seat-locked booking).
   const pendingRevenue = bookings
-    .filter(b => (b.payment_status === 'pending' || b.payment_status === 'cash_pending') && b.booking_status !== 'cancelled')
-    .reduce((sum, b) => sum + parseFloat(b.final_amount || b.total_price || 0), 0);
+    .filter(b => !['cancelled', 'rejected'].includes(b.booking_status))
+    .reduce((sum, b) => sum + Math.max(0, fullOf(b) - paidOf(b)), 0);
 
   const needsAttention = bookings.filter(b =>
     b.payment_transactions?.some((p: any) => p.payment_status === 'pending') ||
