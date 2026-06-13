@@ -780,22 +780,45 @@ export default function BookingDetailsPage() {
                   <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><CreditCard className="h-4 w-4 text-purple-700" /></div>
                   <h3 className="font-bold text-gray-900">Payment summary</h3>
                 </div>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between"><dt className="text-gray-600">Trip price</dt><dd className="font-semibold text-gray-900">₹{totalAmount.toLocaleString('en-IN')}</dd></div>
-                  {couponDiscount > 0 && (
-                    <div className="flex justify-between text-green-700"><dt className="flex items-center gap-1"><Tag className="h-3 w-3" />{booking.coupon_code || 'Coupon'}</dt><dd className="font-semibold">−₹{couponDiscount.toLocaleString('en-IN')}</dd></div>
-                  )}
-                  {walletUsed > 0 && (
-                    <div className="flex justify-between text-purple-700"><dt>Wallet used</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>
-                  )}
-                  <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between items-baseline">
-                    <dt className="text-sm text-gray-600">Amount paid</dt>
-                    <dd className="text-2xl font-extrabold text-gray-900">₹{Math.max(paidAmount, finalAmount - remainingAmount).toLocaleString('en-IN')}</dd>
-                  </div>
-                  {remainingAmount > 0 && (
-                    <div className="flex justify-between text-orange-700 mt-1"><dt className="font-semibold">Pending</dt><dd className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</dd></div>
-                  )}
-                </dl>
+                {(() => {
+                  const perPerson = (trip?.discounted_price && trip.discounted_price > 0)
+                    ? trip.discounted_price
+                    : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
+                  const shownPaid = Math.max(paidAmount, finalAmount - remainingAmount);
+                  return (
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-600">₹{perPerson.toLocaleString('en-IN')} × {pax} {pax === 1 ? 'traveller' : 'travellers'}</dt>
+                        <dd className="font-semibold text-gray-900">₹{totalAmount.toLocaleString('en-IN')}</dd>
+                      </div>
+                      {couponDiscount > 0 && (
+                        <div className="flex justify-between text-green-700"><dt className="flex items-center gap-1"><Tag className="h-3 w-3" />Coupon {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="font-semibold">−₹{couponDiscount.toLocaleString('en-IN')}</dd></div>
+                      )}
+                      {walletUsed > 0 && (
+                        <div className="flex justify-between text-purple-700"><dt>Wallet used</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>
+                      )}
+                      <div className="pt-2 mt-1 border-t border-gray-200 flex justify-between items-baseline">
+                        <dt className="text-gray-900 font-semibold">Total payable</dt>
+                        <dd className="font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <dt className="text-gray-600">Amount paid</dt>
+                        <dd className="font-bold text-green-700">₹{shownPaid.toLocaleString('en-IN')}</dd>
+                      </div>
+                      {remainingAmount > 0 ? (
+                        <div className="pt-2 mt-1 border-t border-gray-200 flex justify-between items-baseline">
+                          <dt className="text-orange-700 font-semibold">Remaining to pay</dt>
+                          <dd className="text-2xl font-extrabold text-orange-600">₹{remainingAmount.toLocaleString('en-IN')}</dd>
+                        </div>
+                      ) : (
+                        <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between">
+                          <dt className="text-green-700 font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4" />Fully paid</dt>
+                          <dd className="text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full">No dues</dd>
+                        </div>
+                      )}
+                    </dl>
+                  );
+                })()}
                 {(booking.transaction_id || booking.reference_id) && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Transaction ID</p>
