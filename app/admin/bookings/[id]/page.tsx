@@ -226,15 +226,27 @@ export default function AdminBookingDetailsPage() {
     return null;
   }
 
-  // total_price = original price, final_amount = price after coupon
-  // The user only owes final_amount. Don't show remaining for unpaid coupon discount.
+  const status = booking.booking_status || 'pending';
+  const pax = Number(booking.number_of_participants) || 1;
+  const couponDiscountRaw = parseFloat(String(booking.coupon_discount || 0)) || 0;
+  const walletUsed = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
   const originalPrice = parseFloat(String(booking.total_price || 0));
-  const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
-  const paidAmount = parseFloat(String(booking.payment_amount || booking.amount_paid || 0));
-  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, originalPrice - finalAmount);
+  const isSeatLock = booking.payment_method === 'seat_lock' || status === 'seat_locked';
+  // Full amount the customer owes after coupon + wallet. Seat-lock bookings only
+  // store the deposit in total_price/final_amount, so the full cost comes from
+  // list price × pax.
+  const listGross = (parseFloat(String(booking.trips?.discounted_price || 0)) || 0) * pax;
+  const finalAmount = isSeatLock
+    ? Math.max(0, listGross - couponDiscountRaw - walletUsed)
+    : (parseFloat(String(booking.final_amount || booking.total_price || 0)));
+  // Money actually received: verified transactions (online) or amount_paid (offline).
+  const txnPaid = (booking.payment_transactions || [])
+    .filter((p: any) => p.payment_status === 'verified')
+    .reduce((s: number, p: any) => s + parseFloat(String(p.amount || 0)), 0);
+  const paidAmount = txnPaid || parseFloat(String(booking.payment_amount || booking.amount_paid || 0));
+  const couponDiscount = couponDiscountRaw || Math.max(0, originalPrice - parseFloat(String(booking.final_amount || 0)));
   const totalAmount = finalAmount; // what the customer actually owes
   const remainingAmount = Math.max(0, finalAmount - paidAmount);
-  const status = booking.booking_status || 'pending';
   const shortId = booking.id.substring(0, 8).toUpperCase();
   const fmtDate = (d?: string) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';

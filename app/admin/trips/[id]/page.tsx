@@ -208,19 +208,19 @@ export default function AdminTripDetailsPage() {
   };
   const bookingFull = (b: any): number => {
     const pax = Number(b.number_of_participants) || 1;
-    // Gross trip cost before any discount (total_price), falling back to list price.
-    const gross = parseFloat(String(b.total_price || 0)) || (Number(trip?.discounted_price) || 0) * pax;
-    // Real amount owed = gross − coupon − wallet. This is what the customer
-    // actually has to pay, no matter how they pay it.
     const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
     const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
-    const owedAfterDiscount = Math.max(0, gross - coupon - wallet);
-    // Seat-lock: final_amount is only the DEPOSIT, so we must use the
-    // discount-adjusted full cost, not final_amount.
-    if (b.payment_method === 'seat_lock') return owedAfterDiscount;
+    // Seat-lock: total_price / final_amount only hold the DEPOSIT, so the real
+    // full trip cost must come from list price × participants.
+    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
+      const gross = (Number(trip?.discounted_price) || 0) * pax;
+      return Math.max(0, gross - coupon - wallet);
+    }
     // Full-payment: final_amount already equals gross − coupon − wallet.
     const fa = parseFloat(String(b.final_amount || 0));
-    return fa > 0 ? fa : owedAfterDiscount;
+    if (fa > 0) return fa;
+    const gross = parseFloat(String(b.total_price || 0)) || (Number(trip?.discounted_price) || 0) * pax;
+    return Math.max(0, gross - coupon - wallet);
   };
   const bookingRemaining = (b: any): number => {
     if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;

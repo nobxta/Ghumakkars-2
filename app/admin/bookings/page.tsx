@@ -106,16 +106,22 @@ export default function AdminBookingsPage() {
     return txnPaid || parseFloat(b.amount_paid || 0);
   };
 
-  // Full amount owed after the customer's coupon + wallet discounts. For
-  // seat-lock bookings final_amount is only the deposit, so we use the
-  // discount-adjusted gross instead.
+  // Full amount owed after the customer's coupon + wallet discounts.
   const fullOf = (b: any): number => {
     const pax = Number(b.number_of_participants) || 1;
-    const gross = parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax;
-    const afterDiscount = Math.max(0, gross - parseFloat(b.coupon_discount || 0) - parseFloat(b.wallet_amount_used || 0));
-    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') return afterDiscount;
+    const coupon = parseFloat(b.coupon_discount || 0);
+    const wallet = parseFloat(b.wallet_amount_used || 0);
+    // Seat-lock: total_price / final_amount only hold the DEPOSIT, so the full
+    // trip cost must come from the list price x participants.
+    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
+      const gross = (Number(b.trips?.discounted_price) || 0) * pax;
+      return Math.max(0, gross - coupon - wallet);
+    }
+    // Full-payment: final_amount is already the net (post-discount) total owed.
     const fa = parseFloat(b.final_amount || 0);
-    return fa > 0 ? fa : afterDiscount;
+    if (fa > 0) return fa;
+    const gross = parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax;
+    return Math.max(0, gross - coupon - wallet);
   };
 
   // Revenue = money actually collected on active (non-cancelled) bookings,

@@ -50,8 +50,18 @@ export async function POST(
       .select('discounted_price, current_participants')
       .eq('id', b.trip_id)
       .single();
-    const gross = Number(b.total_price || 0) || Number(tripRow?.discounted_price || 0) * pax;
-    const fullOwed = Math.max(0, gross - Number(b.coupon_discount || 0) - Number(b.wallet_amount_used || 0));
+    const coupon = Number(b.coupon_discount || 0);
+    const wallet = Number(b.wallet_amount_used || 0);
+    // Seat-lock bookings store only the DEPOSIT in total_price/final_amount, so
+    // the full trip cost must come from list price × pax. Full-payment bookings
+    // already have the net total in final_amount.
+    const isSeatLock = b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked';
+    const gross = isSeatLock
+      ? Number(tripRow?.discounted_price || 0) * pax
+      : (Number(b.total_price || 0) || Number(tripRow?.discounted_price || 0) * pax);
+    const fullOwed = isSeatLock
+      ? Math.max(0, gross - coupon - wallet)
+      : (Number(b.final_amount || 0) > 0 ? Number(b.final_amount) : Math.max(0, gross - coupon - wallet));
 
     // Current money actually received.
     const currentPaid = async (): Promise<number> => {
