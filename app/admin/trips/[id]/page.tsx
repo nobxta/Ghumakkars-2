@@ -338,10 +338,10 @@ export default function AdminTripDetailsPage() {
 
   /** Operational export: Paid Customers — for finance */
   const exportPaidCustomers = () => {
-    const headers = ['Name', 'Phone', 'Email', 'Paid (₹)', 'Total (₹)', 'Payment Method', 'Payment Date', 'Booking ID'];
+    const headers = ['Name', 'Phone', 'Email', 'Paid (₹)', 'Full cost (₹)', 'Payment Method', 'Payment Date', 'Booking ID'];
     const rows = confirmedBookings.map((b: any) => [
       _displayName(b), _displayPhone(b), b.profiles?.email || '',
-      _paid(b).toFixed(0), parseFloat(String(b.final_amount || 0)).toFixed(0),
+      bookingPaid(b).toFixed(0), bookingFull(b).toFixed(0),
       getPaymentMethodLabel(b.payment_method),
       new Date(b.created_at).toLocaleString('en-IN'),
       b.id.slice(0, 8).toUpperCase(),
@@ -351,12 +351,10 @@ export default function AdminTripDetailsPage() {
 
   /** Operational export: Seat-Locked Customers — for follow-up */
   const exportSeatLocked = () => {
-    const headers = ['Name', 'Phone', 'Email', 'Locked Amount (₹)', 'Remaining (₹)', 'Booked At', 'Booking ID'];
+    const headers = ['Name', 'Phone', 'Email', 'Full cost (₹)', 'Paid (₹)', 'Remaining (₹)', 'Booked At', 'Booking ID'];
     const list = bookings.filter((b: any) => b.booking_status === 'seat_locked');
     const rows = list.map((b: any) => {
-      const paid = _paid(b);
-      const total = parseFloat(String(b.final_amount || 0));
-      return [_displayName(b), _displayPhone(b), b.profiles?.email || '', paid.toFixed(0), Math.max(0, total - paid).toFixed(0), new Date(b.created_at).toLocaleString('en-IN'), b.id.slice(0, 8).toUpperCase()];
+      return [_displayName(b), _displayPhone(b), b.profiles?.email || '', bookingFull(b).toFixed(0), bookingPaid(b).toFixed(0), bookingRemaining(b).toFixed(0), new Date(b.created_at).toLocaleString('en-IN'), b.id.slice(0, 8).toUpperCase()];
     });
     genericCSV(rows, headers, 'Seat-Locked');
   };
@@ -364,11 +362,9 @@ export default function AdminTripDetailsPage() {
   /** Operational export: Pending Payments — for sales follow-up */
   const exportPendingPayments = () => {
     const headers = ['Name', 'Phone', 'Email', 'Outstanding (₹)', 'Days Since Booking', 'Booking ID'];
-    const list = bookings.filter((b: any) => ['pending', 'seat_locked'].includes(b.booking_status));
+    const list = bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status));
     const rows = list.map((b: any) => {
-      const paid = _paid(b);
-      const total = parseFloat(String(b.final_amount || 0));
-      const due = Math.max(0, total - paid);
+      const due = bookingRemaining(b);
       const days = Math.floor((Date.now() - new Date(b.created_at).getTime()) / (1000 * 60 * 60 * 24));
       return [_displayName(b), _displayPhone(b), b.profiles?.email || '', due.toFixed(0), days, b.id.slice(0, 8).toUpperCase()];
     }).filter((r) => Number(r[3]) > 0);
@@ -609,175 +605,193 @@ export default function AdminTripDetailsPage() {
     w.document.close();
   };
 
-  const downloadFullPDF = () => {
-    const list = confirmedBookings;
-    if (list.length === 0) {
-      alert('No confirmed users to export.');
-      return;
-    }
-    const pageW = 297;
-    const pageH = 210;
-    const margin = 16;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-    const paid = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
-      return (b.payment_transactions || [])
-        .filter((pt: any) => pt.payment_status === 'verified')
-        .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
-    };
-    const displayName = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return (b.primary_passenger_name || '—').substring(0, 22);
-      const u = b.profiles;
-      return (u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—').substring(0, 22);
-    };
-    const displayEmail = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return '—';
-      return (b.profiles?.email || '—').substring(0, 28);
-    };
-    const displayPhone = (b: any) => (b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—').substring(0, 14);
-    const displayGender = (b: any) => {
-      const g = b.primary_passenger_gender || '';
-      return g && String(g).toUpperCase().startsWith('F') ? 'F' : (g && String(g).toUpperCase().startsWith('M') ? 'M' : '—');
-    };
-
+  // Shared PDF helpers (discount-aware money + display).
+  const _pdfName = (b: any, n = 24) => {
+    if (b.is_offline_booking || !b.user_id) return (b.primary_passenger_name || '—').substring(0, n);
+    const u = b.profiles;
+    return (u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : (b.primary_passenger_name || u?.email || '—')).substring(0, n);
+  };
+  const _pdfPhone = (b: any) => (b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—').substring(0, 14);
+  const _pdfGender = (b: any) => {
+    const g = b.primary_passenger_gender || '';
+    return g && String(g).toUpperCase().startsWith('F') ? 'F' : (g && String(g).toUpperCase().startsWith('M') ? 'M' : '—');
+  };
+  const _pdfStatus = (b: any) => b.booking_status === 'seat_locked' ? 'Seat lock' : (b.booking_status || 'pending').charAt(0).toUpperCase() + (b.booking_status || 'pending').slice(1);
+  const _pdfDeparture = () => {
+    if (!trip?.is_recurring) return `${trip?.start_date || '—'} to ${trip?.end_date || '—'}`;
+    if (selectedBatch !== 'all' && selectedBatch !== 'unscheduled') return formatDeparture(selectedBatch, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    return `Every ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][trip.recurrence_day]} (all departures)`;
+  };
+  const _pdfHeader = (doc: any, pageW: number, margin: number, title: string, subtitle: string) => {
     doc.setFillColor(94, 53, 177);
     doc.rect(0, 0, pageW, 28, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
+    doc.setFontSize(17);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${trip?.title || 'Trip'} — Full details (A–Z)`, margin, 12);
-    doc.setFontSize(10);
+    doc.text(`${trip?.title || 'Trip'} — ${title}`, margin, 11);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${trip?.destination || '—'}  •  ${trip?.start_date || '—'} to ${trip?.end_date || '—'}`, margin, 19);
-    doc.text(`Total: ${list.length} confirmed  •  Generated ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, 25);
+    doc.text(`${trip?.destination || '—'}  •  ${_pdfDeparture()}`, margin, 18);
+    doc.text(subtitle, margin, 24);
     doc.setTextColor(0, 0, 0);
+  };
+  const _pdfFooter = (doc: any, pageW: number, pageH: number, margin: number, note: string) => {
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, pageH - 12, pageW - margin, pageH - 12);
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(note, margin, pageH - 6);
+    doc.text(`Generated ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, pageW - margin - 70, pageH - 6);
+    doc.setTextColor(0, 0, 0);
+  };
 
-    const headers = [['#', 'Name', 'Email', 'Number', 'M/F', 'Passengers (name, age, M/F)', 'Pax', 'Total (₹)', 'Paid (₹)', 'Payment', 'Booked on']];
-    const rows = list.map((b: any, i: number) => {
-      const p = paid(b);
-      return [
-        String(i + 1),
-        displayName(b),
-        displayEmail(b),
-        displayPhone(b),
-        displayGender(b),
-        formatPassengersMultiline(b).join('\n'),
-        String(b.number_of_participants || 1),
-        parseFloat(String(b.final_amount || 0)).toFixed(0),
-        p.toFixed(0),
-        `${getPaymentModeLabel(b.payment_mode)} / ${(b.is_offline_booking ? 'Offline' : getPaymentMethodLabel(b.payment_method))}`,
-        new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      ];
-    });
+  // FULL booking report — every active booking with the real money (full cost
+  // after discount, paid, and balance still due) plus status and passengers.
+  const downloadFullPDF = () => {
+    const list = bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status));
+    if (list.length === 0) { alert('No active bookings to export.'); return; }
+    const pageW = 297, pageH = 210, margin = 14;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const totFull = list.reduce((s: number, b: any) => s + bookingFull(b), 0);
+    const totPaid = list.reduce((s: number, b: any) => s + bookingPaid(b), 0);
+    const totDue = list.reduce((s: number, b: any) => s + bookingRemaining(b), 0);
+
+    _pdfHeader(doc, pageW, margin, 'Full booking report', `${list.length} bookings  •  Collected ₹${totPaid.toLocaleString('en-IN')}  •  To collect ₹${totDue.toLocaleString('en-IN')}`);
+
+    const headers = [['#', 'Name', 'Phone', 'Pax', 'Passengers (name, age, M/F)', 'Full (₹)', 'Paid (₹)', 'Due (₹)', 'Status', 'Pickup', 'Booked']];
+    const rows = list.map((b: any, i: number) => [
+      String(i + 1),
+      _pdfName(b),
+      _pdfPhone(b),
+      String(b.number_of_participants || 1),
+      formatPassengersMultiline(b).join('\n'),
+      bookingFull(b).toFixed(0),
+      bookingPaid(b).toFixed(0),
+      bookingRemaining(b).toFixed(0),
+      _pdfStatus(b),
+      (b.pickup_point || '—').substring(0, 16),
+      new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+    ]);
+    rows.push(['', 'TOTAL', '', String(list.reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0)), '', totFull.toFixed(0), totPaid.toFixed(0), totDue.toFixed(0), '', '', '']);
 
     autoTable(doc, {
       head: headers,
       body: rows,
-      startY: 34,
+      startY: 33,
       margin: { left: margin, right: margin },
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 1.8 },
       headStyles: { fillColor: [67, 56, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 248, 252] },
       theme: 'grid',
       columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 24 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 22 },
-        4: { cellWidth: 10 },
-        5: { cellWidth: 58 },
-        6: { cellWidth: 10 },
-        7: { cellWidth: 18 },
-        8: { cellWidth: 18 },
-        9: { cellWidth: 22 },
-        10: { cellWidth: 22 },
+        0: { cellWidth: 8 }, 1: { cellWidth: 30 }, 2: { cellWidth: 24 }, 3: { cellWidth: 9, halign: 'center' },
+        4: { cellWidth: 62 }, 5: { cellWidth: 18, halign: 'right' }, 6: { cellWidth: 18, halign: 'right' },
+        7: { cellWidth: 18, halign: 'right' }, 8: { cellWidth: 20 }, 9: { cellWidth: 22 }, 10: { cellWidth: 16 },
+      },
+      didParseCell: (data: any) => {
+        if (data.row.index === rows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [237, 233, 254]; }
       },
     });
 
-    const finalY = (doc as any).lastAutoTable?.finalY;
-    if (finalY && finalY < pageH - 18) {
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      doc.text(`Ghumakkars — Full list. Confidential.`, margin, pageH - 8);
-      doc.text(`Page 1`, pageW - margin - 15, pageH - 8);
-      doc.setTextColor(0, 0, 0);
-    }
+    _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars — Full report. Confidential (contains payment info).');
     doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Full-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  // TRAVEL list — everyone actually going (confirmed + seat-locked). No money
+  // at all, so it is safe to print and hand to a trip captain. Names, age,
+  // gender, phone, pickup and every co-passenger.
   const downloadCarryPDF = () => {
-    const list = confirmedBookings;
-    if (list.length === 0) {
-      alert('No confirmed users to export.');
-      return;
-    }
-    const pageW = 297;
-    const pageH = 210;
-    const margin = 16;
+    const list = bookings.filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status));
+    if (list.length === 0) { alert('No travelling guests yet (need confirmed or seat-locked bookings).'); return; }
+    const pageW = 297, pageH = 210, margin = 16;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    const displayName = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return (b.primary_passenger_name || '—').substring(0, 26);
-      const u = b.profiles;
-      return (u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—').substring(0, 26);
-    };
-    const displayPhone = (b: any) => (b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—').substring(0, 16);
-    const displayGender = (b: any) => {
-      const g = b.primary_passenger_gender || '';
-      return g && String(g).toUpperCase().startsWith('F') ? 'F' : (g && String(g).toUpperCase().startsWith('M') ? 'M' : '—');
-    };
+    const headPax = list.reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0);
+    _pdfHeader(doc, pageW, margin, 'Travel list (no payment info)', `${list.length} bookings  •  ${headPax} travellers  •  safe to print`);
 
-    doc.setFillColor(94, 53, 177);
-    doc.rect(0, 0, pageW, 26, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${trip?.title || 'Trip'} — Carry list (who booked)`, margin, 11);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${trip?.destination || '—'}  •  ${trip?.start_date || '—'} to ${trip?.end_date || '—'}  •  ${list.length} confirmed`, margin, 20);
-    doc.setTextColor(0, 0, 0);
-
-    const headers = [['#', 'Name', 'Number', 'M/F', 'Passengers (name, age, M/F)']];
+    const headers = [['#', 'Lead name', 'Age', 'M/F', 'Phone', 'Pickup', 'All passengers (name, age, M/F)']];
     const rows = list.map((b: any, i: number) => [
       String(i + 1),
-      displayName(b),
-      displayPhone(b),
-      displayGender(b),
+      _pdfName(b, 26),
+      b.primary_passenger_age || '—',
+      _pdfGender(b),
+      _pdfPhone(b),
+      (b.pickup_point || '—').substring(0, 18),
       formatPassengersMultiline(b).join('\n'),
     ]);
 
     autoTable(doc, {
       head: headers,
       body: rows,
-      startY: 32,
+      startY: 33,
       margin: { left: margin, right: margin },
-      styles: { fontSize: 10, cellPadding: 4 },
-      headStyles: { fillColor: [67, 56, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 10 },
+      styles: { fontSize: 9.5, cellPadding: 3 },
+      headStyles: { fillColor: [67, 56, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9.5 },
       alternateRowStyles: { fillColor: [248, 248, 252] },
       theme: 'grid',
       columnStyles: {
-        0: { cellWidth: 12 },
-        1: { cellWidth: 42 },
-        2: { cellWidth: 38 },
-        3: { cellWidth: 16 },
-        4: { cellWidth: 165 },
+        0: { cellWidth: 10 }, 1: { cellWidth: 40 }, 2: { cellWidth: 12, halign: 'center' },
+        3: { cellWidth: 12, halign: 'center' }, 4: { cellWidth: 32 }, 5: { cellWidth: 30 }, 6: { cellWidth: 129 },
       },
     });
 
-    const finalY = (doc as any).lastAutoTable?.finalY;
-    if (finalY && finalY < pageH - 16) {
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, pageH - 12, pageW - margin, pageH - 12);
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      doc.text(`Ghumakkars — Carry list. No payment info.`, margin, pageH - 6);
-      doc.setTextColor(0, 0, 0);
-    }
-    doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Carry-${new Date().toISOString().slice(0, 10)}.pdf`);
+    _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars — Travel list. No payment info, safe to print.');
+    doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Travel-list-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  // COLLECTION list — only bookings with money still to collect (seat-locked
+  // and any partly-paid). Sorted by largest balance first, for follow-up calls.
+  const downloadCollectionPDF = () => {
+    const list = bookings
+      .filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status) && bookingRemaining(b) > 0)
+      .sort((a: any, b: any) => bookingRemaining(b) - bookingRemaining(a));
+    if (list.length === 0) { alert('Nothing to collect — every active booking is fully paid.'); return; }
+    const pageW = 297, pageH = 210, margin = 16;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const totDue = list.reduce((s: number, b: any) => s + bookingRemaining(b), 0);
+    _pdfHeader(doc, pageW, margin, 'Payments to collect', `${list.length} bookings owe money  •  ₹${totDue.toLocaleString('en-IN')} still to collect`);
+
+    const headers = [['#', 'Name', 'Phone', 'Pax', 'Full (₹)', 'Paid (₹)', 'Due (₹)', 'Status', 'Days waiting']];
+    const rows = list.map((b: any, i: number) => {
+      const days = Math.floor((Date.now() - new Date(b.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      return [
+        String(i + 1),
+        _pdfName(b, 28),
+        _pdfPhone(b),
+        String(b.number_of_participants || 1),
+        bookingFull(b).toFixed(0),
+        bookingPaid(b).toFixed(0),
+        bookingRemaining(b).toFixed(0),
+        _pdfStatus(b),
+        String(days),
+      ];
+    });
+    rows.push(['', 'TOTAL', '', '', '', '', totDue.toFixed(0), '', '']);
+
+    autoTable(doc, {
+      head: headers,
+      body: rows,
+      startY: 33,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9.5, cellPadding: 2.5 },
+      headStyles: { fillColor: [67, 56, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9.5 },
+      alternateRowStyles: { fillColor: [248, 248, 252] },
+      theme: 'grid',
+      columnStyles: {
+        0: { cellWidth: 10 }, 1: { cellWidth: 50 }, 2: { cellWidth: 34 }, 3: { cellWidth: 14, halign: 'center' },
+        4: { cellWidth: 26, halign: 'right' }, 5: { cellWidth: 26, halign: 'right' }, 6: { cellWidth: 26, halign: 'right' },
+        7: { cellWidth: 26 }, 8: { cellWidth: 24, halign: 'center' },
+      },
+      didParseCell: (data: any) => {
+        if (data.row.index === rows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [254, 243, 199]; }
+        if (data.section === 'body' && data.column.index === 6 && data.row.index < rows.length - 1) { data.cell.styles.textColor = [194, 65, 12]; data.cell.styles.fontStyle = 'bold'; }
+      },
+    });
+
+    _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars — Collection follow-up list. Confidential.');
+    doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Collection-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const handleAddOffline = async (e: React.FormEvent) => {
@@ -1214,66 +1228,67 @@ export default function AdminTripDetailsPage() {
                 {exportMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                    <div className="absolute right-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-b border-gray-100">Operations</div>
+                    <div className="absolute right-0 mt-1 w-80 max-h-[80vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-20">
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-b border-gray-100">PDF — print ready</div>
+                      <button onClick={() => { setExportMenuOpen(false); downloadCarryPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <UsersIcon className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Travel list <span className="text-[10px] font-bold uppercase text-green-700 bg-green-100 px-1 py-0.5 rounded ml-1">no money</span></p>
+                          <p className="text-[11px] text-gray-500">Who's going: name, age, phone, all passengers. Safe to hand to the trip captain.</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); downloadCollectionPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <ClockIcon className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Payments to collect</p>
+                          <p className="text-[11px] text-gray-500">Only seat-locked / part-paid, biggest balance first. For follow-up calls.</p>
+                        </div>
+                      </button>
+                      <button onClick={() => { setExportMenuOpen(false); downloadFullPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
+                        <FileText className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Full booking report</p>
+                          <p className="text-[11px] text-gray-500">Everyone: full cost, paid, due, status & passengers. Confidential.</p>
+                        </div>
+                      </button>
+
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-y border-gray-100">Spreadsheets (CSV)</div>
                       <button onClick={() => { setExportMenuOpen(false); exportPassengerManifest(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <UsersIcon className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <UsersIcon className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Passenger manifest</p>
-                          <p className="text-[11px] text-gray-500">Name, age, gender, phone, emergency — for trip captains</p>
+                          <p className="text-[11px] text-gray-500">One row per person, with emergency contacts</p>
                         </div>
                       </button>
                       <button onClick={() => { setExportMenuOpen(false); exportSeatLocked(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <LockIcon className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <LockIcon className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Seat-locked customers</p>
-                          <p className="text-[11px] text-gray-500">For follow-up calls — paid + remaining amount</p>
+                          <p className="text-[11px] text-gray-500">Full cost, paid &amp; remaining</p>
                         </div>
                       </button>
-                      <button onClick={() => { setExportMenuOpen(false); exportPendingPayments(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <ClockIcon className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">Pending payments</p>
-                          <p className="text-[11px] text-gray-500">Outstanding + days since booking — for sales</p>
-                        </div>
-                      </button>
-                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-y border-gray-100">Finance</div>
                       <button onClick={() => { setExportMenuOpen(false); exportPaidCustomers(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <IndianRupeeIcon className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <IndianRupeeIcon className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Paid customers</p>
                           <p className="text-[11px] text-gray-500">Confirmed bookings with payment details</p>
                         </div>
                       </button>
                       <button onClick={() => { setExportMenuOpen(false); exportRevenueReport(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <DollarSign className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <DollarSign className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Revenue report</p>
                           <p className="text-[11px] text-gray-500">Expected · collected · pending summary</p>
                         </div>
                       </button>
-                      <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-y border-gray-100">Advanced</div>
                       <button onClick={() => { setExportMenuOpen(false); downloadCSV(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <FileText className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900">Full data (CSV)</p>
                           <p className="text-[11px] text-gray-500">Everything — all columns, all bookings</p>
                         </div>
                       </button>
-                      <button onClick={() => { setExportMenuOpen(false); downloadFullPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">Detailed PDF</p>
-                          <p className="text-[11px] text-gray-500">Landscape A4 with email, payment, all passengers</p>
-                        </div>
-                      </button>
-                      <button onClick={() => { setExportMenuOpen(false); downloadCarryPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
-                        <FileText className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">Field PDF (no payments)</p>
-                          <p className="text-[11px] text-gray-500">Name, phone, gender, passengers only — safe to print</p>
-                        </div>
-                      </button>
+
                       <button onClick={() => { setExportMenuOpen(false); handlePrint(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3 border-t border-gray-100">
                         <Printer className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
                         <div>
