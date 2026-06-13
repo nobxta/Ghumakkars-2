@@ -774,58 +774,146 @@ export default function BookingDetailsPage() {
           {/* RIGHT 30% — sticky */}
           <div className="space-y-4 sm:space-y-6">
             <div className="lg:sticky lg:top-20 space-y-4 sm:space-y-6">
-              {/* Payment summary */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><CreditCard className="h-4 w-4 text-purple-700" /></div>
-                  <h3 className="font-bold text-gray-900">Payment summary</h3>
-                </div>
-                {(() => {
-                  const perPerson = (trip?.discounted_price && trip.discounted_price > 0)
-                    ? trip.discounted_price
-                    : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
-                  const shownPaid = Math.max(paidAmount, finalAmount - remainingAmount);
-                  return (
-                    <dl className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <dt className="text-gray-600">₹{perPerson.toLocaleString('en-IN')} × {pax} {pax === 1 ? 'traveller' : 'travellers'}</dt>
-                        <dd className="font-semibold text-gray-900">₹{totalAmount.toLocaleString('en-IN')}</dd>
-                      </div>
-                      {couponDiscount > 0 && (
-                        <div className="flex justify-between text-green-700"><dt className="flex items-center gap-1"><Tag className="h-3 w-3" />Coupon {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="font-semibold">−₹{couponDiscount.toLocaleString('en-IN')}</dd></div>
+              {/* Payment status + breakdown */}
+              {(() => {
+                const perPerson = (trip?.discounted_price && trip.discounted_price > 0)
+                  ? trip.discounted_price
+                  : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
+                const shownPaid = Math.max(paidAmount, finalAmount - remainingAmount);
+                const payBefore = effectiveStart ? new Date(new Date(effectiveStart).getTime() - 5 * 86400000) : null;
+                const fmtPay = payBefore ? payBefore.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+
+                // Status config: drives the big banner at the top of the card.
+                const cfg = (() => {
+                  if (status === 'rejected') return { kind: 'rejected', emoji: '🔴', label: 'Booking Rejected', card: 'bg-red-50 border-red-200', banner: 'text-red-700', sub: 'border-red-200' };
+                  if (status === 'cancelled') return { kind: 'cancelled', emoji: '⚫', label: 'Booking Cancelled', card: 'bg-gray-50 border-gray-200', banner: 'text-gray-700', sub: 'border-gray-200' };
+                  if (status === 'remaining_submitted' || status === 'pending') return { kind: 'pending', emoji: '🔵', label: 'Verification Pending', card: 'bg-blue-50/60 border-blue-200', banner: 'text-blue-700', sub: 'border-blue-200' };
+                  if (status === 'seat_locked') return { kind: 'seat_locked', emoji: '🟡', label: 'Seat Locked', card: 'bg-amber-50/70 border-amber-200', banner: 'text-amber-700', sub: 'border-amber-200' };
+                  return { kind: 'paid', emoji: '🟢', label: 'Fully Paid', card: 'bg-green-50/60 border-green-200', banner: 'text-green-700', sub: 'border-green-200' };
+                })();
+
+                const subtotalRows = (
+                  <>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">₹{perPerson.toLocaleString('en-IN')} × {pax} {pax === 1 ? 'traveller' : 'travellers'}</dt>
+                      <dd className="font-semibold text-gray-900">₹{totalAmount.toLocaleString('en-IN')}</dd>
+                    </div>
+                    {couponDiscount > 0 && (
+                      <div className="flex justify-between text-green-700"><dt className="flex items-center gap-1"><Tag className="h-3 w-3" />Coupon {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="font-semibold">−₹{couponDiscount.toLocaleString('en-IN')}</dd></div>
+                    )}
+                    {walletUsed > 0 && (
+                      <div className="flex justify-between text-purple-700"><dt>Wallet used</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>
+                    )}
+                  </>
+                );
+
+                return (
+                  <div className={`rounded-2xl border overflow-hidden ${cfg.card}`}>
+                    {/* Status banner — the first thing users see */}
+                    <div className="px-5 sm:px-6 pt-5 pb-4">
+                      <p className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Payment status</p>
+                      <p className={`text-2xl font-extrabold mt-1.5 flex items-center gap-2 ${cfg.banner}`}>
+                        <span className="text-xl leading-none">{cfg.emoji}</span>{cfg.label}
+                      </p>
+                    </div>
+
+                    <div className={`bg-white/70 border-t ${cfg.sub} px-5 sm:px-6 py-4 space-y-2 text-sm`}>
+                      {cfg.kind === 'paid' && (
+                        <dl className="space-y-2">
+                          {subtotalRows}
+                          <div className={`pt-2 mt-1 border-t ${cfg.sub} flex justify-between items-baseline`}>
+                            <dt className="text-gray-900 font-semibold">Total payable</dt>
+                            <dd className="font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd>
+                          </div>
+                          <div className="flex justify-between items-baseline">
+                            <dt className="text-gray-600">Amount paid</dt>
+                            <dd className="font-bold text-green-700">₹{shownPaid.toLocaleString('en-IN')}</dd>
+                          </div>
+                          <p className="flex items-center gap-1.5 text-green-700 font-semibold pt-1"><CheckCircle className="h-4 w-4" />No dues remaining</p>
+                        </dl>
                       )}
-                      {walletUsed > 0 && (
-                        <div className="flex justify-between text-purple-700"><dt>Wallet used</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>
+
+                      {cfg.kind === 'seat_locked' && (
+                        <dl className="space-y-2">
+                          {subtotalRows}
+                          <div className={`pt-2 mt-1 border-t ${cfg.sub} flex justify-between items-baseline`}>
+                            <dt className="text-gray-600">Seat lock paid</dt>
+                            <dd className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</dd>
+                          </div>
+                          <div className={`pt-3 mt-1 border-t ${cfg.sub}`}>
+                            <dt className="text-orange-700 font-semibold text-sm">Remaining amount</dt>
+                            <dd className="text-3xl font-extrabold text-orange-600 mt-0.5">₹{remainingAmount.toLocaleString('en-IN')}</dd>
+                            {fmtPay && <p className="text-xs text-orange-700 mt-1.5 font-medium">Pay before {fmtPay}</p>}
+                          </div>
+                        </dl>
                       )}
-                      <div className="pt-2 mt-1 border-t border-gray-200 flex justify-between items-baseline">
-                        <dt className="text-gray-900 font-semibold">Total payable</dt>
-                        <dd className="font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <dt className="text-gray-600">Amount paid</dt>
-                        <dd className="font-bold text-green-700">₹{shownPaid.toLocaleString('en-IN')}</dd>
-                      </div>
-                      {remainingAmount > 0 ? (
-                        <div className="pt-2 mt-1 border-t border-gray-200 flex justify-between items-baseline">
-                          <dt className="text-orange-700 font-semibold">Remaining to pay</dt>
-                          <dd className="text-2xl font-extrabold text-orange-600">₹{remainingAmount.toLocaleString('en-IN')}</dd>
+
+                      {cfg.kind === 'pending' && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-gray-600">Amount paid</span>
+                            <span className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</span>
+                          </div>
+                          {remainingAmount > 0 && (
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-gray-600">Remaining</span>
+                              <span className="font-bold text-orange-600">₹{remainingAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                          <p className={`text-sm text-gray-600 pt-2 mt-1 border-t ${cfg.sub} leading-relaxed`}>
+                            We're verifying your payment. This usually takes a few minutes — you'll get an email the moment it's confirmed.
+                          </p>
                         </div>
-                      ) : (
-                        <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between">
-                          <dt className="text-green-700 font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4" />Fully paid</dt>
-                          <dd className="text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full">No dues</dd>
+                      )}
+
+                      {cfg.kind === 'rejected' && (
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Reason</p>
+                            <p className="text-sm text-gray-800 mt-0.5">{booking.rejection_reason || 'Your booking could not be verified.'}</p>
+                          </div>
+                          <div className={`pt-3 border-t ${cfg.sub}`}>
+                            <p className="text-sm text-gray-700 mb-3">This booking can no longer be used. Please create a new one.</p>
+                            <Link href={trip?.id ? `/trips/${trip.id}` : '/trips'} className="inline-flex items-center justify-center gap-1.5 w-full px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold transition-colors">
+                              Create new booking
+                            </Link>
+                          </div>
                         </div>
                       )}
-                    </dl>
-                  );
-                })()}
-                {(booking.transaction_id || booking.reference_id) && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Transaction ID</p>
-                    <p className="font-mono text-xs text-gray-900 break-all">{booking.reference_id || booking.transaction_id}</p>
+
+                      {cfg.kind === 'cancelled' && (
+                        <div className="space-y-2">
+                          {shownPaid > 0 && (
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-gray-600">Amount paid</span>
+                              <span className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                          {booking.rejection_reason && (
+                            <div className={`pt-2 mt-1 border-t ${cfg.sub}`}>
+                              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Reason</p>
+                              <p className="text-sm text-gray-800 mt-0.5">{booking.rejection_reason}</p>
+                            </div>
+                          )}
+                          {shownPaid > 0 && (
+                            <div className={`pt-2 mt-1 border-t ${cfg.sub}`}>
+                              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Refund status</p>
+                              <p className="text-sm text-gray-800 mt-0.5">Being processed as per the cancellation policy. Our team will reach out.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {(booking.transaction_id || booking.reference_id) && (
+                        <div className={`mt-3 pt-3 border-t ${cfg.sub}`}>
+                          <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Transaction ID</p>
+                          <p className="font-mono text-xs text-gray-700 break-all">{booking.reference_id || booking.transaction_id}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* What's next */}
               <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6">
