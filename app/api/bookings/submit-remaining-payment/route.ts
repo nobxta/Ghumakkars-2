@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     // Fetch booking to verify user owns it
     const { data: booking, error: bookingError } = await adminClient
       .from('bookings')
-      .select('user_id, trips(discounted_price), number_of_participants, payment_amount, final_amount, total_price, payment_method')
+      .select('user_id, trips(discounted_price), number_of_participants, payment_amount, final_amount, total_price, payment_method, coupon_discount, wallet_amount_used, booking_status')
       .eq('id', bookingId)
       .single();
 
@@ -52,15 +52,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate remaining amount using the booking's final_amount (already includes coupon/wallet discounts)
-    const trip = booking.trips as any;
-    const bookingTotal = parseFloat(String(booking.final_amount || booking.total_price || ((trip?.discounted_price || 0) * (booking.number_of_participants || 1))));
-    const paidAmount = parseFloat(String(booking.payment_amount || 0));
-    const remainingAmount = Math.max(0, bookingTotal - paidAmount);
+    // Full amount owed (after coupon + wallet). For seat-lock bookings,
+    // total_price / final_amount only hold the DEPOSIT, so the real trip cost
+    // must come from list price x participants.
+    const tripRel: any = Array.isArray((booking as any).trips) ? (booking as any).trips[0] : (booking as any).trips;
+    const pax = Number(booking.number_of_participants) || 1;
+    const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
+    const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
+    const isSeatLock = booking.payment_method === 'seat_lock' || booking.booking_status === 'seat_locked';
+    const bookingTotal = isSeatLock
+      ? Math.max(0, (Number(tripRel?.discounted_price) || 0) * pax - coupon - wallet)
+      : (parseFloat(String(booking.final_amount || 0)) > 0
+          ? parseFloat(String(booking.final_amount))
+          : Math.max(0, (parseFloat(String(booking.total_price || 0)) || (Number(tripRel?.discounted_price) || 0) * pax) - coupon - wallet));
+
+    // Money already received = sum of VERIFIED transactions (source of truth),
+    // falling back to the stored payment_amount.
+    const { data: existingTxns } = await adminClient
+      .from('payment_transactions')
+      .select('amount, payment_status')
+      .eq('booking_id', bookingId);
+    const verifiedPaid = (existingTxns || [])
+      .filter((t: any) => t.payment_status === 'verified')
+      .reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
+    const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || 0));
+    const remainingAmount = Math.max(0, Math.round(bookingTotal - paidAmount));
 
     if (remainingAmount <= 0) {
       return NextResponse.json(
         { error: 'No remaining payment required' },
+        { status: 400 }
+      );
+    }
+
+    // Guard against a duplicate remaining submission already awaiting review.
+    const hasPendingRemaining = (existingTxns || []).some(
+      (t: any) => t.payment_status === 'pending'
+    );
+    if (hasPendingRemaining) {
+      return NextResponse.json(
+        { error: 'A payment is already submitted and waiting for our team to verify it.' },
         { status: 400 }
       );
     }
