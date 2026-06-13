@@ -252,9 +252,13 @@ export default function AdminTripDetailsPage() {
 
   // Search + status filter applied to the (batch-filtered) bookings for the table.
   const visibleBookings = bookings.filter((b: any) => {
-    if (bookingFilter !== 'all') {
-      if (bookingFilter === 'cancelled') { if (!['cancelled', 'rejected'].includes(b.booking_status)) return false; }
-      else if (b.booking_status !== bookingFilter) return false;
+    if (bookingFilter === 'all') {
+      // Active view hides cancelled / rejected — they live under the Cancelled tab.
+      if (['cancelled', 'rejected'].includes(b.booking_status)) return false;
+    } else if (bookingFilter === 'cancelled') {
+      if (!['cancelled', 'rejected'].includes(b.booking_status)) return false;
+    } else if (b.booking_status !== bookingFilter) {
+      return false;
     }
     const q = bookingSearch.trim().toLowerCase();
     if (!q) return true;
@@ -283,11 +287,10 @@ export default function AdminTripDetailsPage() {
     // bookings are treated as refunded and drop out of earnings.
     revenue: bookings.reduce((s: number, b: any) => {
       if (['cancelled', 'rejected'].includes(b.booking_status)) return s;
-      if (b.is_offline_booking || !b.user_id) return s + parseFloat(String(b.amount_paid || 0));
-      return s + (b.payment_transactions || [])
-        .filter((pt: any) => pt.payment_status === 'verified')
-        .reduce((x: number, pt: any) => x + parseFloat(String(pt.amount || 0)), 0);
+      return s + bookingPaid(b);
     }, 0),
+    // Balance still to collect across active bookings (e.g. seat-lock balance).
+    outstanding: bookings.reduce((s: number, b: any) => s + bookingRemaining(b), 0),
   };
 
   // ─────────────────────────── Operational exports ───────────────────────────
@@ -1004,38 +1007,54 @@ export default function AdminTripDetailsPage() {
         {/* Compact stat strip (batch-aware) */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
           {(() => {
-            const isBatch = selectedBatch !== 'all';
-            const rev = isBatch ? batchMetrics.revenue : (metrics?.totalRevenue || 0);
-            const bk = isBatch ? batchMetrics.totalBookings : (metrics?.totalBookings || 0);
-            const conf = isBatch ? batchMetrics.confirmedBookings : (metrics?.confirmedBookings || 0);
-            const pend = isBatch ? batchMetrics.pendingBookings : (metrics?.pendingBookings || 0);
-            const pax = isBatch ? batchMetrics.totalParticipants : (metrics?.totalParticipants || 0);
+            // Always compute from the (batch-filtered) booking view so batch and
+            // lifetime stay consistent.
+            const collected = batchMetrics.revenue;
+            const outstanding = batchMetrics.outstanding;
+            const bk = batchMetrics.totalBookings;
+            const conf = batchMetrics.confirmedBookings;
+            const seat = batchMetrics.seatLockedBookings;
+            const pend = batchMetrics.pendingBookings;
+            const pax = batchMetrics.totalParticipants;
             const maxCap = Number(trip.max_participants) || 0;
-            const filled = isBatch ? pax : (Number(trip.current_participants) || 0);
-            const occPct = maxCap > 0 ? Math.min(100, Math.round((filled / maxCap) * 100)) : 0;
-            const Cell = ({ icon, label, value, sub }: any) => (
-              <div className="px-4 py-2.5">
-                <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span></div>
-                <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5">{icon}{value}</p>
-                {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
-              </div>
-            );
+            const occPct = maxCap > 0 ? Math.min(100, Math.round((pax / maxCap) * 100)) : 0;
+            // Booking-status breakdown, only the non-zero buckets.
+            const parts: string[] = [];
+            if (conf) parts.push(`${conf} confirmed`);
+            if (seat) parts.push(`${seat} seat-locked`);
+            if (pend) parts.push(`${pend} pending`);
+            const bookingSub = parts.length ? parts.join(' · ') : 'none yet';
             return (
               <>
-                <Cell icon={<TrendingUp className="h-3.5 w-3.5 text-green-600" />} label={isBatch ? 'Batch revenue' : 'Revenue'} value={`₹${rev.toLocaleString()}`} />
-                <Cell icon={<Package className="h-3.5 w-3.5 text-purple-600" />} label="Bookings" value={bk} sub={`${conf} confirmed · ${pend} pending`} />
-                <Cell icon={<Users className="h-3.5 w-3.5 text-blue-600" />} label="Participants" value={pax} />
+                <div className="px-4 py-2.5">
+                  <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">{selectedBatch !== 'all' ? 'Batch revenue' : 'Revenue'}</span></div>
+                  <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5 text-green-600" />₹{collected.toLocaleString()}</p>
+                  <p className="text-[11px] font-medium">{outstanding > 0 ? <span className="text-orange-600">₹{outstanding.toLocaleString()} to collect</span> : <span className="text-gray-400">fully collected</span>}</p>
+                </div>
+                <div className="px-4 py-2.5">
+                  <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Bookings</span></div>
+                  <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Package className="h-3.5 w-3.5 text-purple-600" />{bk}</p>
+                  <p className="text-[11px] text-gray-400">{bookingSub}</p>
+                </div>
+                <div className="px-4 py-2.5">
+                  <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Participants</span></div>
+                  <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-blue-600" />{pax}</p>
+                  <p className="text-[11px] text-gray-400">travelling this {selectedBatch !== 'all' ? 'departure' : 'trip'}</p>
+                </div>
                 <div className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Occupancy</span></div>
                   {maxCap > 0 ? (
                     <>
-                      <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />{filled} / {maxCap}<span className="text-xs font-semibold text-gray-400">· {occPct}%</span></p>
+                      <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />{pax} / {maxCap}<span className="text-xs font-semibold text-gray-400">· {occPct}%</span></p>
                       <div className="mt-1 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${occPct >= 100 ? 'bg-green-500' : occPct >= 60 ? 'bg-purple-500' : 'bg-amber-400'}`} style={{ width: `${occPct}%` }} />
                       </div>
                     </>
                   ) : (
-                    <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />{filled}<span className="text-xs font-semibold text-gray-400">· Unlimited</span></p>
+                    <>
+                      <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-orange-600" />Unlimited</p>
+                      <p className="text-[11px] text-gray-400">no seat cap</p>
+                    </>
                   )}
                 </div>
               </>
@@ -1284,7 +1303,7 @@ export default function AdminTripDetailsPage() {
                 : b.booking_status === s
             ).length;
             const counts: Record<string, number> = {
-              all: bookings.length,
+              all: bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status)).length,
               confirmed: statusCount('confirmed'),
               seat_locked: statusCount('seat_locked'),
               pending: statusCount('pending'),
@@ -1305,11 +1324,11 @@ export default function AdminTripDetailsPage() {
                   onChange={(e) => setBookingFilter(e.target.value as typeof bookingFilter)}
                   className="px-3 py-2 text-sm font-semibold border border-gray-200 rounded-lg bg-white text-gray-900 outline-none focus:border-purple-400 cursor-pointer w-full sm:w-auto"
                 >
-                  <option value="all">All statuses ({counts.all})</option>
+                  <option value="all">Active ({counts.all})</option>
                   <option value="confirmed">Confirmed ({counts.confirmed})</option>
                   <option value="seat_locked">Seat locked ({counts.seat_locked})</option>
                   <option value="pending">Pending ({counts.pending})</option>
-                  <option value="cancelled">Cancelled ({counts.cancelled})</option>
+                  <option value="cancelled">Cancelled / Rejected ({counts.cancelled})</option>
                 </select>
               </div>
             );
@@ -1390,6 +1409,9 @@ export default function AdminTripDetailsPage() {
                           </span>
                           {bookingRemaining(booking) > 0 && booking.booking_status === 'confirmed' && (
                             <p className="text-[10px] text-orange-600 font-semibold mt-0.5">balance pending</p>
+                          )}
+                          {['cancelled', 'rejected'].includes(booking.booking_status) && booking.rejection_reason && (
+                            <p className="text-[10px] text-red-600 mt-0.5 max-w-[160px]">Reason: {booking.rejection_reason}</p>
                           )}
                         </td>
                         <td className="py-2.5 pl-3">
@@ -1483,6 +1505,9 @@ export default function AdminTripDetailsPage() {
                               {displayPhone}
                             </span>
                           </div>
+                          {['cancelled', 'rejected'].includes(booking.booking_status) && booking.rejection_reason && (
+                            <p className="text-xs text-red-600 mb-1">Reason: {booking.rejection_reason}</p>
+                          )}
                           {formatPassengersLine(booking, 200) && (
                             <p className="text-xs text-gray-500 mt-0.5">
                               <span className="font-medium text-gray-600">Passengers:</span> {formatPassengersLine(booking, 200)}

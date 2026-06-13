@@ -456,7 +456,11 @@ export default function AdminBookingDetailsPage() {
                 {!['cancelled', 'rejected'].includes(status) && (
                   <button
                     disabled={managing}
-                    onClick={() => manageBooking({ action: 'set_status', status: 'cancelled' }, 'CANCEL this booking? The seat is freed, the booking drops out of revenue, and a cancellation email is sent. Any refund must be issued separately in Razorpay.')}
+                    onClick={() => {
+                      if (!window.confirm('CANCEL this booking? The seat is freed, the booking drops out of revenue, and a cancellation email is sent. Any refund must be issued separately in Razorpay.')) return;
+                      const reason = window.prompt('Reason for cancellation (shown in your records, optional):', '') || '';
+                      manageBooking({ action: 'set_status', status: 'cancelled', reason });
+                    }}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
                   >
                     <XCircle className="h-4 w-4" /> Cancel booking

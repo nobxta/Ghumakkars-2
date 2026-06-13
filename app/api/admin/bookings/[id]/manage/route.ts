@@ -159,7 +159,10 @@ export async function POST(
       if (!willCount && wasCounted) await adjustSeats(-pax);
 
       const updates: Record<string, unknown> = { booking_status: status };
-      if (status === 'cancelled' || status === 'rejected') updates.payment_status = 'refunded';
+      if (status === 'cancelled' || status === 'rejected') {
+        updates.payment_status = 'refunded';
+        updates.rejection_reason = body.reason ? String(body.reason).slice(0, 500) : 'Cancelled by admin';
+      }
       if (status === 'confirmed') updates.payment_status = 'paid';
       await adminClient.from('bookings').update(updates).eq('id', id);
 
