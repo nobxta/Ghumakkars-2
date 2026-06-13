@@ -75,12 +75,20 @@ export default function BookingDetailsPage() {
   const [transactionId, setTransactionId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; title: string; message?: string } | null>(null);
 
   useEffect(() => {
     checkUser();
     fetchBooking();
     fetchPaymentSettings();
   }, [params.id]);
+
+  // Auto-dismiss the toast.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const checkUser = async () => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -195,14 +203,18 @@ export default function BookingDetailsPage() {
 
       // Refresh booking data
       await fetchBooking();
-      
-      // Show success message
-      alert('Remaining payment submitted successfully! We will review and confirm shortly.');
-      
+
+      // Show success toast (seat is locked; full payment now awaiting confirmation)
+      setToast({
+        type: 'success',
+        title: 'Payment submitted — seat locked',
+        message: "We've got your full payment details. Your seat stays locked while our team confirms it, usually within a few hours.",
+      });
+
       // Reset form
       setShowPaymentSection(false);
       setTransactionId('');
-      
+
       // Refresh the page to show updated status
       router.refresh();
     } catch (error: any) {
@@ -351,6 +363,7 @@ export default function BookingDetailsPage() {
     switch (status) {
       case 'confirmed':  return { bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500', label: 'Confirmed', icon: <CheckCircle className="h-3.5 w-3.5" /> };
       case 'seat_locked': return { bg: 'bg-orange-100', text: 'text-orange-800', dot: 'bg-orange-500', label: 'Seat Locked', icon: <Lock className="h-3.5 w-3.5" /> };
+      case 'remaining_submitted': return { bg: 'bg-blue-100', text: 'text-blue-800', dot: 'bg-blue-500', label: 'Seat locked · confirming payment', icon: <Clock className="h-3.5 w-3.5" /> };
       case 'pending':    return { bg: 'bg-yellow-100', text: 'text-yellow-800', dot: 'bg-yellow-500', label: 'Under review', icon: <Clock className="h-3.5 w-3.5" /> };
       case 'cancelled':
       case 'rejected':   return { bg: 'bg-red-100', text: 'text-red-800', dot: 'bg-red-500', label: 'Cancelled', icon: <XCircle className="h-3.5 w-3.5" /> };
@@ -483,6 +496,31 @@ export default function BookingDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16 pb-32 lg:pb-12">
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-20 right-4 z-50 w-[calc(100%-2rem)] sm:w-96 animate-toast-in">
+          <div className={`rounded-2xl shadow-2xl border overflow-hidden bg-white ${
+            toast.type === 'success' ? 'border-green-200' : toast.type === 'error' ? 'border-red-200' : 'border-blue-200'
+          }`}>
+            <div className={`h-1 ${toast.type === 'success' ? 'bg-green-500' : toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`} />
+            <div className="p-4 flex items-start gap-3">
+              <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${
+                toast.type === 'success' ? 'bg-green-100 text-green-600' : toast.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+              }`}>
+                {toast.type === 'success' ? <CheckCircle className="h-5 w-5" /> : toast.type === 'error' ? <XCircle className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-gray-900">{toast.title}</p>
+                {toast.message && <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{toast.message}</p>}
+              </div>
+              <button onClick={() => setToast(null)} className="flex-shrink-0 p-1 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                <XCircle className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Back link */}
         <Link href="/bookings" className="inline-flex items-center text-sm font-semibold text-gray-600 hover:text-purple-700 mb-4 sm:mb-6 transition-colors">
@@ -787,6 +825,21 @@ export default function BookingDetailsPage() {
             </div>
           </div>
         </div>
+
+        {/* ─────────── Full payment submitted, awaiting confirmation ─────────── */}
+        {booking.booking_status === 'remaining_submitted' && (
+          <div className="mt-4 sm:mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-5 sm:p-6 flex items-start gap-4">
+            <div className="flex-shrink-0 w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-900">Seat locked — full payment confirmation waiting</p>
+              <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                Your seat is locked and we've received your full payment details. Our team is verifying it now and will confirm your booking shortly (usually within a few hours). You'll get an email the moment it's confirmed.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ─────────── Remaining payment (kept) ─────────── */}
         {showRemainingPayment && (
