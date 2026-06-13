@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet } from 'lucide-react';
+import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet, MoreVertical } from 'lucide-react';
 
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -24,6 +24,8 @@ export default function AdminBookingsPage() {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'status'>('date');
   const [selectedTripId, setSelectedTripId] = useState<string>('all');
   const [trips, setTrips] = useState<any[]>([]);
+  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
+  const [quickFilter, setQuickFilter] = useState<'none' | 'today' | 'week' | 'pending_payment' | 'upcoming'>('none');
   const supabase = createClient();
 
   const rejectionReasons = [
@@ -169,6 +171,32 @@ export default function AdminBookingsPage() {
   // Filter by status
   if (filter !== 'all') {
     filteredBookings = filteredBookings.filter(b => b.booking_status === filter);
+  }
+
+  // Quick filters (Today / This week / Pending payment / Upcoming)
+  if (quickFilter !== 'none') {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
+    filteredBookings = filteredBookings.filter(b => {
+      if (quickFilter === 'today') {
+        const c = new Date(b.created_at);
+        return c >= startOfToday;
+      }
+      if (quickFilter === 'week') {
+        const c = new Date(b.created_at);
+        return c >= startOfWeek;
+      }
+      if (quickFilter === 'pending_payment') {
+        return Math.max(0, fullOf(b) - paidOf(b)) > 0 && !['cancelled', 'rejected'].includes(b.booking_status);
+      }
+      if (quickFilter === 'upcoming') {
+        const dep = b.departure_date || b.trips?.start_date;
+        return dep ? new Date(dep) >= startOfToday : false;
+      }
+      return true;
+    });
   }
 
   // Apply search
@@ -421,90 +449,33 @@ export default function AdminBookingsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header Section - Compact */}
-      <div className="flex justify-between items-center gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">All Bookings</h1>
-          <p className="text-[11px] sm:text-xs text-gray-500">Manage all trip bookings</p>
-        </div>
-        <button
-          onClick={fetchBookings}
-          className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center space-x-1.5"
-        >
-          <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
-          <span>Refresh</span>
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">All Bookings</h1>
+        <p className="text-[11px] sm:text-xs text-gray-500">Manage all trip bookings</p>
       </div>
 
-      {/* Key Stats Cards — consistent neutral palette, more info per card */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        {/* Revenue */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-green-100 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-green-700" />
-            </div>
-            <TrendingUp className="h-3.5 w-3.5 text-green-500" />
-          </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</p>
-          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center mt-0.5">
-            <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{totalRevenue.toLocaleString('en-IN')}
-          </p>
-          <div className="mt-1.5 space-y-0.5">
-            <p className="text-[10px] sm:text-[11px] text-gray-500 flex items-center justify-between">
-              <span>Confirmed</span><span className="font-semibold text-gray-700">₹{confirmedRevenue.toLocaleString('en-IN')}</span>
-            </p>
-            {seatLockRevenue > 0 && (
-              <p className="text-[10px] sm:text-[11px] text-gray-500 flex items-center justify-between">
-                <span>Seat lock</span><span className="font-semibold text-gray-700">₹{seatLockRevenue.toLocaleString('en-IN')}</span>
-              </p>
-            )}
-          </div>
+      {/* Compact KPI strip */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><DollarSign className="h-3.5 w-3.5 text-green-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Revenue</span></div>
+          <p className="text-lg font-bold text-gray-900 leading-tight">₹{totalRevenue.toLocaleString('en-IN')}</p>
+          <p className="text-[11px] text-gray-400">collected</p>
         </div>
-
-        {/* Pending Revenue */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-100 flex items-center justify-center">
-              <Clock className="h-4 w-4 text-amber-700" />
-            </div>
-            {stats.pendingPayments > 0 && (
-              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-md text-[10px] font-bold">{stats.pendingPayments}</span>
-            )}
-          </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending</p>
-          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 flex items-center mt-0.5">
-            <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{pendingRevenue.toLocaleString('en-IN')}
-          </p>
-          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">{stats.pendingPayments} awaiting payment</p>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><Clock className="h-3.5 w-3.5 text-amber-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Pending</span></div>
+          <p className="text-lg font-bold text-gray-900 leading-tight">₹{pendingRevenue.toLocaleString('en-IN')}</p>
+          <p className="text-[11px] text-gray-400">balance to collect</p>
         </div>
-
-        {/* Needs Attention — replaces meaningless OC/OM/OR */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${needsAttention > 0 ? 'bg-orange-100' : 'bg-gray-100'}`}>
-              <AlertCircle className={`h-4 w-4 ${needsAttention > 0 ? 'text-orange-700' : 'text-gray-400'}`} />
-            </div>
-          </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Needs attention</p>
-          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-0.5">{needsAttention}</p>
-          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">
-            {needsAttention === 0 ? 'All caught up' : 'Payments to verify / confirm'}
-          </p>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><AlertCircle className={`h-3.5 w-3.5 ${needsAttention > 0 ? 'text-orange-600' : 'text-gray-400'}`} /><span className="text-[10px] font-semibold uppercase tracking-wide">Attention</span></div>
+          <p className="text-lg font-bold text-gray-900 leading-tight">{needsAttention}</p>
+          <p className="text-[11px] text-gray-400">{needsAttention === 0 ? 'all caught up' : 'to verify'}</p>
         </div>
-
-        {/* Total Bookings with conversion */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-purple-100 flex items-center justify-center">
-              <Calendar className="h-4 w-4 text-purple-700" />
-            </div>
-          </div>
-          <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Bookings</p>
-          <p className="text-lg sm:text-2xl font-extrabold text-gray-900 mt-0.5">{stats.total}</p>
-          <p className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5">
-            {stats.confirmed} confirmed · {conversionRate}% rate
-          </p>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><Calendar className="h-3.5 w-3.5 text-purple-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Bookings</span></div>
+          <p className="text-lg font-bold text-gray-900 leading-tight">{stats.total}</p>
+          <p className="text-[11px] text-gray-400">{stats.confirmed} confirmed · {conversionRate}%</p>
         </div>
       </div>
 
@@ -521,115 +492,87 @@ export default function AdminBookingsPage() {
         </div>
       )}
 
-      {/* Search and Filters Section - Compact */}
-      <div className="bg-white rounded-lg sm:rounded-xl border border-purple-200 shadow-sm p-2.5 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
-          {/* Search Bar — grows */}
-          <div className="relative search-flex">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+      {/* Toolbar: search + filters + actions in one row */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by customer, email, or booking ID..."
+              placeholder="Search customer, email or ID…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 sm:pl-10 pr-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900"
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none text-sm text-gray-900"
             />
           </div>
-
-          {/* Trip Filter — large (long names) */}
           <select
             value={selectedTripId}
-            onChange={(e) => {
-              setSelectedTripId(e.target.value);
-              setFilter('all');
-            }}
-            className="filter-large px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium bg-white"
+            onChange={(e) => { setSelectedTripId(e.target.value); setFilter('all'); }}
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white max-w-[220px]"
           >
-            <option value="all">All Trips</option>
+            <option value="all">All trips</option>
             {trips.map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {trip.title} - {trip.destination}
-              </option>
+              <option key={trip.id} value={trip.id}>{trip.title} - {trip.destination}</option>
             ))}
           </select>
-
-          {/* Sort — small */}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
-            className="filter-small px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-100 outline-none transition-all text-xs sm:text-sm text-gray-900 font-medium bg-white"
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white"
           >
-            <option value="date">Sort by Date</option>
-            <option value="amount">Sort by Amount</option>
-            <option value="status">Sort by Status</option>
+            <option value="date">Sort: Date</option>
+            <option value="amount">Sort: Amount</option>
+            <option value="status">Sort: Status</option>
           </select>
+          <button
+            onClick={fetchBookings}
+            className="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4 text-gray-500" />
+            Refresh
+          </button>
         </div>
 
-        {/* Quick Filter Pills - Compact */}
-        <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
-          <button
-            onClick={() => {
-              setFilter('all');
-              setSearchTerm('');
-            }}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
-              filter === 'all'
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-            }`}
-          >
-            <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span>All ({tripStats.total})</span>
-          </button>
-          <button
-            onClick={() => setFilter('pending')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
-              filter === 'pending'
-                ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md'
-                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
-            }`}
-          >
-            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span>Pending ({tripStats.pending})</span>
-            {stats.pendingPayments > 0 && (
-              <span className="px-2 py-0.5 bg-white/30 rounded-full text-xs font-bold">
-                {stats.pendingPayments} payments
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setFilter('confirmed')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
-              filter === 'confirmed'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
-                : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-            }`}
-          >
-            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span>Confirmed ({tripStats.confirmed})</span>
-          </button>
-          <button
-            onClick={() => setFilter('seat_locked')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
-              filter === 'seat_locked'
-                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-                : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
-            }`}
-          >
-            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span>Seat Locked ({tripStats.seatLocked})</span>
-          </button>
-          <button
-            onClick={() => setFilter('cancelled')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-xs transition-all flex items-center space-x-1.5 ${
-              filter === 'cancelled'
-                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-md'
-                : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
-            }`}
-          >
-            <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span>Cancelled ({tripStats.cancelled})</span>
-          </button>
+        {/* Status segmented control */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+            {([
+              ['all', `All (${tripStats.total})`],
+              ['pending', `Pending (${tripStats.pending})`],
+              ['confirmed', `Confirmed (${tripStats.confirmed})`],
+              ['seat_locked', `Seat locked (${tripStats.seatLocked})`],
+              ['cancelled', `Cancelled (${tripStats.cancelled})`],
+            ] as const).map(([val, label], i) => (
+              <button
+                key={val}
+                onClick={() => setFilter(val)}
+                className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
+                  filter === val ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Quick filters */}
+          <span className="hidden sm:inline h-5 w-px bg-gray-200 mx-1" />
+          {([
+            ['today', 'Today'],
+            ['week', 'This week'],
+            ['pending_payment', 'Pending payment'],
+            ['upcoming', 'Upcoming'],
+          ] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setQuickFilter(quickFilter === val ? 'none' : val)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                quickFilter === val ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -772,11 +715,6 @@ export default function AdminBookingsPage() {
                               <span>Manual</span>
                             </span>
                           )}
-                          {booking.payment_transactions && booking.payment_transactions.length > 0 && (
-                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200 text-xs">
-                              {booking.payment_transactions.length}
-                            </span>
-                          )}
                         </div>
                         {hasPendingPayment && (
                           <div className="flex items-center space-x-1 text-xs text-orange-600 font-semibold">
@@ -800,82 +738,77 @@ export default function AdminBookingsPage() {
                       </span>
                     </td>
 
-                    {/* Actions - Compact */}
+                    {/* Actions - primary + overflow */}
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <div className="flex flex-col gap-1.5 min-w-[120px]">
-                        {/* Cash Payment Approval */}
-                        {booking.payment_mode === 'cash' && booking.payment_status === 'cash_pending' && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openCashPaymentModal(booking);
-                            }}
-                            className="w-full px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md text-xs font-bold hover:from-green-700 hover:to-green-800 transition-all shadow-sm hover:shadow flex items-center justify-center space-x-1"
-                          >
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            <span>Approve Cash</span>
-                          </button>
-                        )}
-                        {/* Manual Payment Review */}
-                        {booking.payment_mode === 'manual' && (booking.payment_status === 'pending' || booking.reference_id) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openPaymentModal(booking);
-                            }}
-                            className="w-full px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-md text-xs font-bold hover:from-purple-700 hover:to-purple-800 transition-all shadow-sm hover:shadow flex items-center justify-center space-x-1"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>Review</span>
-                          </button>
-                        )}
-                        {/* Primary: View booking */}
-                        <Link
-                          href={`/admin/bookings/${booking.id}`}
-                          className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-sm"
-                        >
-                          <Eye className="h-3 w-3" />
-                          <span>View booking</span>
-                        </Link>
-                        {/* Secondary row */}
-                        <div className="flex gap-1">
-                          {booking.payment_transactions && booking.payment_transactions.length > 0 && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openPaymentModal(booking); }}
-                              className={`flex-1 px-2 py-1 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 ${
-                                booking.payment_transactions.some((p: any) => p.payment_status === 'pending')
-                                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              }`}
-                              title="Payments"
-                            >
-                              <CreditCard className="h-3 w-3" /> Pay
-                              {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length > 0 && (
-                                <span className="ml-0.5 px-1 bg-white rounded text-[9px] font-bold">
-                                  {booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length}
-                                </span>
+                      {(() => {
+                        const needsManualReview = booking.payment_mode === 'manual' && (booking.payment_status === 'pending' || booking.reference_id);
+                        const needsCashApproval = booking.payment_mode === 'cash' && booking.payment_status === 'cash_pending';
+                        const hasTxns = booking.payment_transactions && booking.payment_transactions.length > 0;
+                        const phone = booking.primary_passenger_phone || booking.profiles?.phone;
+                        const pendingTxns = hasTxns ? booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length : 0;
+                        return (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Primary action: review if something needs it, else view */}
+                            {needsCashApproval ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openCashPaymentModal(booking); }}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" /> Approve cash
+                              </button>
+                            ) : needsManualReview ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openPaymentModal(booking); }}
+                                className="relative px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                              >
+                                <Eye className="h-3.5 w-3.5" /> Review
+                                {pendingTxns > 0 && <span className="ml-0.5 px-1 bg-white/25 rounded text-[10px] font-bold">{pendingTxns}</span>}
+                              </button>
+                            ) : (
+                              <Link
+                                href={`/admin/bookings/${booking.id}`}
+                                className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                              >
+                                <Eye className="h-3.5 w-3.5 text-gray-500" /> View
+                              </Link>
+                            )}
+
+                            {/* Overflow menu */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenRowMenu(openRowMenu === booking.id ? null : booking.id); }}
+                                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                                title="More actions"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                              {openRowMenu === booking.id && (
+                                <>
+                                  <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); }} />
+                                  <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-xl z-20 overflow-hidden py-1">
+                                    <Link href={`/admin/bookings/${booking.id}`} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                      <Eye className="h-3.5 w-3.5 text-gray-500" /> View booking
+                                    </Link>
+                                    {(needsManualReview || hasTxns) && (
+                                      <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); openPaymentModal(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                                        <CreditCard className="h-3.5 w-3.5 text-gray-500" /> Payments{pendingTxns > 0 ? ` (${pendingTxns})` : ''}
+                                      </button>
+                                    )}
+                                    {phone && (
+                                      <a href={`tel:${phone}`} onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                        <Phone className="h-3.5 w-3.5 text-gray-500" /> Call customer
+                                      </a>
+                                    )}
+                                    <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); handleDeleteBooking(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left border-t border-gray-100">
+                                      <XCircle className="h-3.5 w-3.5" /> Delete
+                                    </button>
+                                  </div>
+                                </>
                               )}
-                            </button>
-                          )}
-                          {(booking.primary_passenger_phone || booking.profiles?.phone) && (
-                            <a
-                              onClick={(e) => e.stopPropagation()}
-                              href={`tel:${booking.primary_passenger_phone || booking.profiles?.phone}`}
-                              className="flex-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-[10px] font-semibold hover:bg-gray-200 flex items-center justify-center gap-1"
-                              title="Call customer"
-                            >
-                              <Phone className="h-3 w-3" /> Call
-                            </a>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking); }}
-                            className="px-2 py-1 bg-red-50 text-red-600 rounded text-[10px] font-semibold hover:bg-red-100 flex items-center justify-center gap-1"
-                            title="Delete booking (spam / test)"
-                          >
-                            <XCircle className="h-3 w-3" /> Delete
-                          </button>
-                        </div>
-                      </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
