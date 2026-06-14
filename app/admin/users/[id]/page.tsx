@@ -10,7 +10,7 @@ import {
   GraduationCap, Heart, Eye, AlertCircle, Shield, 
   Wallet, UserCircle, PhoneCall, Calendar as CalendarIcon, 
   Hash, AlertTriangle, Edit, Plus, Send, Gift, X, 
-  Activity, FileText, TrendingUp, History, MessageCircle
+  Activity, FileText, TrendingUp, History, MessageCircle, Copy
 } from 'lucide-react';
 
 export default function AdminUserDetailsPage() {
@@ -391,11 +391,12 @@ export default function AdminUserDetailsPage() {
           </div>
         </div>
 
-        {/* Stats row — 3 metrics, big numbers, no gradients */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 pb-6 border-b border-gray-200">
-          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Bookings</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{bookingStats.total}</p><p className="text-xs text-gray-500 mt-1">{bookingStats.confirmed} confirmed</p></div>
-          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Lifetime Value</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">₹{totalPaid.toLocaleString('en-IN')}</p><p className="text-xs text-gray-500 mt-1">{bookingStats.cancelled || 0} cancelled</p></div>
-          <div><p className="text-xs uppercase tracking-wider font-semibold text-gray-500">Wallet Balance</p><p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">₹{parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}</p><p className="text-xs text-gray-500 mt-1">Member since {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}</p></div>
+        {/* Stats strip — compact, bordered, grouped */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 bg-white border border-gray-200 rounded-xl divide-x divide-y sm:divide-y-0 divide-gray-100 mb-5">
+          <div className="px-4 py-3"><p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Bookings</p><p className="text-xl font-bold text-gray-900 leading-tight">{bookingStats.total}</p><p className="text-[11px] text-gray-400">{bookingStats.confirmed} confirmed</p></div>
+          <div className="px-4 py-3"><p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Spent</p><p className="text-xl font-bold text-gray-900 leading-tight">₹{totalPaid.toLocaleString('en-IN')}</p><p className="text-[11px] text-gray-400">{bookingStats.cancelled || 0} cancelled</p></div>
+          <div className="px-4 py-3"><p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Wallet</p><p className="text-xl font-bold text-gray-900 leading-tight">₹{parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}</p><p className="text-[11px] text-gray-400">balance</p></div>
+          <div className="px-4 py-3"><p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Member since</p><p className="text-xl font-bold text-gray-900 leading-tight">{user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}</p><p className="text-[11px] text-gray-400">{user.email_verified ? 'verified' : 'unverified'}</p></div>
         </div>
 
         {/* Tabs Navigation - Compact */}
@@ -455,10 +456,11 @@ export default function AdminUserDetailsPage() {
 
         {/* Tab Content */}
         {activeTab === 'overview' && (
-          <>
+          <div className="grid lg:grid-cols-[1fr_300px] gap-4 items-start">
+          <div className="space-y-4 min-w-0">
             {/* Profile details — only fields NOT already in the header. Plain dl, no decoration. */}
             {(user.alternative_number || user.college || user.college_name || user.university || user.student_id || user.gender || user.date_of_birth || authUser?.last_sign_in_at || user.bio) && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Profile details</h2>
                 <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
                   {user.alternative_number && (<div><dt className="text-xs text-gray-500">Alt. phone</dt><dd className="font-semibold text-gray-900">{user.alternative_number}</dd></div>)}
@@ -474,7 +476,7 @@ export default function AdminUserDetailsPage() {
 
             {/* Emergency Contact - Compact */}
             {(user.emergency_contact || user.emergency_contact_name) && (
-              <div className="bg-white rounded-xl border-2 border-red-200 shadow-md p-4 sm:p-6 mb-4">
+              <div className="bg-white rounded-xl border-2 border-red-200 shadow-md p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-red-100">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900">
@@ -511,98 +513,75 @@ export default function AdminUserDetailsPage() {
               </div>
             )}
 
-            {/* Wallet & Referral - Compact */}
-            {(user.wallet_balance !== undefined || user.referral_code || user.referred_by) && (
-              <div className="bg-white rounded-xl border-2 border-green-200 shadow-md p-4 sm:p-6 mb-4">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-green-100">
-                  <Wallet className="h-5 w-5 text-green-600" />
-                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                    Wallet & Referrals
-                  </h2>
+            {/* Login activity — timeline */}
+            {authUser && (() => {
+              const events = [
+                authUser.created_at && { dot: 'bg-purple-500', label: 'Account created', when: new Date(authUser.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
+                authUser.email_confirmed_at && { dot: 'bg-green-500', label: 'Email verified', when: new Date(authUser.email_confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
+                authUser.last_sign_in_at && { dot: 'bg-blue-500', label: 'Last login', when: new Date(authUser.last_sign_in_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) },
+              ].filter(Boolean) as { dot: string; label: string; when: string }[];
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Login activity</h2>
+                  <div className="space-y-0">
+                    {events.map((e, i) => (
+                      <div key={i} className="relative flex gap-3 pb-4 last:pb-0">
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <span className={`h-2.5 w-2.5 rounded-full ring-4 ring-white ${e.dot} mt-1`} />
+                          {i < events.length - 1 && <span className="w-px flex-1 bg-gray-200 my-1" />}
+                        </div>
+                        <div className="min-w-0 -mt-0.5">
+                          <p className="text-sm font-semibold text-gray-900">{e.label}</p>
+                          <p className="text-xs text-gray-500">{e.when}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">Sign-in method: <span className="capitalize">{authUser.app_metadata?.provider || authUser.app_metadata?.providers?.[0] || 'email'}</span>. IP/location aren't stored by Supabase Auth by default.</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {user.referral_code && (
-                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referral Code</p>
-                      <p className="font-mono font-bold text-green-600 text-sm">{user.referral_code}</p>
-                    </div>
-                  )}
-                  {user.referred_by && (
-                    <div className="bg-green-50 rounded-lg p-2 sm:p-3 border border-green-100">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referred By</p>
-                      {referrer ? (
-                        <Link href={`/admin/users/${referrer.id}`} className="block hover:underline">
-                          <p className="font-bold text-gray-900 text-sm truncate">
-                            {referrer.full_name || `${referrer.first_name || ''} ${referrer.last_name || ''}`.trim() || '—'}
-                          </p>
-                          <p className="text-[10px] text-gray-500 truncate">{referrer.email || referrer.phone || ''}</p>
-                          {referrer.referral_code && <p className="text-[10px] font-mono text-green-700 mt-0.5">{referrer.referral_code}</p>}
-                        </Link>
-                      ) : (
-                        <p className="font-bold text-gray-900 text-xs">
-                          <span className="font-mono">{user.referred_by.substring(0, 8)}...</span>
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              );
+            })()}
+          </div>
 
-            {/* Login & session info */}
-            {authUser && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Login activity</h2>
-                <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                  {authUser.last_sign_in_at && (
-                    <div>
-                      <dt className="text-xs text-gray-500">Last login</dt>
-                      <dd className="font-semibold text-gray-900">
-                        {new Date(authUser.last_sign_in_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </dd>
-                    </div>
-                  )}
-                  {authUser.created_at && (
-                    <div>
-                      <dt className="text-xs text-gray-500">First seen</dt>
-                      <dd className="font-semibold text-gray-900">
-                        {new Date(authUser.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </dd>
-                    </div>
-                  )}
-                  {authUser.email_confirmed_at && (
-                    <div>
-                      <dt className="text-xs text-gray-500">Email confirmed</dt>
-                      <dd className="font-semibold text-gray-900">
-                        {new Date(authUser.email_confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </dd>
-                    </div>
-                  )}
-                  {(authUser.app_metadata?.provider || authUser.app_metadata?.providers?.[0]) && (
-                    <div>
-                      <dt className="text-xs text-gray-500">Sign-in method</dt>
-                      <dd className="font-semibold text-gray-900 capitalize">{authUser.app_metadata.provider || authUser.app_metadata.providers[0]}</dd>
-                    </div>
-                  )}
-                  {authUser.user_metadata?.ip && (
-                    <div>
-                      <dt className="text-xs text-gray-500">Last IP</dt>
-                      <dd className="font-mono text-xs text-gray-900">{authUser.user_metadata.ip}</dd>
-                    </div>
-                  )}
-                  {authUser.user_metadata?.location && (
-                    <div>
-                      <dt className="text-xs text-gray-500">Approx. location</dt>
-                      <dd className="font-semibold text-gray-900">{authUser.user_metadata.location}</dd>
-                    </div>
-                  )}
-                </dl>
-                <p className="text-[10px] text-gray-400 mt-3">
-                  Supabase Auth does not store IP / location history by default. Enable session capture in your auth hooks to populate those fields.
-                </p>
+          {/* Quick-actions + wallet rail */}
+          <aside className="space-y-4 lg:sticky lg:top-20">
+            {/* Quick actions */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <p className="px-4 pt-3.5 pb-1 text-[11px] uppercase tracking-wide font-semibold text-gray-500">Quick actions</p>
+              <button onClick={() => { setEditForm({ ...user }); setShowEditModal(true); }} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Edit className="h-4 w-4 text-gray-400" />Edit profile</button>
+              <button onClick={() => setShowWalletModal(true)} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Wallet className="h-4 w-4 text-gray-400" />Adjust wallet balance</button>
+              <button onClick={() => setShowCouponModal(true)} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Gift className="h-4 w-4 text-gray-400" />Create coupon</button>
+              {getBookingsWithRemainingPayment().length > 0 && (
+                <button onClick={() => setShowReminderModal(true)} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-orange-700 hover:bg-orange-50 border-t border-gray-100"><Send className="h-4 w-4" />Send payment reminder ({getBookingsWithRemainingPayment().length})</button>
+              )}
+              {user.email && <a href={`mailto:${user.email}`} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Mail className="h-4 w-4 text-gray-400" />Email user</a>}
+              {user.phone && <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><MessageCircle className="h-4 w-4 text-gray-400" />WhatsApp</a>}
+            </div>
+
+            {/* Wallet & referral — compact */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 mb-2 flex items-center gap-1.5"><Gift className="h-3.5 w-3.5 text-green-600" />Referral</h3>
+              {user.referral_code ? (
+                <div className="flex items-center justify-between gap-2">
+                  <code className="font-mono font-bold text-green-700 text-sm">{user.referral_code}</code>
+                  <button onClick={() => navigator.clipboard?.writeText(user.referral_code)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Copy code"><Copy className="h-3.5 w-3.5" /></button>
+                </div>
+              ) : <p className="text-sm text-gray-400">No referral code</p>}
+              {user.referred_by && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 mb-1">Referred by</p>
+                  {referrer ? (
+                    <Link href={`/admin/users/${referrer.id}`} className="text-sm font-medium text-gray-900 hover:text-purple-700 hover:underline truncate block">{referrer.full_name || `${referrer.first_name || ''} ${referrer.last_name || ''}`.trim() || referrer.email || '—'}</Link>
+                  ) : <p className="text-sm font-mono text-gray-500">{user.referred_by.substring(0, 8)}…</p>}
+                </div>
+              )}
+              <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-sm">
+                <span className="text-gray-500">Wallet balance</span>
+                <span className="font-bold text-gray-900">₹{parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}</span>
               </div>
-            )}
-          </>
+            </div>
+          </aside>
+          </div>
         )}
 
         {/* Bookings Tab */}
