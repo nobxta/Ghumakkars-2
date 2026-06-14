@@ -8,6 +8,7 @@ import {
   sendSeatLockConfirmedEmail,
   sendBookingCancelledEmail
 } from '@/lib/email';
+import { notifyPaymentForApproval } from '@/lib/telegram';
 
 export const runtime = "nodejs";
 
@@ -249,6 +250,16 @@ export async function POST(request: NextRequest) {
           { error: 'Invalid status' },
           { status: 400 }
         );
+    }
+
+    // Telegram alert for events that need an admin's attention (new booking,
+    // seat-lock deposit, or a remaining payment awaiting approval).
+    try {
+      if (status === 'pending' || status === 'seat_locked') {
+        await notifyPaymentForApproval(bookingId);
+      }
+    } catch (tgErr) {
+      console.error('Telegram notify failed:', tgErr);
     }
 
     return NextResponse.json({

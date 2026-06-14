@@ -6,7 +6,59 @@ import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Up
 
 export default function AdminSettingsPage() {
   const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<'general' | 'payment' | 'whatsapp'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'payment' | 'whatsapp' | 'telegram'>('general');
+  const [tg, setTg] = useState({ enabled: false, bot_token: '', bot_username: '', admin_chat_ids: '', notify_new_booking: true, notify_payments: true });
+  const [tgSaving, setTgSaving] = useState(false);
+  const [tgBusy, setTgBusy] = useState<'' | 'test' | 'webhook'>('');
+  const [tgMsg, setTgMsg] = useState('');
+
+  const loadTelegram = async () => {
+    try {
+      const res = await fetch('/api/admin/telegram-settings');
+      if (!res.ok) return;
+      const d = await res.json();
+      setTg({
+        enabled: !!d.enabled,
+        bot_token: d.bot_token || '',
+        bot_username: d.bot_username || '',
+        admin_chat_ids: Array.isArray(d.admin_chat_ids) ? d.admin_chat_ids.join(', ') : '',
+        notify_new_booking: d.notify_new_booking !== false,
+        notify_payments: d.notify_payments !== false,
+      });
+    } catch { /* ignore */ }
+  };
+
+  const saveTelegram = async () => {
+    setTgSaving(true); setTgMsg('');
+    try {
+      const res = await fetch('/api/admin/telegram-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', enabled: tg.enabled, bot_token: tg.bot_token, admin_chat_ids: tg.admin_chat_ids, notify_new_booking: tg.notify_new_booking, notify_payments: tg.notify_payments }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      setTgMsg('Saved.');
+      await loadTelegram();
+    } catch (e: any) { setTgMsg(e.message); }
+    finally { setTgSaving(false); }
+  };
+
+  const tgAction = async (action: 'test' | 'webhook') => {
+    setTgBusy(action === 'webhook' ? 'webhook' : 'test'); setTgMsg('');
+    try {
+      const res = await fetch('/api/admin/telegram-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action === 'webhook' ? 'set_webhook' : 'test' }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      setTgMsg(d.message || 'Done.');
+      if (action === 'webhook') await loadTelegram();
+    } catch (e: any) { setTgMsg(e.message); }
+    finally { setTgBusy(''); }
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -240,6 +292,7 @@ export default function AdminSettingsPage() {
     fetchPaymentSettings();
     fetchCoupons();
     checkWhatsAppStatus();
+    loadTelegram();
     setLoading(false);
   }, []);
 
@@ -513,7 +566,67 @@ export default function AdminSettingsPage() {
         >
           WhatsApp
         </button>
+        <button
+          onClick={() => setActiveTab('telegram')}
+          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
+            activeTab === 'telegram'
+              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
+              : 'text-gray-600 hover:text-purple-600'
+          }`}
+        >
+          Telegram
+        </button>
       </div>
+
+      {/* Telegram Tab */}
+      {activeTab === 'telegram' && (
+        <div className="max-w-2xl space-y-5">
+          <div className="neon-card rounded-2xl border border-purple-200 p-4 sm:p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center"><MessageSquare className="h-5 w-5 mr-2 text-purple-600" />Telegram alerts</h3>
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <span className="text-sm text-gray-600">{tg.enabled ? 'On' : 'Off'}</span>
+                <input type="checkbox" checked={tg.enabled} onChange={(e) => setTg({ ...tg, enabled: e.target.checked })} className="h-5 w-5 accent-purple-600" />
+              </label>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">Get a Telegram message for every new booking and payment, and approve or reject payments right from the chat.</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Bot token</label>
+                <input type="text" value={tg.bot_token} onChange={(e) => setTg({ ...tg, bot_token: e.target.value })} placeholder="123456:ABC-DEF…" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white font-mono" />
+                <p className="text-xs text-gray-400 mt-1">From @BotFather → /newbot. {tg.bot_username && <>Connected as <span className="font-semibold text-gray-600">@{tg.bot_username}</span>.</>}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Admin Chat IDs</label>
+                <input type="text" value={tg.admin_chat_ids} onChange={(e) => setTg({ ...tg, admin_chat_ids: e.target.value })} placeholder="e.g. 123456789, 987654321" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white" />
+                <p className="text-xs text-gray-400 mt-1">Message your bot and send <code>/start</code> — it replies with your Chat ID. Paste it here (comma-separated for multiple admins).</p>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700"><input type="checkbox" checked={tg.notify_new_booking} onChange={(e) => setTg({ ...tg, notify_new_booking: e.target.checked })} className="h-4 w-4 accent-purple-600" />New bookings</label>
+                <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700"><input type="checkbox" checked={tg.notify_payments} onChange={(e) => setTg({ ...tg, notify_payments: e.target.checked })} className="h-4 w-4 accent-purple-600" />Payment approvals</label>
+              </div>
+            </div>
+
+            {tgMsg && <p className="mt-4 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg px-3 py-2">{tgMsg}</p>}
+
+            <div className="flex flex-wrap gap-2 mt-5">
+              <button onClick={saveTelegram} disabled={tgSaving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 disabled:opacity-50"><Save className="h-4 w-4" />{tgSaving ? 'Saving…' : 'Save'}</button>
+              <button onClick={() => tgAction('webhook')} disabled={tgBusy !== ''} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"><RefreshCw className="h-4 w-4" />{tgBusy === 'webhook' ? 'Connecting…' : 'Connect webhook'}</button>
+              <button onClick={() => tgAction('test')} disabled={tgBusy !== ''} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"><CheckCircle className="h-4 w-4" />{tgBusy === 'test' ? 'Sending…' : 'Send test'}</button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 p-4 sm:p-5 bg-gray-50/60 text-sm text-gray-600 leading-relaxed">
+            <p className="font-bold text-gray-900 mb-2">Setup (one time)</p>
+            <ol className="list-decimal ml-4 space-y-1">
+              <li>In Telegram, open <span className="font-semibold">@BotFather</span> → <code>/newbot</code> → copy the token here and Save.</li>
+              <li>Open your new bot, press Start, send <code>/start</code> — it replies with your Chat ID. Paste it in Admin Chat IDs and Save.</li>
+              <li>Click <span className="font-semibold">Connect webhook</span>, then <span className="font-semibold">Send test</span>. You should get a message.</li>
+            </ol>
+          </div>
+        </div>
+      )}
 
       {/* General Settings Tab */}
       {activeTab === 'general' && (

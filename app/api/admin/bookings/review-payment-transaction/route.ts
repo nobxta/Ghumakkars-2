@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireAdmin } from '@/lib/auth-helpers';
+import { requireAdmin, isInternalRequest } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin();
-    if (auth instanceof NextResponse) return auth;
+    const body = await request.json();
+    const { transactionId, status, reviewNotes, rejectionReason } = body;
 
-    const { transactionId, status, reviewNotes, rejectionReason } = await request.json();
+    // Auth: admin session (website) OR an internal server call (Telegram bot).
+    let reviewerId: string | null = null;
+    if (isInternalRequest(request)) {
+      reviewerId = body.reviewedBy || null;
+    } else {
+      const auth = await requireAdmin();
+      if (auth instanceof NextResponse) return auth;
+      reviewerId = auth.user.id;
+    }
 
     if (!transactionId || !status) {
       return NextResponse.json(
@@ -51,7 +59,7 @@ export async function POST(request: NextRequest) {
       .update({
         payment_status: status,
         payment_reviewed_at: new Date().toISOString(),
-        payment_reviewed_by: auth.user.id,
+        payment_reviewed_by: reviewerId,
         payment_review_notes: reviewNotes || null,
         rejection_reason: status === 'rejected' ? rejectionReason : null,
         updated_at: new Date().toISOString(),
@@ -72,6 +80,7 @@ export async function POST(request: NextRequest) {
       .select('payment_status, payment_type, amount')
       .eq('booking_id', bookingId);
 
+    let finalBookingStatus = 'pending';
     if (!paymentsError && allPayments) {
       const allVerified = allPayments.every(p => p.payment_status === 'verified');
       const hasRejected = allPayments.some(p => p.payment_status === 'rejected');
@@ -85,6 +94,8 @@ export async function POST(request: NextRequest) {
         .single();
 
       let bookingStatus = 'pending';
+      // expose to the outer scope for the response payload
+      // (assigned again just before returning)
 
       if (hasRejected) {
         bookingStatus = 'rejected';
@@ -116,6 +127,8 @@ export async function POST(request: NextRequest) {
           bookingStatus = 'confirmed';
         }
       }
+
+      finalBookingStatus = bookingStatus;
 
       // Update booking status
       await adminClient
@@ -169,6 +182,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Payment transaction ${status === 'verified' ? 'verified' : 'rejected'} successfully`,
+      bookingId,
+      bookingStatus: finalBookingStatus,
     });
   } catch (error: any) {
     console.error('Error in review payment transaction API:', error);

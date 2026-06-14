@@ -203,6 +203,14 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       console.error('Error sending confirmation email:', emailError);
     }
 
+    // Telegram heads-up: Razorpay auto-verified, no action needed.
+    try {
+      const { notifyBookingInfo } = await import('@/lib/telegram');
+      await notifyBookingInfo(booking.id, 'razorpay_confirmed');
+    } catch (tgErr) {
+      console.error('Telegram notify failed:', tgErr);
+    }
+
     // Send WhatsApp notification
     try {
       await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/send-booking-notification`, {
