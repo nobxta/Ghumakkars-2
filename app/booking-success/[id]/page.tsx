@@ -137,15 +137,24 @@ export default function BookingSuccessPage() {
   const Icon = theme.Icon;
   const trip = booking.trips;
   const shortId = booking.id.slice(0, 8).toUpperCase();
-  // The "total to pay" after coupon is final_amount, NOT total_price
+  const pax = Number(booking.number_of_participants) || 1;
   const originalPrice = parseFloat(String(booking.total_price || 0));
-  const finalAmount = parseFloat(String(booking.final_amount || booking.total_price || 0));
-  const paidAmount = parseFloat(String(booking.amount_paid || 0));
-  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, originalPrice - finalAmount);
-  // Remaining = amount still owed against what user actually has to pay (the discounted total)
-  const remainingAmount = Math.max(0, finalAmount - paidAmount);
-  // Money submitted but not yet verified — so we never scare the customer with "₹0 paid".
+  const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || 0;
+  const walletUsed = parseFloat(String((booking as any).wallet_amount_used || 0)) || 0;
+  // Seat-lock bookings store only the deposit in final_amount/total_price, so
+  // the real trip cost comes from list price × travellers.
+  const isSeatLockBooking = (booking as any).payment_method === 'seat_lock' || status === 'seat_locked';
+  const grossFull = (Number((trip as any)?.discounted_price) || 0) * pax;
+  const fullCost = isSeatLockBooking
+    ? Math.max(0, grossFull - couponDiscount - walletUsed)
+    : parseFloat(String(booking.final_amount || booking.total_price || 0));
+  // Money received = verified transactions (the approved deposit), else amount_paid.
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
+  const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+  const paidAmount = verifiedPaid || parseFloat(String(booking.amount_paid || (booking as any).payment_amount || 0));
+  const finalAmount = fullCost;
+  const remainingAmount = Math.max(0, fullCost - paidAmount);
+  // Money submitted but not yet verified — so we never scare the customer with "₹0 paid".
   const submittedPending = txns.filter((t) => t.payment_status === 'pending').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
   const isVerifying = isPending && submittedPending > 0;
 

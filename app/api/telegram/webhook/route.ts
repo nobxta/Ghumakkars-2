@@ -45,7 +45,8 @@ function mainMenuKeyboard() {
       [{ text: '🟡 Pending', callback_data: 'menu:pending' }, { text: '📊 Today', callback_data: 'menu:today' }],
       [{ text: '🗓 This week', callback_data: 'menu:week' }, { text: '💰 Revenue', callback_data: 'menu:revenue' }],
       [{ text: '🧾 Recent', callback_data: 'menu:recent' }, { text: '🚌 Upcoming', callback_data: 'menu:upcoming' }],
-      [{ text: '❓ Help', callback_data: 'menu:help' }, { text: '🔄 Refresh', callback_data: 'menu:menu' }],
+      [{ text: '🏷 Coupons', callback_data: 'menu:coupons' }, { text: '❓ Help', callback_data: 'menu:help' }],
+      [{ text: '🔄 Refresh', callback_data: 'menu:menu' }],
     ],
   };
 }
@@ -65,6 +66,8 @@ const helpText = [
   '/upcoming — next departures with seat counts',
   '/find &lt;name/phone&gt; — search bookings',
   '/booking &lt;id&gt; — one booking\'s details',
+  '/coupons — list coupons',
+  '/coupon &lt;CODE&gt; &lt;VALUE&gt; — create a coupon (e.g. /coupon SUMMER10 10%)',
   '/id — show your Chat ID',
 ].join('\n');
 
@@ -220,6 +223,67 @@ async function reportBooking(admin: AdminClient, arg: string): Promise<string> {
   ].filter(Boolean).join('\n');
 }
 
+async function listCoupons(admin: AdminClient): Promise<string> {
+  const { data } = await admin
+    .from('coupon_codes')
+    .select('code, discount_type, discount_value, max_discount, usage_limit, is_active, expiry_date')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  const list = data || [];
+  const hint = '\n\n<b>Create one:</b>\n<code>/coupon SUMMER10 10%</code>\n<code>/coupon FLAT500 500</code>\nOptions: <code>max=1000 limit=50 days=30</code>';
+  if (list.length === 0) return `🏷 <b>No coupons yet</b>${hint}`;
+  const lines = list.map((c: any) => {
+    const off = c.discount_type === 'percentage' ? `${c.discount_value}% off${c.max_discount ? ` (max ₹${c.max_discount})` : ''}` : `₹${c.discount_value} off`;
+    return `${c.is_active ? '🟢' : '⚪️'} <b>${esc(c.code)}</b> — ${esc(off)}${c.usage_limit ? ` · limit ${c.usage_limit}` : ''}${c.expiry_date ? ` · till ${esc(c.expiry_date)}` : ''}`;
+  });
+  return `🏷 <b>Coupons</b>\n\n${lines.join('\n')}${hint}`;
+}
+
+async function createCoupon(admin: AdminClient, argStr: string): Promise<string> {
+  const usage = '🏷 <b>Create a coupon</b>\n\n<code>/coupon CODE VALUE [options]</code>\n\nExamples:\n<code>/coupon SUMMER10 10%</code> — 10% off\n<code>/coupon FLAT500 500</code> — ₹500 off\n<code>/coupon BIG20 20% max=1500 limit=100 days=30</code>\n\nOptions: <code>max=</code> cap (₹), <code>limit=</code> total uses, <code>days=</code> expires in N days.';
+  const parts = argStr.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return usage;
+
+  const code = parts[0].toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const rawVal = parts[1];
+  const isPct = rawVal.endsWith('%');
+  const value = parseFloat(rawVal.replace('%', ''));
+  if (!code || Number.isNaN(value) || value <= 0) return `❌ Invalid value.\n\n${usage}`;
+  if (isPct && value > 100) return '❌ A percentage coupon can\'t be more than 100%.';
+
+  const opts: Record<string, string> = {};
+  parts.slice(2).forEach((p) => { const [k, v] = p.split('='); if (k && v) opts[k.toLowerCase()] = v; });
+  const max = opts.max ? parseFloat(opts.max) : null;
+  const limit = opts.limit ? parseInt(opts.limit, 10) : null;
+  const days = opts.days ? parseInt(opts.days, 10) : null;
+  const expiry = days && days > 0 ? new Date(Date.now() + days * 86400000).toISOString().slice(0, 10) : null;
+
+  const { data: existing } = await admin.from('coupon_codes').select('id').ilike('code', code).limit(1);
+  if (existing && existing.length) return `⚠️ Coupon <b>${esc(code)}</b> already exists. Pick a different code.`;
+
+  const { error } = await admin.from('coupon_codes').insert([{
+    code,
+    discount_type: isPct ? 'percentage' : 'fixed',
+    discount_value: value,
+    max_discount: max,
+    usage_limit: limit,
+    expiry_date: expiry,
+    min_amount: 0,
+    is_active: true,
+  }]);
+  if (error) return `❌ Could not create: ${esc(error.message)}`;
+
+  return [
+    `✅ <b>Coupon created</b>`,
+    ``,
+    `🏷 Code: <b>${esc(code)}</b>`,
+    `💸 ${isPct ? `${value}% off` : `₹${value} off`}${max ? ` (max ₹${max})` : ''}`,
+    limit ? `🔢 Usage limit: ${limit}` : '',
+    expiry ? `📅 Expires: ${expiry}` : '',
+    `\n<i>It's active now and ready to use.</i>`,
+  ].filter(Boolean).join('\n');
+}
+
 // ───────────────────────── webhook ─────────────────────────
 export async function POST(request: NextRequest) {
   const settings = await getTelegramSettings();
@@ -247,6 +311,7 @@ export async function POST(request: NextRequest) {
       case 'revenue': return { text: await reportRevenue(admin), kb: backKeyboard };
       case 'recent': return { text: await reportRecent(admin), kb: backKeyboard };
       case 'upcoming': return { text: await reportUpcoming(admin), kb: backKeyboard };
+      case 'coupons': return { text: await listCoupons(admin), kb: backKeyboard };
       case 'help': return { text: helpText, kb: backKeyboard };
       default: return { text: menuText, kb: mainMenuKeyboard() };
     }
@@ -338,6 +403,8 @@ export async function POST(request: NextRequest) {
       }
       if (cmd === '/find' || cmd === '/search') { await sendTelegramMessage(String(chatId), await reportFind(admin, arg), backKeyboard, token); return NextResponse.json({ ok: true }); }
       if (cmd === '/booking') { await sendTelegramMessage(String(chatId), await reportBooking(admin, arg), backKeyboard, token); return NextResponse.json({ ok: true }); }
+      if (cmd === '/coupons') { await sendTelegramMessage(String(chatId), await listCoupons(admin), backKeyboard, token); return NextResponse.json({ ok: true }); }
+      if (cmd === '/coupon' || cmd === '/newcoupon') { await sendTelegramMessage(String(chatId), await createCoupon(admin, arg), backKeyboard, token); return NextResponse.json({ ok: true }); }
 
       // Unknown command → show the menu.
       await sendTelegramMessage(String(chatId), menuText, mainMenuKeyboard(), token);

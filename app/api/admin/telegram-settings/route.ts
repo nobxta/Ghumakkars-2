@@ -68,6 +68,8 @@ export async function POST(request: NextRequest) {
         { command: 'upcoming', description: 'Next departures with seat counts' },
         { command: 'find', description: 'Search bookings by name or phone' },
         { command: 'booking', description: 'Details for a booking ID' },
+        { command: 'coupons', description: 'List coupons' },
+        { command: 'coupon', description: 'Create a coupon, e.g. /coupon SUMMER10 10%' },
         { command: 'id', description: 'Show your Chat ID' },
       ],
     }, s.bot_token);
