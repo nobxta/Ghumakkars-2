@@ -366,19 +366,20 @@ export default function BookingDetailsPage() {
 
   // Headline shown in the hero badge for each phase.
   const phaseBadge: { kicker: string; big: string } = (() => {
+    const dayN = Math.min(Math.max(dayOfTrip, 1), totalDays);
     switch (tripPhase) {
       case 'upcoming':
-        return { kicker: 'Trip starts in', big: daysToStart === 1 ? 'Tomorrow' : `${daysToStart} days` };
+        return { kicker: 'Starting Soon', big: daysToStart === 1 ? 'Tomorrow' : `${daysToStart} days left` };
       case 'today':
-        return { kicker: 'Your trip', big: 'Starts today 🎉' };
+        return { kicker: 'On Trip', big: `Day 1 of ${totalDays} 🎉` };
       case 'ongoing':
-        return { kicker: 'Trip in progress', big: totalDays > 1 ? `Day ${Math.min(Math.max(dayOfTrip, 1), totalDays)} of ${totalDays}` : 'Happening now' };
+        return { kicker: 'On Trip', big: `Day ${dayN} of ${totalDays}` };
       case 'lastday':
-        return { kicker: 'Trip in progress', big: 'Last day 👋' };
+        return { kicker: 'On Trip', big: 'Final day 👋' };
       case 'ended':
-        return { kicker: 'Trip', big: 'Completed' };
+        return { kicker: '', big: 'Completed ✓' };
       default:
-        return { kicker: 'Trip', big: '' };
+        return { kicker: '', big: '' };
     }
   })();
 
@@ -615,7 +616,7 @@ export default function BookingDetailsPage() {
               </span>
               {phaseBadge.big && (
                 <div className="hidden sm:block bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>
+                  {phaseBadge.kicker && <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>}
                   <p className="text-2xl font-extrabold mt-0.5">{phaseBadge.big}</p>
                 </div>
               )}
@@ -635,7 +636,7 @@ export default function BookingDetailsPage() {
             </div>
             {phaseBadge.big && (
               <div className="sm:hidden mt-4 bg-white/15 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-2.5 inline-block">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>
+                {phaseBadge.kicker && <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>}
                 <p className="text-xl font-extrabold mt-0.5">{phaseBadge.big}</p>
               </div>
             )}
