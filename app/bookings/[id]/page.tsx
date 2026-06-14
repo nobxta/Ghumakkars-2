@@ -123,7 +123,8 @@ export default function BookingDetailsPage() {
             gallery_images,
             whatsapp_group_link,
             highlights
-          )
+          ),
+          payment_transactions ( id, amount, payment_status, created_at )
         `)
         .eq('id', params.id)
         .single();
@@ -296,7 +297,16 @@ export default function BookingDetailsPage() {
   }
 
   const remainingAmount = calculateRemainingAmount();
-  const showRemainingPayment = ['seat_locked', 'pending'].includes(booking.booking_status) && booking.payment_method === 'seat_lock' && remainingAmount > 0 && booking.booking_status !== 'remaining_submitted';
+  // Is a payment already submitted and waiting for verification?
+  const hasPendingTxn = Array.isArray((booking as any).payment_transactions)
+    && (booking as any).payment_transactions.some((t: any) => t.payment_status === 'pending');
+  // Only invite a remaining payment once the seat lock is APPROVED (status
+  // seat_locked) and nothing is currently pending verification — otherwise a
+  // customer who just paid the deposit would be wrongly asked to pay again.
+  const showRemainingPayment = booking.booking_status === 'seat_locked'
+    && booking.payment_method === 'seat_lock'
+    && remainingAmount > 0
+    && !hasPendingTxn;
 
   // ─────────── derived display values ───────────
   const trip = booking.trips;
@@ -353,7 +363,12 @@ export default function BookingDetailsPage() {
     : (parseFloat(String(booking.total_price || 0)) || grossFull);
   // Net amount actually owed after coupon + wallet.
   const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed);
-  const paidAmount = parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
+  // Money actually received = verified transactions (source of truth), else payment_amount.
+  const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
+  const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+  const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
+  // Amount the customer has submitted that we haven't verified yet.
+  const submittedPending = txns.filter((t) => t.payment_status === 'pending').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
 
   const maskPhone = (p?: string) => {
     if (!p) return '—';
@@ -850,18 +865,24 @@ export default function BookingDetailsPage() {
 
                       {cfg.kind === 'pending' && (
                         <div className="space-y-2">
-                          <div className="flex justify-between items-baseline">
-                            <span className="text-gray-600">Amount paid</span>
-                            <span className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</span>
-                          </div>
-                          {remainingAmount > 0 && (
+                          {submittedPending > 0 ? (
+                            <>
+                              <p className="text-[11px] uppercase tracking-wider font-bold text-blue-600">Payment submitted · verifying</p>
+                              <p className="text-3xl font-extrabold text-blue-700">₹{submittedPending.toLocaleString('en-IN')}</p>
+                              {paidAmount > 0 && (
+                                <div className="flex justify-between items-baseline text-sm"><span className="text-gray-600">Already paid earlier</span><span className="font-semibold text-gray-900">₹{paidAmount.toLocaleString('en-IN')}</span></div>
+                              )}
+                            </>
+                          ) : (
                             <div className="flex justify-between items-baseline">
-                              <span className="text-gray-600">Remaining</span>
-                              <span className="font-bold text-orange-600">₹{remainingAmount.toLocaleString('en-IN')}</span>
+                              <span className="text-gray-600">Amount paid</span>
+                              <span className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</span>
                             </div>
                           )}
                           <p className={`text-sm text-gray-600 pt-2 mt-1 border-t ${cfg.sub} leading-relaxed`}>
-                            We're verifying your payment. This usually takes a few minutes — you'll get an email the moment it's confirmed.
+                            {submittedPending > 0
+                              ? "We've received your payment details and our team is verifying them now. Your seat is held — you'll get an email the moment it's confirmed (usually within a few hours)."
+                              : "We're verifying your payment. This usually takes a few minutes — you'll get an email the moment it's confirmed."}
                           </p>
                         </div>
                       )}

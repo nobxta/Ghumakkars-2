@@ -53,8 +53,9 @@ export default function BookingSuccessPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, coupon_code, coupon_discount, departure_date,
-                 trips:trip_id (title, destination, start_date, end_date, is_recurring, duration_days)`)
+        .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, payment_amount, payment_method, coupon_code, coupon_discount, wallet_amount_used, departure_date,
+                 trips:trip_id (title, destination, start_date, end_date, is_recurring, duration_days, discounted_price),
+                 payment_transactions ( amount, payment_status )`)
         .eq('id', bookingId)
         .single();
       if (error) throw error;
@@ -143,6 +144,10 @@ export default function BookingSuccessPage() {
   const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || Math.max(0, originalPrice - finalAmount);
   // Remaining = amount still owed against what user actually has to pay (the discounted total)
   const remainingAmount = Math.max(0, finalAmount - paidAmount);
+  // Money submitted but not yet verified — so we never scare the customer with "₹0 paid".
+  const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
+  const submittedPending = txns.filter((t) => t.payment_status === 'pending').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+  const isVerifying = isPending && submittedPending > 0;
 
   return (
     <div className={`fixed inset-0 z-50 bg-gradient-to-br ${theme.bgFrom} ${theme.bgVia} ${theme.bgTo} overflow-y-auto`}>
@@ -176,15 +181,15 @@ export default function BookingSuccessPage() {
 
         {/* Status badge */}
         <span className="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-[10px] sm:text-xs font-extrabold uppercase tracking-widest mb-3 animate-fade-in-delay">
-          {theme.badge}
+          {isVerifying ? 'VERIFYING' : theme.badge}
         </span>
 
         {/* Title */}
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-center mb-2 sm:mb-3 px-4 animate-fade-in-delay">
-          {theme.title}
+          {isVerifying ? 'Payment received!' : theme.title}
         </h1>
         <p className="text-base sm:text-lg md:text-xl text-white/90 text-center max-w-md mb-8 sm:mb-10 px-4 animate-fade-in-delay-2">
-          {theme.subtitle}
+          {isVerifying ? "We're verifying your payment now. Your seat is held — you'll get a confirmation email shortly." : theme.subtitle}
         </p>
 
         {/* Booking summary card */}
@@ -235,30 +240,42 @@ export default function BookingSuccessPage() {
             </div>
           )}
 
-          <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Amount paid</span>
-              <span className="font-extrabold text-lg flex items-baseline text-gray-900">
-                <IndianRupee className="h-4 w-4" />{paidAmount.toLocaleString('en-IN')}
-              </span>
+          {isVerifying ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-blue-600 uppercase tracking-wider font-semibold">Payment submitted · verifying</span>
+                <span className="font-extrabold text-lg flex items-baseline text-blue-700">
+                  <IndianRupee className="h-4 w-4" />{submittedPending.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-700/80 mt-1.5 leading-relaxed">We&apos;ve received your payment details. Your seat is held while our team verifies it — you&apos;ll get a confirmation email shortly.</p>
             </div>
-            {couponDiscount > 0 && booking.coupon_code && (
-              <div className="flex items-center justify-between text-xs text-green-700 mt-2 pt-2 border-t border-gray-200">
-                <span className="font-semibold">You saved with {booking.coupon_code}</span>
-                <span className="font-bold flex items-baseline">
-                  <IndianRupee className="h-3 w-3" />{couponDiscount.toLocaleString('en-IN')}
+          ) : (
+            <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Amount paid</span>
+                <span className="font-extrabold text-lg flex items-baseline text-gray-900">
+                  <IndianRupee className="h-4 w-4" />{paidAmount.toLocaleString('en-IN')}
                 </span>
               </div>
-            )}
-            {remainingAmount > 0 && (
-              <div className="flex items-center justify-between text-xs text-orange-700 mt-2 pt-2 border-t border-gray-200">
-                <span className="font-semibold">Remaining</span>
-                <span className="font-bold flex items-baseline">
-                  <IndianRupee className="h-3 w-3" />{remainingAmount.toLocaleString('en-IN')}
-                </span>
-              </div>
-            )}
-          </div>
+              {couponDiscount > 0 && booking.coupon_code && (
+                <div className="flex items-center justify-between text-xs text-green-700 mt-2 pt-2 border-t border-gray-200">
+                  <span className="font-semibold">You saved with {booking.coupon_code}</span>
+                  <span className="font-bold flex items-baseline">
+                    <IndianRupee className="h-3 w-3" />{couponDiscount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
+              {remainingAmount > 0 && (
+                <div className="flex items-center justify-between text-xs text-orange-700 mt-2 pt-2 border-t border-gray-200">
+                  <span className="font-semibold">Remaining</span>
+                  <span className="font-bold flex items-baseline">
+                    <IndianRupee className="h-3 w-3" />{remainingAmount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action buttons */}

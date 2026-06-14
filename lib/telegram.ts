@@ -114,7 +114,11 @@ function bookingMoney(b: any, trip: any) {
   const paid = (b.is_offline_booking || !b.user_id)
     ? parseFloat(String(b.amount_paid || 0))
     : (b.payment_transactions || []).filter((t: any) => t.payment_status === 'verified').reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
-  return { pax, coupon, wallet, full, paid, due: Math.max(0, full - paid) };
+  // Amount the customer has SUBMITTED but you haven't approved yet.
+  const submitted = (b.payment_transactions || [])
+    .filter((t: any) => t.payment_status === 'pending')
+    .reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
+  return { pax, coupon, wallet, full, paid, submitted, due: Math.max(0, full - paid) };
 }
 
 function passengerLines(b: any): string {
@@ -179,7 +183,10 @@ function commonBlock(b: any, trip: any, profile: any): string {
     passengerLines(b),
     ``,
     `💳 Method: ${esc(methodLabel(b))}`,
-    `💰 Trip cost: <b>${inr(m.full)}</b>   Paid: <b>${inr(m.paid)}</b>${m.due > 0 ? `   Due: <b>${inr(m.due)}</b>` : ''}`,
+    `💰 Trip cost: <b>${inr(m.full)}</b>`,
+    m.submitted > 0
+      ? `🧾 Submitted now: <b>${inr(m.submitted)}</b> — awaiting your approval${m.paid > 0 ? `\n✅ Already paid: <b>${inr(m.paid)}</b>` : ''}`
+      : `✅ Paid: <b>${inr(m.paid)}</b>${m.due > 0 ? `   ⏳ Due: <b>${inr(m.due)}</b>` : ''}`,
     b.coupon_code ? `🏷️ Coupon: ${esc(b.coupon_code)}` : '',
     `🆔 <code>${esc(String(b.id).slice(0, 8).toUpperCase())}</code>`,
   ].filter(Boolean).join('\n');
