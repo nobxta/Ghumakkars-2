@@ -11,6 +11,7 @@ import {
   MessageCircle, Download, Sparkles, ChevronRight, Copy, FileText, Check
 } from 'lucide-react';
 import { IMG } from '@/lib/image';
+import { resolveDueDate } from '@/lib/payment-due';
 
 interface Trip {
   id: string;
@@ -23,6 +24,7 @@ interface Trip {
   is_recurring?: boolean;
   discounted_price?: number;
   seat_lock_price?: number;
+  payment_due_days_before?: number | null;
   included_features?: string[];
   excluded_features?: string[];
   image_url?: string;
@@ -70,7 +72,7 @@ export default function BookingDetailsPage() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [paymentSettings, setPaymentSettings] = useState<{ qrUrl?: string; upiId?: string }>({});
+  const [paymentSettings, setPaymentSettings] = useState<{ qrUrl?: string; upiId?: string; dueDaysBefore?: number }>({});
   const [showPaymentSection, setShowPaymentSection] = useState(false);
   const [transactionId, setTransactionId] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -116,6 +118,7 @@ export default function BookingDetailsPage() {
             is_recurring,
             discounted_price,
             seat_lock_price,
+            payment_due_days_before,
             included_features,
             excluded_features,
             image_url,
@@ -799,7 +802,7 @@ export default function BookingDetailsPage() {
                   ? trip.discounted_price
                   : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
                 const shownPaid = Math.max(paidAmount, finalAmount - remainingAmount);
-                const payBefore = effectiveStart ? new Date(new Date(effectiveStart).getTime() - 5 * 86400000) : null;
+                const payBefore = resolveDueDate(effectiveStart, trip?.payment_due_days_before, paymentSettings.dueDaysBefore);
                 const fmtPay = payBefore ? payBefore.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
                 // Status config: drives the big banner at the top of the card.

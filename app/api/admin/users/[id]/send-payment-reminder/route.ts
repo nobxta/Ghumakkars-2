@@ -39,7 +39,8 @@ export async function POST(
           title,
           destination,
           start_date,
-          end_date
+          end_date,
+          payment_due_days_before
         ),
         payment_transactions (*)
       `)
@@ -62,9 +63,14 @@ export async function POST(
       return NextResponse.json({ error: 'No remaining payment for this booking' }, { status: 400 });
     }
 
-    // Calculate due date (5 days before trip start)
-    const tripStartDate = booking.trips?.start_date ? new Date(booking.trips.start_date) : null;
-    const dueDate = tripStartDate ? new Date(tripStartDate.getTime() - 5 * 24 * 60 * 60 * 1000) : null;
+    // Calculate due date: per-trip override -> global setting -> 5 days before.
+    const { resolveDueDate } = await import('@/lib/payment-due');
+    let globalDueDays = 5;
+    try {
+      const { data: ps } = await adminClient.from('payment_settings').select('seat_lock_due_days_before').order('created_at', { ascending: false }).limit(1).single();
+      if (ps?.seat_lock_due_days_before != null) globalDueDays = Number(ps.seat_lock_due_days_before);
+    } catch { /* fall back to 5 */ }
+    const dueDate = resolveDueDate(booking.trips?.start_date, (booking.trips as any)?.payment_due_days_before, globalDueDays);
 
     // Log the activity
     await adminClient

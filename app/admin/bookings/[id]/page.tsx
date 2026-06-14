@@ -10,6 +10,7 @@ import {
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
   Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet, Receipt
 } from 'lucide-react';
+import { resolveDueDate } from '@/lib/payment-due';
 
 export default function AdminBookingDetailsPage() {
   const params = useParams();
@@ -31,6 +32,7 @@ export default function AdminBookingDetailsPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelReasonPreset, setCancelReasonPreset] = useState('');
   const [showActionsDrawer, setShowActionsDrawer] = useState(false);
+  const [dueDaysBefore, setDueDaysBefore] = useState<number>(5);
 
   const cancelReasonPresets = [
     'Customer requested cancellation',
@@ -71,6 +73,10 @@ export default function AdminBookingDetailsPage() {
   useEffect(() => {
     checkUser();
     fetchBooking();
+    fetch('/api/payment/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.dueDaysBefore != null) setDueDaysBefore(Number(d.dueDaysBefore)); })
+      .catch(() => {});
   }, [params.id]);
 
   const checkUser = async () => {
@@ -492,8 +498,8 @@ export default function AdminBookingDetailsPage() {
                 <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Balance due</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
               </dl>
               {status === 'seat_locked' && remainingAmount > 0 && (() => {
-                const d = booking.departure_date || booking.trips?.start_date;
-                const pb = d ? new Date(new Date(d).getTime() - 5 * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+                const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);
+                const pb = due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
                 return pb ? <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"><Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />Pay before <strong>{pb}</strong> to confirm the seat.</div> : null;
               })()}
             </div>

@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
             is_recurring,
             duration_days,
             discounted_price,
+            payment_due_days_before,
             whatsapp_group_link
           )
         `)
@@ -163,10 +164,16 @@ export async function POST(request: NextRequest) {
         const fullTripPrice = (tripPrice || 0) * (booking.number_of_participants || 1);
         const paidAmount = parseFloat(booking.payment_amount) || parseFloat(booking.final_amount) || 0;
         const remainingAmount = Math.max(0, fullTripPrice - paidAmount);
-        
-        const startDate = new Date(effStart || trip.start_date);
-        const dueDate = new Date(startDate);
-        dueDate.setDate(dueDate.getDate() - 5); // 5 days before departure
+
+        // Deadline: per-trip override -> global setting -> 5 days before departure.
+        const { resolveDueDate } = await import('@/lib/payment-due');
+        let globalDueDays = 5;
+        try {
+          const adminForSettings = createAdminClient();
+          const { data: ps } = await adminForSettings.from('payment_settings').select('seat_lock_due_days_before').order('created_at', { ascending: false }).limit(1).single();
+          if (ps?.seat_lock_due_days_before != null) globalDueDays = Number(ps.seat_lock_due_days_before);
+        } catch { /* fall back to 5 */ }
+        const dueDate = resolveDueDate(effStart || trip.start_date, (trip as any).payment_due_days_before, globalDueDays) || new Date(effStart || trip.start_date);
 
         await sendSeatLockConfirmedEmail(
           userEmail,

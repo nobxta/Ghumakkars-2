@@ -90,6 +90,7 @@ export default function AdminSettingsPage() {
     razorpayWebhookSecret: '',
     referralRewardAmount: '100',
     referralFriendRewardAmount: '50',
+    dueDaysBefore: '5',
   });
 
   // Coupons
@@ -156,6 +157,7 @@ export default function AdminSettingsPage() {
           razorpayWebhookSecret: data.razorpay_webhook_secret || '',
           referralRewardAmount: data.referral_reward_amount?.toString() || '100',
           referralFriendRewardAmount: data.referral_friend_reward_amount?.toString() || '50',
+          dueDaysBefore: data.seat_lock_due_days_before?.toString() || '5',
         });
       }
     } catch (error) {
@@ -343,6 +345,7 @@ export default function AdminSettingsPage() {
               razorpay_webhook_secret: null,
               referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
               referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
+              seat_lock_due_days_before: parseInt(paymentSettings.dueDaysBefore, 10) || 5,
               updated_by: user?.id,
             })
             .eq('id', existing.id);
@@ -362,6 +365,7 @@ export default function AdminSettingsPage() {
                 razorpay_webhook_secret: paymentSettings.razorpayWebhookSecret || null,
                 referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
                 referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
+                seat_lock_due_days_before: parseInt(paymentSettings.dueDaysBefore, 10) || 5,
                 updated_by: user?.id,
               },
             ]);
@@ -833,6 +837,24 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
             )}
+
+            {/* Seat-lock balance deadline */}
+            <div className="mb-6 pb-6 border-b border-purple-200">
+              <h3 className="text-sm font-bold text-gray-900 mb-4">Seat-lock balance deadline</h3>
+              <div className="max-w-xs">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Balance due (days before departure)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={paymentSettings.dueDaysBefore}
+                  onChange={(e) => setPaymentSettings({ ...paymentSettings, dueDaysBefore: e.target.value })}
+                  placeholder="5"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-semibold"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Default for all trips. A trip can override this on its own form. The customer is told to pay the balance this many days before departure.</p>
+              </div>
+            </div>
 
             {/* Referral Rewards */}
             <div className="mb-6 pb-6 border-b border-purple-200">

@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
           discounted_price,
           cover_image_url,
           image_url,
+          payment_due_days_before,
           whatsapp_group_link
         ),
         payment_transactions (

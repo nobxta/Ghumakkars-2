@@ -56,6 +56,7 @@ export default function EditTripPage() {
   const [recurrenceDay, setRecurrenceDay] = useState('5');
   const [recurrenceWeeksAhead, setRecurrenceWeeksAhead] = useState('4');
   const [recurringDurationDays, setRecurringDurationDays] = useState('3');
+  const [paymentDueDaysBefore, setPaymentDueDaysBefore] = useState('');
 
   // Step 4: Images
   const [coverImage, setCoverImage] = useState('');
@@ -109,6 +110,7 @@ export default function EditTripPage() {
       setIsRecurring(!!data.is_recurring);
       if (data.recurrence_day != null) setRecurrenceDay(String(data.recurrence_day));
       if (data.recurrence_weeks_ahead != null) setRecurrenceWeeksAhead(String(data.recurrence_weeks_ahead));
+      if (data.payment_due_days_before != null) setPaymentDueDaysBefore(String(data.payment_due_days_before));
       if (data.duration_days != null) setRecurringDurationDays(String(data.duration_days));
       
       // Format dates for input fields (YYYY-MM-DD)
@@ -483,6 +485,7 @@ export default function EditTripPage() {
         is_recurring: isRecurring,
         recurrence_day: isRecurring ? parseInt(recurrenceDay) : null,
         recurrence_weeks_ahead: isRecurring ? (parseInt(recurrenceWeeksAhead) || 4) : 4,
+        payment_due_days_before: paymentDueDaysBefore.trim() === '' ? null : (parseInt(paymentDueDaysBefore, 10) || null),
         cover_image_url: coverImage,
         image_url: coverImage,
         gallery_images: filteredGallery.length > 0 ? filteredGallery : null,
@@ -694,8 +697,18 @@ export default function EditTripPage() {
                 />
                 <div className="mt-3 space-y-1 text-sm text-gray-600">
                   <p>• This amount locks a seat (non-refundable)</p>
-                  <p>• Remaining payment must be completed 5 days before departure</p>
-                  <p>• Seat will auto-cancel if full payment not received</p>
+                  <p>• The traveller is asked to pay the balance before the deadline below</p>
+                </div>
+                <div className="mt-4 pt-4 border-t border-purple-200">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Balance due (days before departure)</label>
+                  <input
+                    type="number" min="0" step="1"
+                    value={paymentDueDaysBefore}
+                    onChange={(e) => setPaymentDueDaysBefore(e.target.value)}
+                    placeholder="Leave blank for the global default"
+                    className="w-full sm:w-64 px-3 py-2.5 border border-purple-200 rounded-lg bg-white text-gray-900 focus:border-purple-600 outline-none"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">Overrides the global setting for this trip only. Blank = use the global default.</p>
                 </div>
               </div>
 
