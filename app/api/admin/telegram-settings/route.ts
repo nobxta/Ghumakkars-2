@@ -25,9 +25,17 @@ export async function POST(request: NextRequest) {
   if (action === 'test') {
     const s = await getTelegramSettings();
     if (!s?.bot_token) return NextResponse.json({ error: 'Add and save the bot token first.' }, { status: 400 });
-    if (!s.admin_chat_ids?.length) return NextResponse.json({ error: 'Add at least one admin Chat ID first.' }, { status: 400 });
-    await sendToAdmins('✅ <b>Test message</b>\nGhumakkars is connected to this chat. You will get booking and payment alerts here.');
-    return NextResponse.json({ success: true, message: 'Test message sent.' });
+    if (!s.admin_chat_ids?.length) return NextResponse.json({ error: 'Add at least one admin Chat ID, then Save, before testing.' }, { status: 400 });
+    // force=true so the test works even while alerts are still toggled Off.
+    const out: any = await sendToAdmins('✅ <b>Test message</b>\nGhumakkars is connected to this chat. You will get booking and payment alerts here.', undefined, true);
+    const first = out?.results?.[0];
+    if (first && first.ok === false) {
+      return NextResponse.json({ error: `Telegram says: ${first.description || 'failed'}. Open your bot and press Start, then check the Chat ID.` }, { status: 400 });
+    }
+    if (out?.ok === false) {
+      return NextResponse.json({ error: out.error === 'Missing bot token or admin chat IDs' ? 'Save the bot token and Chat ID first.' : 'Could not send. Check the token and Chat ID.' }, { status: 400 });
+    }
+    return NextResponse.json({ success: true, message: 'Test message sent — check Telegram.' });
   }
 
   if (action === 'set_webhook') {

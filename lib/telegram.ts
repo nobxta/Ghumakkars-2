@@ -73,13 +73,19 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
   return tgCall('answerCallbackQuery', { callback_query_id: callbackQueryId, ...(text ? { text } : {}) }, tokenOverride);
 }
 
-/** Send a message to every configured admin chat. */
-export async function sendToAdmins(text: string, replyMarkup?: unknown) {
+/**
+ * Send a message to every configured admin chat.
+ * `force` bypasses the enabled flag (used for the "Send test" button so you
+ * can verify setup before switching alerts on).
+ */
+export async function sendToAdmins(text: string, replyMarkup?: unknown, force = false) {
   const s = await getTelegramSettings();
-  if (!s?.enabled || !s.bot_token || !s.admin_chat_ids?.length) return;
-  await Promise.all(
+  if (!s?.bot_token || !s.admin_chat_ids?.length) return { ok: false, error: 'Missing bot token or admin chat IDs' };
+  if (!s.enabled && !force) return { ok: false, error: 'disabled' };
+  const results = await Promise.all(
     s.admin_chat_ids.map((id) => sendTelegramMessage(String(id).trim(), text, replyMarkup, s.bot_token!))
   );
+  return { ok: true, results };
 }
 
 // ─────────────────────────── formatting helpers ───────────────────────────
