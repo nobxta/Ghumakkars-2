@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
-  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet
+  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet, Receipt
 } from 'lucide-react';
 
 export default function AdminBookingDetailsPage() {
@@ -362,23 +362,8 @@ export default function AdminBookingDetailsPage() {
         })()}
 
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
-          {/* Right rail — Traveller profile + compact Actions */}
+          {/* Right rail — Actions + Contact */}
           <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-4 lg:mb-0">
-            {/* Payment summary */}
-            <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Payment summary</h2>
-              <dl className="space-y-2.5 text-sm">
-                <div className="flex justify-between"><dt className="text-gray-500">Booking amount</dt><dd className="font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex justify-between"><dt className="text-gray-500">Paid</dt><dd className="font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex justify-between items-center pt-2.5 border-t border-[#ECECEE]"><dt className="text-gray-500">Balance due</dt><dd className={remainingAmount > 0 ? 'font-bold text-orange-600 text-lg' : 'font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
-              </dl>
-              {status === 'seat_locked' && remainingAmount > 0 && (() => {
-                const d = booking.departure_date || booking.trips?.start_date;
-                const pb = d ? new Date(new Date(d).getTime() - 5 * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
-                return pb ? <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"><Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />Pay before <strong>{pb}</strong> to confirm your seat.</div> : null;
-              })()}
-            </div>
-
             {/* Actions */}
             <div className="bg-white border border-[#ECECEE] rounded-xl overflow-hidden print:hidden">
               <p className="px-5 pt-4 pb-1 text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Actions</p>
@@ -442,16 +427,6 @@ export default function AdminBookingDetailsPage() {
                   </div>
                 </div>
               </div>
-              {/* money at a glance */}
-              <div className="mt-5 pt-4 border-t border-[#ECECEE] grid grid-cols-3 gap-4">
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Booking amount</p><p className="text-lg sm:text-xl font-bold text-gray-900 mt-0.5">₹{finalAmount.toLocaleString('en-IN')}</p></div>
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Paid</p><p className="text-lg sm:text-xl font-bold text-green-700 mt-0.5">₹{paidAmount.toLocaleString('en-IN')}</p></div>
-                {remainingAmount > 0 ? (
-                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance due</p><p className="text-lg sm:text-xl font-bold text-orange-600 mt-0.5">₹{remainingAmount.toLocaleString('en-IN')}</p></div>
-                ) : (
-                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance</p><p className="text-lg sm:text-xl font-bold text-green-700 mt-0.5 flex items-center gap-1"><CheckCircle className="h-4 w-4" />Cleared</p></div>
-                )}
-              </div>
             </div>
 
             {/* Traveller Details — primary content */}
@@ -508,12 +483,26 @@ export default function AdminBookingDetailsPage() {
               </details>
             </div>
 
-        {/* Payment history — primary content */}
+            {/* Booking Summary — the ONLY place totals appear */}
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
+              <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
+              <dl className="space-y-3">
+                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Total amount</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Paid</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Balance due</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
+              </dl>
+              {status === 'seat_locked' && remainingAmount > 0 && (() => {
+                const d = booking.departure_date || booking.trips?.start_date;
+                const pb = d ? new Date(new Date(d).getTime() - 5 * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+                return pb ? <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"><Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />Pay before <strong>{pb}</strong> to confirm the seat.</div> : null;
+              })()}
+            </div>
+
+        {/* Payment history — what happened, no totals */}
         {booking.payment_transactions && booking.payment_transactions.length > 0 ? (
           <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:shadow-none">
-            <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><CreditCard className="h-4 w-4 text-purple-600" />Payment History</h2>
-              <span className="text-xs text-gray-400">Booking amount ₹{finalAmount.toLocaleString('en-IN')}</span>
+            <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Receipt className="h-4 w-4 text-purple-600" />Payment History</h2>
             </div>
             <div className="p-4 sm:p-5 space-y-3">
               {booking.payment_transactions
@@ -552,9 +541,11 @@ export default function AdminBookingDetailsPage() {
                             {t.payment_status}
                           </span>
                         </div>
-                        <p className="font-extrabold text-gray-900 flex items-baseline whitespace-nowrap">
-                          <IndianRupee className="h-4 w-4" />{parseFloat(String(t.amount)).toLocaleString('en-IN')}
-                        </p>
+                        {isVerified ? (
+                          <p className="font-bold text-gray-900 flex items-baseline whitespace-nowrap"><IndianRupee className="h-4 w-4" />{parseFloat(String(t.amount)).toLocaleString('en-IN')}</p>
+                        ) : (
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{isRejected ? 'not collected' : 'awaiting payment'}</span>
+                        )}
                       </div>
                       <div className="space-y-1 text-xs sm:text-sm text-gray-700">
                         <div className="flex items-start gap-2">
@@ -590,12 +581,6 @@ export default function AdminBookingDetailsPage() {
                     </div>
                   );
                 })}
-            </div>
-            <div className="px-4 sm:px-5 py-3 border-t border-[#ECECEE] bg-[#FAFAFA] flex items-center justify-between text-sm">
-              <span className="text-gray-600">Total paid <span className="font-bold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</span></span>
-              {remainingAmount > 0
-                ? <span className="text-gray-600">Balance due <span className="font-bold text-orange-600">₹{remainingAmount.toLocaleString('en-IN')}</span></span>
-                : <span className="font-semibold text-green-700 flex items-center gap-1"><CheckCircle className="h-4 w-4" />No dues</span>}
             </div>
           </div>
         ) : (
