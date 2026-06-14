@@ -65,6 +65,7 @@ export default function BookingsPage() {
           payment_amount, total_price, final_amount, coupon_code, coupon_discount,
           wallet_amount_used, number_of_participants, primary_passenger_name,
           created_at, rejection_reason, reference_id,
+          payment_transactions ( amount, payment_status ),
           trips (id, title, destination, start_date, end_date, discounted_price, image_url, cover_image_url)
         `)
         .eq('user_id', currentUser.id)
@@ -202,8 +203,19 @@ export default function BookingsPage() {
             {filteredBookings.map((booking) => {
               const status = getStatusConfig(booking.booking_status);
               const paymentStatus = getPaymentStatusConfig(booking.payment_status);
-              const amountPaid = parseFloat(String(booking.payment_amount || booking.final_amount || 0));
-              const totalPrice = parseFloat(String(booking.total_price || 0));
+              // Paid = verified transactions (source of truth, includes admin-recorded
+              // cash), falling back to payment_amount / final_amount.
+              const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
+              const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+              const amountPaid = verifiedPaid || parseFloat(String(booking.payment_amount || booking.final_amount || 0));
+              // Full trip cost (seat-lock aware) for the "remaining" hint.
+              const isSeatLock = booking.payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(booking.booking_status);
+              const pax = Number(booking.number_of_participants) || 1;
+              const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
+              const wallet = parseFloat(String((booking as any).wallet_amount_used || 0)) || 0;
+              const totalPrice = isSeatLock
+                ? Math.max(0, (Number((booking as any).trips?.discounted_price) || 0) * pax - coupon - wallet)
+                : parseFloat(String(booking.final_amount || booking.total_price || 0));
 
               return (
                 <Link
