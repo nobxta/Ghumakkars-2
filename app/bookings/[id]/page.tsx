@@ -338,10 +338,49 @@ export default function BookingDetailsPage() {
     ? computeEnd((booking as any).departure_date, trip?.duration_days)
     : trip?.end_date;
 
-  const daysUntil = effectiveStart ? Math.max(0, Math.ceil((new Date(effectiveStart).getTime() - Date.now()) / 86400000)) : 0;
-  const isUpcoming = daysUntil > 0;
-  const isStartingSoon = daysUntil <= 7 && daysUntil > 0;
-  const isPast = effectiveEnd ? new Date(effectiveEnd).getTime() < Date.now() : false;
+  // ── Trip phase (date-only, so "today" is correct regardless of time) ──
+  const dayMs = 86400000;
+  const midnight = (v?: string) => { if (!v) return null; const d = new Date(v); if (Number.isNaN(d.getTime())) return null; d.setHours(0, 0, 0, 0); return d; };
+  const todayMid = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const startMid = midnight(effectiveStart);
+  const endMid = midnight(effectiveEnd) || startMid;
+  const daysToStart = startMid ? Math.round((startMid.getTime() - todayMid.getTime()) / dayMs) : null;
+  const totalDays = (startMid && endMid) ? Math.round((endMid.getTime() - startMid.getTime()) / dayMs) + 1 : (trip?.duration_days || 1);
+  const dayOfTrip = startMid ? Math.round((todayMid.getTime() - startMid.getTime()) / dayMs) + 1 : 0;
+
+  type TripPhase = 'upcoming' | 'today' | 'ongoing' | 'lastday' | 'ended' | 'unknown';
+  const tripPhase: TripPhase = (() => {
+    if (!startMid) return 'unknown';
+    if (endMid && todayMid.getTime() > endMid.getTime()) return 'ended';
+    if (todayMid.getTime() < startMid.getTime()) return 'upcoming';
+    // today is within [start, end]
+    if (endMid && todayMid.getTime() === endMid.getTime()) return 'lastday';
+    if (todayMid.getTime() === startMid.getTime()) return 'today';
+    return 'ongoing';
+  })();
+
+  const isUpcoming = tripPhase === 'upcoming';
+  const isStartingSoon = isUpcoming && (daysToStart != null && daysToStart <= 7);
+  const isPast = tripPhase === 'ended';
+  const isLive = tripPhase === 'today' || tripPhase === 'ongoing' || tripPhase === 'lastday';
+
+  // Headline shown in the hero badge for each phase.
+  const phaseBadge: { kicker: string; big: string } = (() => {
+    switch (tripPhase) {
+      case 'upcoming':
+        return { kicker: 'Trip starts in', big: daysToStart === 1 ? 'Tomorrow' : `${daysToStart} days` };
+      case 'today':
+        return { kicker: 'Your trip', big: 'Starts today 🎉' };
+      case 'ongoing':
+        return { kicker: 'Trip in progress', big: totalDays > 1 ? `Day ${Math.min(Math.max(dayOfTrip, 1), totalDays)} of ${totalDays}` : 'Happening now' };
+      case 'lastday':
+        return { kicker: 'Trip in progress', big: 'Last day 👋' };
+      case 'ended':
+        return { kicker: 'Trip', big: 'Completed' };
+      default:
+        return { kicker: 'Trip', big: '' };
+    }
+  })();
 
   // Filter primary out of the passengers array — many old bookings stored
   // the primary as the first passenger entry too, causing the duplicate.
@@ -407,8 +446,8 @@ export default function BookingDetailsPage() {
     { key: 'received', label: 'Booking received', done: true },
     { key: 'paid', label: 'Payment received', done: ['confirmed', 'seat_locked'].includes(status) || paidAmount > 0 },
     { key: 'reserved', label: 'Seat reserved', done: ['confirmed', 'seat_locked'].includes(status) },
-    { key: 'soon', label: isStartingSoon ? 'Trip starting soon' : 'Trip starts', done: isPast, active: isStartingSoon },
-    { key: 'done', label: 'Trip completed', done: isPast },
+    { key: 'soon', label: isPast ? 'Trip started' : isLive ? 'Trip in progress' : isStartingSoon ? 'Trip starting soon' : 'Trip starts', done: isPast || isLive, active: isLive || isStartingSoon },
+    { key: 'done', label: 'Trip completed', done: isPast, active: isPast },
   ];
 
   const whatsappLink = trip?.whatsapp_group_link;
@@ -574,10 +613,10 @@ export default function BookingDetailsPage() {
                 {statusTheme.icon}
                 {statusTheme.label}
               </span>
-              {isUpcoming && !isPast && (
+              {phaseBadge.big && (
                 <div className="hidden sm:block bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-2.5 text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Trip starts in</p>
-                  <p className="text-2xl font-extrabold mt-0.5">{daysUntil} day{daysUntil === 1 ? '' : 's'}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>
+                  <p className="text-2xl font-extrabold mt-0.5">{phaseBadge.big}</p>
                 </div>
               )}
             </div>
@@ -594,10 +633,10 @@ export default function BookingDetailsPage() {
                 <Copy className="h-3 w-3" />#{shortId}
               </button>
             </div>
-            {isUpcoming && !isPast && (
+            {phaseBadge.big && (
               <div className="sm:hidden mt-4 bg-white/15 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-2.5 inline-block">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Starts in</p>
-                <p className="text-xl font-extrabold mt-0.5">{daysUntil} day{daysUntil === 1 ? '' : 's'}</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">{phaseBadge.kicker}</p>
+                <p className="text-xl font-extrabold mt-0.5">{phaseBadge.big}</p>
               </div>
             )}
           </div>
