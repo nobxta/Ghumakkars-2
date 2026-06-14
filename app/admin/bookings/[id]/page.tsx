@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
-  Printer, Copy, FileText, Tag, Shield
+  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight
 } from 'lucide-react';
 
 export default function AdminBookingDetailsPage() {
@@ -274,7 +274,7 @@ export default function AdminBookingDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/40 via-white to-white print:bg-white print:pt-0 print:pb-0">
+    <div className="min-h-screen pt-16 pb-24 bg-[#FAFAFA] tabular-nums print:bg-white print:pt-0 print:pb-0">
       {/* Print-only header */}
       <div className="hidden print:block max-w-4xl mx-auto px-6 pt-6 pb-4 border-b border-gray-300">
         <div className="flex items-center justify-between">
@@ -289,296 +289,165 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 print:py-3">
-        {/* Top actions */}
-        <div className="mb-5 sm:mb-6 print:hidden flex items-center justify-between gap-2 flex-wrap">
-          <Link
-            href="/admin/bookings"
-            className="inline-flex items-center text-purple-700 hover:text-purple-900 text-sm font-semibold transition-colors"
-          >
+      {/* Sticky top header — the only place booking status appears */}
+      <div className="sticky top-16 z-30 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
+          <Link href="/admin/bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
-            <span>All Bookings</span>
+            <span className="hidden sm:inline">Bookings</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={copyId}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs sm:text-sm font-semibold hover:border-purple-300 hover:text-purple-700 transition-colors"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Copy ID</span>
-            </button>
-            <button
-              onClick={() => typeof window !== 'undefined' && window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span>Print / PDF</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Hero / receipt header */}
-        <div className="rounded-2xl overflow-hidden shadow-md border border-purple-100 bg-white mb-5 sm:mb-6 print:shadow-none print:border-gray-300">
-          <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-fuchsia-700 text-white p-5 sm:p-6 print:bg-purple-700 print:!text-white">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-wider text-purple-200 font-semibold mb-1">Booking Receipt</p>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold leading-tight truncate">
-                  {booking.trips?.title || 'Trip'}
-                </h1>
-                <p className="text-sm text-purple-100 mt-1 flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {booking.trips?.destination || 'N/A'}
-                </p>
-              </div>
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white shadow-sm whitespace-nowrap ${
-                status === 'confirmed' ? 'text-green-700'
-                : status === 'seat_locked' ? 'text-orange-700'
-                : status === 'pending' ? 'text-yellow-700'
-                : 'text-red-700'
-              }`}>
-                {getStatusIcon(status)}
-                <span>
-                  {status === 'seat_locked' ? 'Seat Locked' : status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')}
-                </span>
+          <button onClick={copyId} title="Copy full booking ID" className="group inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-gray-900 hover:text-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded px-1">
+            #{shortId}
+            <Copy className="h-3.5 w-3.5 text-gray-400 group-hover:text-purple-600" />
+          </button>
+          {(() => {
+            const m: Record<string, { l: string; c: string; d: string }> = {
+              confirmed: { l: 'Confirmed', c: 'bg-green-50 text-green-700 border-green-200', d: 'bg-green-500' },
+              seat_locked: { l: 'Seat Locked', c: 'bg-amber-50 text-amber-700 border-amber-200', d: 'bg-amber-500' },
+              remaining_submitted: { l: 'Verifying payment', c: 'bg-blue-50 text-blue-700 border-blue-200', d: 'bg-blue-500' },
+              pending: { l: 'Pending', c: 'bg-yellow-50 text-yellow-700 border-yellow-200', d: 'bg-yellow-500' },
+              cancelled: { l: 'Cancelled', c: 'bg-red-50 text-red-700 border-red-200', d: 'bg-red-500' },
+              rejected: { l: 'Rejected', c: 'bg-red-50 text-red-700 border-red-200', d: 'bg-red-500' },
+            };
+            const s = m[status] || { l: status, c: 'bg-gray-100 text-gray-700 border-gray-200', d: 'bg-gray-400' };
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${s.c}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${s.d}`} />{s.l}
               </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
-              <div>
-                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Ref</p>
-                <p className="font-mono font-bold mt-0.5">{shortId}</p>
-              </div>
-              <div>
-                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Dates</p>
-                <p className="font-semibold mt-0.5 truncate">{fmtDate(booking.trips?.start_date)}{booking.trips?.end_date ? ` → ${fmtDate(booking.trips?.end_date)}` : ''}</p>
-              </div>
-              <div>
-                <p className="text-purple-200 uppercase tracking-wider font-semibold text-[10px] sm:text-xs">Guests</p>
-                <p className="font-semibold mt-0.5">{booking.number_of_participants || 1}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Payment KPI strip */}
-          <div className="grid grid-cols-3 divide-x divide-gray-200 bg-white">
-            <div className="p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Payable</p>
-              <p className="text-base sm:text-xl font-extrabold text-gray-900 mt-0.5 flex items-baseline justify-center">
-                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{finalAmount.toLocaleString('en-IN')}
-              </p>
-              {couponDiscount > 0 && (
-                <p className="text-[10px] text-gray-400 line-through mt-0.5">₹{originalPrice.toLocaleString('en-IN')}</p>
-              )}
-            </div>
-            <div className="p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">Paid</p>
-              <p className="text-base sm:text-xl font-extrabold text-green-700 mt-0.5 flex items-baseline justify-center">
-                <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{paidAmount.toLocaleString('en-IN')}
-              </p>
-            </div>
-            <div className="p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-semibold">{remainingAmount > 0 ? 'Due' : 'Saved'}</p>
-              {remainingAmount > 0 ? (
-                <p className="text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center text-orange-600">
-                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{remainingAmount.toLocaleString('en-IN')}
-                </p>
-              ) : couponDiscount > 0 ? (
-                <p className="text-base sm:text-xl font-extrabold mt-0.5 flex items-baseline justify-center text-green-700">
-                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />{couponDiscount.toLocaleString('en-IN')}
-                </p>
-              ) : (
-                <p className="text-base sm:text-xl font-extrabold mt-0.5 text-gray-400">—</p>
-              )}
-              {!remainingAmount && couponDiscount > 0 && booking.coupon_code && (
-                <p className="text-[10px] text-green-700 font-semibold mt-0.5">{booking.coupon_code}</p>
-              )}
-            </div>
-          </div>
+            );
+          })()}
+          <button
+            onClick={() => typeof window !== 'undefined' && window.print()}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          >
+            <Printer className="h-3.5 w-3.5 text-gray-500" />
+            <span className="hidden sm:inline">Print</span>
+          </button>
         </div>
+      </div>
 
-        {/* Manage booking (admin actions) — hidden when printing */}
-        <div className="bg-white rounded-2xl shadow-md border border-gray-200 mb-5 sm:mb-6 print:hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-            <Shield className="h-4 w-4 text-purple-600" />
-            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Manage booking</h2>
-          </div>
-          <div className="p-5 space-y-5">
-            {/* Record an in-person payment */}
-            {!['cancelled', 'rejected'].includes(status) && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Record a payment taken in person</p>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div className="relative flex-1 sm:max-w-[200px]">
-                    <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="number"
-                      min="1"
-                      value={cashAmount}
-                      onChange={(e) => setCashAmount(e.target.value)}
-                      placeholder="Amount received"
-                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
-                    />
-                  </div>
-                  <select
-                    value={cashMode}
-                    onChange={(e) => setCashMode(e.target.value as 'cash' | 'upi')}
-                    className="px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-900 outline-none cursor-pointer"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                  </select>
-                  <button
-                    disabled={managing || !cashAmount}
-                    onClick={() => manageBooking({ action: 'record_payment', amount: cashAmount, mode: cashMode })}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
-                  >
-                    <Check className="h-4 w-4" />
-                    Record &amp; update
-                  </button>
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 print:py-3">
+        {/* Conditional action banner — only when an admin action is required */}
+        {(() => {
+          const pendingTxn = (booking.payment_transactions || []).find((t: any) => t.payment_status === 'pending');
+          if (pendingTxn) {
+            return (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm text-amber-900">
+                    <span className="font-bold">₹{parseFloat(String(pendingTxn.amount || 0)).toLocaleString('en-IN')}</span> {pendingTxn.payment_type === 'remaining' ? 'remaining payment' : pendingTxn.payment_type === 'seat_lock' ? 'seat-lock payment' : 'payment'} is awaiting your approval.
+                  </p>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1.5">
-                  Adds to the paid amount. If it covers the full balance ({remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')} due now` : 'fully paid'}), the booking is confirmed and a confirmation email goes out. Otherwise it stays seat-locked.
-                </p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button disabled={reviewing} onClick={() => handleReviewPayment(pendingTxn, 'verified')} className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><CheckCircle className="h-4 w-4" /> Approve</button>
+                  <button disabled={reviewing} onClick={() => openTransactionModal(pendingTxn)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-50 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><XCircle className="h-4 w-4" /> Reject</button>
+                </div>
+              </div>
+            );
+          }
+          if (status === 'seat_locked' && remainingAmount > 0) {
+            return (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex items-center gap-2.5 print:hidden">
+                <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                <p className="text-sm text-amber-900"><span className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</span> balance due to confirm this seat. Record it in the payment panel when collected.</p>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
+          {/* Right rail (DOM-first so mobile shows actions first) */}
+          <aside className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-4 mb-4 lg:mb-0 print:hidden">
+            {/* Payment summary */}
+            <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CreditCard className="h-4 w-4 text-purple-600" />Payment</h2>
+              {(() => {
+                const perPerson = (booking.trips?.discounted_price && booking.trips.discounted_price > 0) ? booking.trips.discounted_price : (pax > 0 ? Math.round(finalAmount / pax) : finalAmount);
+                const payBefore = (() => {
+                  const d = booking.departure_date || booking.trips?.start_date;
+                  if (!d || status !== 'seat_locked') return null;
+                  const dt = new Date(new Date(d).getTime() - 5 * 86400000);
+                  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                })();
+                return (
+                  <dl className="space-y-2 text-sm">
+                    <div className="flex justify-between"><dt className="text-gray-500">₹{perPerson.toLocaleString('en-IN')} × {pax}</dt><dd className="font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
+                    {couponDiscount > 0 && <div className="flex justify-between text-green-700"><dt className="flex items-center gap-1"><Tag className="h-3 w-3" />{booking.coupon_code || 'Coupon'}</dt><dd className="font-semibold">−₹{couponDiscount.toLocaleString('en-IN')}</dd></div>}
+                    {walletUsed > 0 && <div className="flex justify-between text-purple-700"><dt>Wallet</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>}
+                    <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-[#ECECEE]"><dt className="text-gray-600">Paid</dt><dd className="font-bold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                    {remainingAmount > 0 ? (
+                      <div className="pt-2 mt-1 border-t border-[#ECECEE]">
+                        <dt className="text-xs uppercase tracking-wide font-semibold text-gray-500">Due</dt>
+                        <dd className="text-2xl font-bold text-orange-600 leading-tight">₹{remainingAmount.toLocaleString('en-IN')}</dd>
+                        {payBefore && <p className="text-xs text-orange-700 mt-0.5">Pay before {payBefore}</p>}
+                      </div>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-green-700 font-semibold pt-2 mt-1 border-t border-[#ECECEE]"><CheckCircle className="h-4 w-4" />Fully paid</p>
+                    )}
+                  </dl>
+                );
+              })()}
+            </div>
+
+            {/* Manage: record payment + status */}
+            {!['cancelled', 'rejected'].includes(status) ? (
+              <div className="bg-white border border-[#ECECEE] rounded-xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><Shield className="h-4 w-4 text-purple-600" />Record a payment</h2>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input type="number" min="1" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} placeholder="Amount" className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                    </div>
+                    <select value={cashMode} onChange={(e) => setCashMode(e.target.value as 'cash' | 'upi')} className="px-2.5 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                    </select>
+                  </div>
+                  <button disabled={managing || !cashAmount} onClick={() => manageBooking({ action: 'record_payment', amount: cashAmount, mode: cashMode })} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record &amp; update</button>
+                </div>
+                <div className="pt-1 border-t border-[#ECECEE]">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-3">Change status</p>
+                  <div className="flex flex-wrap gap-2">
+                    {status !== 'confirmed' && <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'confirmed' }, 'Mark this booking as CONFIRMED and email the traveller?')} className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><CheckCircle className="h-4 w-4" />Confirm</button>}
+                    {status !== 'seat_locked' && <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'seat_locked' }, 'Move this booking to SEAT LOCKED and email the traveller?')} className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><Lock className="h-4 w-4" />Seat lock</button>}
+                    <button disabled={managing} onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setShowCancelModal(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><XCircle className="h-4 w-4" />Cancel</button>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-2">Refunds are manual in Razorpay — cancelling only frees the seat and notifies the traveller.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
+                <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><Clock className="h-4 w-4" />Reopen (pending)</button>
               </div>
             )}
 
-            {/* Change status */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Change status</p>
-              <div className="flex flex-wrap gap-2">
-                {status !== 'confirmed' && (
-                  <button
-                    disabled={managing}
-                    onClick={() => manageBooking({ action: 'set_status', status: 'confirmed' }, 'Mark this booking as CONFIRMED and email the traveller? This counts a seat even if the full amount is not recorded.')}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
-                  >
-                    <CheckCircle className="h-4 w-4" /> Mark confirmed
-                  </button>
-                )}
-                {status !== 'seat_locked' && !['cancelled', 'rejected'].includes(status) && (
-                  <button
-                    disabled={managing}
-                    onClick={() => manageBooking({ action: 'set_status', status: 'seat_locked' }, 'Move this booking to SEAT LOCKED and email the traveller?')}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors"
-                  >
-                    <Lock className="h-4 w-4" /> Seat locked
-                  </button>
-                )}
-                {!['cancelled', 'rejected'].includes(status) && (
-                  <button
-                    disabled={managing}
-                    onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setShowCancelModal(true); }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
-                  >
-                    <XCircle className="h-4 w-4" /> Cancel booking
-                  </button>
-                )}
-                {['cancelled', 'rejected'].includes(status) && (
-                  <button
-                    disabled={managing}
-                    onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                  >
-                    <Clock className="h-4 w-4" /> Reopen (pending)
-                  </button>
-                )}
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1.5">Refunds are never automatic. Cancelling only frees the seat and notifies the traveller; issue the actual refund in Razorpay.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Two-column grid on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-          {/* Trip details */}
-          <SectionCard icon={<Calendar className="h-4 w-4 text-purple-700" />} title="Trip Details">
-            {booking.departure_date
-              ? <Row label="Departure" value={fmtDate(booking.departure_date)} />
-              : <Row label="Start" value={fmtDate(booking.trips?.start_date)} />}
-            {!booking.departure_date && <Row label="End" value={fmtDate(booking.trips?.end_date)} />}
-            {booking.pickup_point && <Row label="Pickup point" value={booking.pickup_point} />}
-            <Row label="Booked on" value={fmtDateTime(booking.created_at)} />
-            <Row label="Booking ID" value={<span className="font-mono text-xs break-all">{booking.id}</span>} />
-          </SectionCard>
-
-          {/* Primary passenger */}
-          <SectionCard icon={<User className="h-4 w-4 text-purple-700" />} title="Primary Passenger">
-            <Row label="Name" value={passengerName} />
-            <Row label="Email" value={<span className="break-all">{passengerEmail}</span>} />
-            <Row label="Phone" value={<a href={`tel:${passengerPhone}`} className="text-purple-700 hover:underline">{passengerPhone}</a>} />
-            <Row label="Age / Gender" value={`${booking.primary_passenger_age || '—'} · ${booking.primary_passenger_gender || '—'}`} />
-            {booking.college && <Row label="College" value={booking.college} />}
-          </SectionCard>
-
-          {/* Emergency contact */}
-          {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
-            <SectionCard icon={<Heart className="h-4 w-4 text-pink-600" />} title="Emergency Contact" iconBg="bg-pink-100">
-              <Row label="Name" value={booking.emergency_contact_name || 'N/A'} />
-              <Row label="Phone" value={
-                <a href={`tel:${booking.emergency_contact_phone}`} className="text-purple-700 hover:underline">
-                  {booking.emergency_contact_phone || 'N/A'}
-                </a>
-              } />
-            </SectionCard>
-          )}
-
-          {/* Discount/coupon (if any) */}
-          {booking.coupon_code && (
-            <SectionCard icon={<Tag className="h-4 w-4 text-green-700" />} title="Discount" iconBg="bg-green-100">
-              <Row label="Coupon" value={<span className="font-mono font-bold text-green-700">{booking.coupon_code}</span>} />
-              {booking.coupon_discount && (
-                <Row label="Saved" value={
-                  <span className="text-green-700 font-bold inline-flex items-baseline">
-                    <IndianRupee className="h-3.5 w-3.5" />{parseFloat(String(booking.coupon_discount)).toLocaleString('en-IN')}
-                  </span>
-                } />
-              )}
-            </SectionCard>
-          )}
-        </div>
-
-        {/* Additional passengers — full width */}
-        {booking.passengers && booking.passengers.length > 0 && (
-          <div className="mt-4 sm:mt-5 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
-                <Users className="h-4 w-4 text-purple-700" />
-              </div>
-              <h2 className="text-sm sm:text-base font-bold text-gray-900">Additional Passengers ({booking.passengers.length})</h2>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {booking.passengers.map((p: any, i: number) => (
-                <div key={i} className="px-4 sm:px-5 py-3 sm:py-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div className="col-span-2 sm:col-span-1">
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Passenger {i + 1}</p>
-                    <p className="font-bold text-gray-900 mt-0.5">{p.name || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Phone</p>
-                    <p className="text-gray-900 mt-0.5">{p.phone || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Age</p>
-                    <p className="text-gray-900 mt-0.5">{p.age || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Gender</p>
-                    <p className="text-gray-900 mt-0.5 capitalize">{p.gender || '—'}</p>
-                  </div>
+            {/* Contact */}
+            <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Contact</h2>
+              <p className="font-semibold text-gray-900">{passengerName}</p>
+              <p className="text-sm text-gray-500 mt-0.5">{passengerPhone}</p>
+              <p className="text-xs text-gray-400 break-all">{passengerEmail}</p>
+              {passengerPhone !== 'N/A' && (
+                <div className="flex gap-2 mt-3">
+                  <a href={`tel:${passengerPhone}`} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors"><Phone className="h-3.5 w-3.5" />Call</a>
+                  <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors"><MessageCircle className="h-3.5 w-3.5" />WhatsApp</a>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          </aside>
 
-        {/* Payment timeline */}
-        {booking.payment_transactions && booking.payment_transactions.length > 0 && (
-          <div className="mt-4 sm:mt-5 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
-                <CreditCard className="h-4 w-4 text-purple-700" />
-              </div>
-              <h2 className="text-sm sm:text-base font-bold text-gray-900">Payment Timeline</h2>
+          {/* Main column */}
+          <div className="lg:col-start-1 lg:row-start-1 space-y-4 min-w-0">
+
+        {/* Payment timeline — primary content */}
+        {booking.payment_transactions && booking.payment_transactions.length > 0 ? (
+          <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:shadow-none">
+            <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-purple-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Payment Timeline</h2>
             </div>
             <div className="p-4 sm:p-5 space-y-3">
               {booking.payment_transactions
@@ -652,24 +521,55 @@ export default function AdminBookingDetailsPage() {
                 })}
             </div>
           </div>
-        )}
-
-        {/* Seat lock deadline */}
-        {status === 'seat_locked' && booking.trips?.start_date && (
-          <div className="mt-4 sm:mt-5 bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-orange-700" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-orange-900 mb-1">Remaining payment deadline</p>
-                <p className="text-sm text-orange-800">
-                  Must be paid before <strong>{fmtDate(new Date(new Date(booking.trips.start_date).setDate(new Date(booking.trips.start_date).getDate() - 5)).toISOString())}</strong>
-                </p>
-              </div>
-            </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-[#ECECEE] p-8 text-center">
+            <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No payments recorded yet.</p>
           </div>
         )}
+
+        {/* Traveller & Trip Information (merged) */}
+        <div className="bg-white rounded-xl border border-[#ECECEE] p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><MapPin className="h-4 w-4 text-purple-600" />Traveller &amp; trip</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Trip</p><p className="font-medium text-gray-900 mt-0.5">{booking.trips?.title || '—'}</p></div>
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Destination</p><p className="text-gray-900 mt-0.5">{booking.trips?.destination || '—'}</p></div>
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Departs</p><p className="text-gray-900 mt-0.5">{fmtDate(booking.departure_date || booking.trips?.start_date)}</p></div>
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Pickup</p><p className="text-gray-900 mt-0.5">{booking.pickup_point || '—'}</p></div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm mt-3 pt-3 border-t border-[#ECECEE]">
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Lead traveller</p><p className="font-medium text-gray-900 mt-0.5">{passengerName}</p></div>
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Phone</p><p className="mt-0.5"><a href={`tel:${passengerPhone}`} className="text-purple-700 hover:underline">{passengerPhone}</a></p></div>
+            <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Age / Gender</p><p className="text-gray-900 mt-0.5">{booking.primary_passenger_age || '—'} · {booking.primary_passenger_gender || '—'}</p></div>
+            <div className="min-w-0"><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Email</p><p className="text-gray-900 mt-0.5 truncate">{passengerEmail}</p></div>
+          </div>
+          <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-[#ECECEE]">Booked {fmtDateTime(booking.created_at)} · ID <span className="font-mono">{shortId}</span></p>
+
+          {((booking.passengers && booking.passengers.length > 0) || booking.emergency_contact_name || booking.emergency_contact_phone) && (
+            <details open className="mt-3 group">
+              <summary className="cursor-pointer list-none flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
+                <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                More travellers &amp; emergency contact
+              </summary>
+              <div className="mt-3 space-y-2">
+                {(booking.passengers || []).map((p: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-sm bg-[#FAFAFA] rounded-lg px-3 py-2">
+                    <span className="font-medium text-gray-900">{p.name || `Passenger ${i + 1}`}</span>
+                    <span className="text-gray-500 text-xs">{[p.age && `${p.age} yrs`, p.gender, p.phone].filter(Boolean).join(' · ') || '—'}</span>
+                  </div>
+                ))}
+                {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+                  <div className="flex items-center gap-2 text-sm bg-pink-50 rounded-lg px-3 py-2">
+                    <Heart className="h-3.5 w-3.5 text-pink-600 flex-shrink-0" />
+                    <span className="text-gray-700">Emergency: <span className="font-medium text-gray-900">{booking.emergency_contact_name || '—'}</span>{booking.emergency_contact_phone ? ` · ${booking.emergency_contact_phone}` : ''}</span>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+        </div>
+          </div>
+        </div>
 
         {/* Print footer */}
         <div className="hidden print:block mt-8 pt-4 border-t border-gray-300 text-xs text-gray-500 text-center">
