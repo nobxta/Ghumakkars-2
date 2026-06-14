@@ -167,7 +167,11 @@ export default function BookingDetailsPage() {
     const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
     const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
     const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet);
-    const paidAmount = parseFloat(String(booking.payment_amount || booking.final_amount || 0));
+    // Paid = verified transactions (source of truth, includes admin-recorded
+    // cash), falling back to payment_amount / final_amount.
+    const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
+    const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+    const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || booking.final_amount || 0));
     return Math.max(0, Math.round(fullPrice - paidAmount));
   };
 

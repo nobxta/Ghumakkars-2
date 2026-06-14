@@ -207,6 +207,12 @@ export async function notifyPaymentForApproval(bookingId: string) {
     .filter((t: any) => t.payment_status === 'pending')
     .sort((a: any, c: any) => new Date(c.created_at).getTime() - new Date(a.created_at).getTime())[0];
 
+  // If nothing is pending review, only the "new booking" heads-up applies —
+  // and only for a genuinely new, unreviewed booking. Admin actions that land
+  // on seat_locked/confirmed (e.g. recording a cash payment) must NOT fire a
+  // spurious "NEW BOOKING" alert.
+  if (!pending && booking.booking_status !== 'pending') return;
+
   const isRemaining = booking.booking_status === 'remaining_submitted';
   const header = pending
     ? (isRemaining ? '💵 <b>REMAINING PAYMENT — needs approval</b>' : '🟡 <b>PAYMENT — needs approval</b>')

@@ -651,28 +651,30 @@ export default function AdminBookingsPage() {
                       </Link>
                     </td>
 
-                    {/* Amount & Details - Compact */}
+                    {/* Amount & Details - paid vs due */}
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center space-x-1">
-                          <IndianRupee className="h-3.5 w-3.5 text-purple-600" />
-                          <span className="text-base font-bold text-gray-900">
-                            {parseFloat(booking.final_amount || booking.total_price || 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-xs">
-                          <span className="flex items-center text-gray-600">
-                            <Users className="h-3 w-3 mr-1" />
-                            {booking.number_of_participants || 1}
-                          </span>
-                          {booking.wallet_amount_used > 0 && (
-                            <span className="text-green-600 flex items-center">
-                              <Wallet className="h-3 w-3 mr-0.5" />
-                              ₹{parseFloat(String(booking.wallet_amount_used || 0)).toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      {(() => {
+                        const paid = paidOf(booking);
+                        const due = Math.max(0, fullOf(booking) - paid);
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-1">
+                              <IndianRupee className="h-3.5 w-3.5 text-green-600" />
+                              <span className="text-base font-bold text-gray-900">{paid.toLocaleString('en-IN')}</span>
+                              <span className="text-[10px] text-gray-400 font-medium">paid</span>
+                            </div>
+                            {due > 0 && !['cancelled', 'rejected'].includes(booking.booking_status) && (
+                              <p className="text-xs text-orange-600 font-medium">₹{due.toLocaleString('en-IN')} due</p>
+                            )}
+                            <div className="flex items-center space-x-2 text-xs">
+                              <span className="flex items-center text-gray-500"><Users className="h-3 w-3 mr-1" />{booking.number_of_participants || 1}</span>
+                              {booking.wallet_amount_used > 0 && (
+                                <span className="text-green-600 flex items-center"><Wallet className="h-3 w-3 mr-0.5" />₹{parseFloat(String(booking.wallet_amount_used || 0)).toLocaleString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Payment Info - Compact */}

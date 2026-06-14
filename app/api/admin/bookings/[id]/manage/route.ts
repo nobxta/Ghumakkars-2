@@ -122,16 +122,23 @@ export async function POST(
         }]);
       }
 
-      const newStatus = paidAfter >= fullOwed - 1 ? 'confirmed' : 'seat_locked';
+      const fullyPaid = paidAfter >= fullOwed - 1;
+      const newStatus = fullyPaid ? 'confirmed' : 'seat_locked';
       const wasCounted = COUNTED.includes(b.booking_status);
       if (!wasCounted) await adjustSeats(pax);
 
+      // Keep payment_amount / amount_paid in sync so every screen that reads
+      // them (user booking page, admin list) shows the new running total.
       await adminClient.from('bookings').update({
         booking_status: newStatus,
-        payment_status: paidAfter >= fullOwed - 1 ? 'paid' : 'partial',
+        payment_status: fullyPaid ? 'paid' : 'partial',
+        payment_amount: paidAfter,
+        amount_paid: paidAfter,
       }).eq('id', id);
 
-      await notify(newStatus);
+      // Email the customer only when it actually changes their state
+      // (fully paid -> confirmed). A partial top-up doesn't re-notify.
+      if (fullyPaid) await notify('confirmed');
 
       return NextResponse.json({
         success: true,
