@@ -56,6 +56,21 @@ export async function POST(request: NextRequest) {
     if (me?.ok && me.result?.username) {
       await admin.from('telegram_settings').update({ bot_username: me.result.username }).eq('id', 1);
     }
+    // Register the slash-command menu shown in Telegram's "/" picker.
+    await tgCall('setMyCommands', {
+      commands: [
+        { command: 'menu', description: 'Open the control panel' },
+        { command: 'pending', description: 'Payments waiting for approval' },
+        { command: 'today', description: "Today's bookings & revenue" },
+        { command: 'week', description: "This week's numbers" },
+        { command: 'revenue', description: 'Collected vs. still to collect' },
+        { command: 'recent', description: 'Last 10 bookings' },
+        { command: 'upcoming', description: 'Next departures with seat counts' },
+        { command: 'find', description: 'Search bookings by name or phone' },
+        { command: 'booking', description: 'Details for a booking ID' },
+        { command: 'id', description: 'Show your Chat ID' },
+      ],
+    }, s.bot_token);
     if (!hook?.ok) return NextResponse.json({ error: hook?.description || 'setWebhook failed' }, { status: 400 });
     return NextResponse.json({ success: true, message: 'Webhook connected.', botUsername: me?.result?.username || null });
   }

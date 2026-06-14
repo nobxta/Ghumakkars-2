@@ -59,13 +59,14 @@ export async function sendTelegramMessage(chatId: string, text: string, replyMar
   }, tokenOverride);
 }
 
-export async function editTelegramMessage(chatId: string | number, messageId: number, text: string, tokenOverride?: string) {
+export async function editTelegramMessage(chatId: string | number, messageId: number, text: string, tokenOverride?: string, replyMarkup?: unknown) {
   return tgCall('editMessageText', {
     chat_id: chatId,
     message_id: messageId,
     text,
     parse_mode: 'HTML',
     disable_web_page_preview: true,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   }, tokenOverride);
 }
 
@@ -206,14 +207,18 @@ export async function notifyPaymentForApproval(bookingId: string) {
 
   const text = `${header}\n\n${commonBlock(booking, trip, profile)}`;
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const replyMarkup = pending
     ? {
-        inline_keyboard: [[
-          { text: '✅ Approve', callback_data: `approve:${pending.id}` },
-          { text: '❌ Reject', callback_data: `reject:${pending.id}` },
-        ]],
+        inline_keyboard: [
+          [
+            { text: '✅ Approve', callback_data: `approve:${pending.id}` },
+            { text: '❌ Reject', callback_data: `reject:${pending.id}` },
+          ],
+          ...(appUrl ? [[{ text: '🔗 Open in admin', url: `${appUrl}/admin/bookings/${booking.id}` }]] : []),
+        ],
       }
-    : undefined;
+    : (appUrl ? { inline_keyboard: [[{ text: '🔗 Open in admin', url: `${appUrl}/admin/bookings/${booking.id}` }]] } : undefined);
 
   await sendToAdmins(text, replyMarkup);
 }
