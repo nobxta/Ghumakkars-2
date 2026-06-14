@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
           start_date,
           end_date,
           discounted_price,
+          cover_image_url,
+          image_url,
           whatsapp_group_link
         ),
         payment_transactions (

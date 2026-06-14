@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
-  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight
+  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet
 } from 'lucide-react';
 
 export default function AdminBookingDetailsPage() {
@@ -349,9 +349,12 @@ export default function AdminBookingDetailsPage() {
           }
           if (status === 'seat_locked' && remainingAmount > 0) {
             return (
-              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex items-center gap-2.5 print:hidden">
-                <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                <p className="text-sm text-amber-900"><span className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</span> balance due to confirm this seat. Record it in the payment panel when collected.</p>
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm text-amber-900"><span className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</span> balance due to confirm this seat. Record it when collected.</p>
+                </div>
+                <button onClick={() => setShowActionsDrawer(true)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><IndianRupee className="h-4 w-4" />Record payment</button>
               </div>
             );
           }
@@ -361,68 +364,53 @@ export default function AdminBookingDetailsPage() {
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
           {/* Right rail — Traveller profile + compact Actions */}
           <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-4 lg:mb-0">
-            {/* Traveller profile */}
+            {/* Payment summary */}
             <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg flex-shrink-0">
-                  {(passengerName[0] || '?').toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">{passengerName}</p>
-                  <p className="text-sm text-gray-500">{booking.primary_passenger_age ? `${booking.primary_passenger_age} yrs` : ''}{booking.primary_passenger_age && booking.primary_passenger_gender ? ' • ' : ''}<span className="capitalize">{booking.primary_passenger_gender || ''}</span></p>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-2 text-sm">
-                {passengerPhone !== 'N/A' && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-gray-700 min-w-0"><Phone className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerPhone}</span></span>
-                    <span className="flex gap-1.5 flex-shrink-0 print:hidden">
-                      <a href={`tel:${passengerPhone}`} title="Call" className="p-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"><Phone className="h-3.5 w-3.5" /></a>
-                      <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"><MessageCircle className="h-3.5 w-3.5" /></a>
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-gray-700 min-w-0"><Mail className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerEmail}</span></div>
-              </div>
-
-              {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
-                <div className="mt-4 pt-3 border-t border-[#ECECEE]">
-                  <p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5"><Heart className="h-3 w-3 text-pink-500" />Emergency contact</p>
-                  <p className="text-sm text-gray-900 mt-1">{booking.emergency_contact_name || '—'}{booking.emergency_contact_phone ? <span className="text-gray-500"> · {booking.emergency_contact_phone}</span> : ''}</p>
-                </div>
-              )}
-
-              {booking.passengers && booking.passengers.length > 0 && (
-                <details className="mt-4 pt-3 border-t border-[#ECECEE] group">
-                  <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
-                    <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
-                    Co-passengers ({booking.passengers.length})
-                  </summary>
-                  <div className="mt-2 space-y-1.5">
-                    {booking.passengers.map((p: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="text-gray-900 truncate">{p.name || `Passenger ${i + 1}`}</span>
-                        <span className="text-gray-400 text-xs flex-shrink-0">{[p.age && `${p.age}`, p.gender].filter(Boolean).join(' · ') || '—'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
+              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Payment summary</h2>
+              <dl className="space-y-2.5 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500">Booking amount</dt><dd className="font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">Paid</dt><dd className="font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex justify-between items-center pt-2.5 border-t border-[#ECECEE]"><dt className="text-gray-500">Balance due</dt><dd className={remainingAmount > 0 ? 'font-bold text-orange-600 text-lg' : 'font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
+              </dl>
+              {status === 'seat_locked' && remainingAmount > 0 && (() => {
+                const d = booking.departure_date || booking.trips?.start_date;
+                const pb = d ? new Date(new Date(d).getTime() - 5 * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+                return pb ? <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"><Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />Pay before <strong>{pb}</strong> to confirm your seat.</div> : null;
+              })()}
             </div>
 
-            {/* Compact actions — open the drawer */}
+            {/* Actions */}
             <div className="bg-white border border-[#ECECEE] rounded-xl overflow-hidden print:hidden">
-              <p className="px-5 pt-4 pb-2 text-[11px] uppercase tracking-wide font-medium text-gray-500">Actions</p>
+              <p className="px-5 pt-4 pb-1 text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Actions</p>
               {!['cancelled', 'rejected'].includes(status) ? (
                 <>
                   <button onClick={() => setShowActionsDrawer(true)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><IndianRupee className="h-4 w-4 text-gray-400" />Record payment</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
                   <button onClick={() => setShowActionsDrawer(true)} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Shield className="h-4 w-4 text-gray-400" />Change status</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                  <button onClick={() => typeof window !== 'undefined' && window.print()} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Printer className="h-4 w-4 text-gray-400" />Print / Download PDF</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                  <button onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setShowCancelModal(true); }} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-red-600 hover:bg-red-50 border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><span className="flex items-center gap-2"><XCircle className="h-4 w-4" />Cancel booking</span><ChevronRight className="h-4 w-4 text-red-300" /></button>
                 </>
               ) : (
-                <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-400" />Reopen (pending)</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                <>
+                  <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-400" />Reopen (pending)</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                  <button onClick={() => typeof window !== 'undefined' && window.print()} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Printer className="h-4 w-4 text-gray-400" />Print / Download PDF</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                </>
               )}
-              <button onClick={() => typeof window !== 'undefined' && window.print()} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Printer className="h-4 w-4 text-gray-400" />Print PDF</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+            </div>
+
+            {/* Contact */}
+            <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Contact</h2>
+              <p className="font-semibold text-gray-900">{passengerName}</p>
+              {passengerPhone !== 'N/A' && (
+                <div className="flex items-center justify-between gap-2 mt-1.5">
+                  <span className="flex items-center gap-2 text-sm text-gray-700 min-w-0"><Phone className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerPhone}</span></span>
+                  <span className="flex gap-1.5 flex-shrink-0">
+                    <a href={`tel:${passengerPhone}`} title="Call" className="p-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"><Phone className="h-3.5 w-3.5" /></a>
+                    <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"><MessageCircle className="h-3.5 w-3.5" /></a>
+                  </span>
+                </div>
+              )}
+              <p className="flex items-center gap-2 text-sm text-gray-700 mt-1.5 min-w-0"><Mail className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerEmail}</span></p>
             </div>
           </aside>
 
@@ -431,27 +419,93 @@ export default function AdminBookingDetailsPage() {
 
             {/* Booking Overview — the hero / first thing admins read */}
             <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">{booking.trips?.title || 'Trip'}</h1>
-                  <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-purple-600" />{booking.trips?.destination || 'N/A'}</p>
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
+                {(() => {
+                  const cover = booking.trips?.cover_image_url || booking.trips?.image_url;
+                  return cover ? (
+                    <img src={cover} alt={booking.trips?.title || ''} className="w-full sm:w-40 h-32 sm:h-28 rounded-lg object-cover flex-shrink-0 border border-[#ECECEE]" />
+                  ) : (
+                    <div className="w-full sm:w-40 h-32 sm:h-28 rounded-lg bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center flex-shrink-0"><MapPin className="h-6 w-6 text-purple-300" /></div>
+                  );
+                })()}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 leading-tight">{booking.trips?.title || 'Trip'}</h1>
+                      <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-purple-600" />{booking.trips?.destination || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3">
+                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Calendar className="h-3 w-3" />Departure</p><p className="text-sm font-medium text-gray-900 mt-0.5">{fmtDate(booking.departure_date || booking.trips?.start_date)}</p></div>
+                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><MapPin className="h-3 w-3" />Pickup</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.pickup_point || '—'}</p></div>
+                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Users className="h-3 w-3" />Passengers</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.number_of_participants || 1}</p></div>
+                  </div>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Departure</p><p className="text-sm font-medium text-gray-900 mt-0.5">{fmtDate(booking.departure_date || booking.trips?.start_date)}</p></div>
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Pickup</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.pickup_point || '—'}</p></div>
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Passengers</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.number_of_participants || 1}</p></div>
-              </div>
               {/* money at a glance */}
-              <div className="mt-4 pt-4 border-t border-[#ECECEE] flex flex-wrap items-end gap-x-8 gap-y-3">
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Booking amount</p><p className="text-lg font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</p></div>
-                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Paid</p><p className="text-lg font-bold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</p></div>
+              <div className="mt-5 pt-4 border-t border-[#ECECEE] grid grid-cols-3 gap-4">
+                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Booking amount</p><p className="text-lg sm:text-xl font-bold text-gray-900 mt-0.5">₹{finalAmount.toLocaleString('en-IN')}</p></div>
+                <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Paid</p><p className="text-lg sm:text-xl font-bold text-green-700 mt-0.5">₹{paidAmount.toLocaleString('en-IN')}</p></div>
                 {remainingAmount > 0 ? (
-                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance due</p><p className="text-2xl font-bold text-orange-600 leading-none">₹{remainingAmount.toLocaleString('en-IN')}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance due</p><p className="text-lg sm:text-xl font-bold text-orange-600 mt-0.5">₹{remainingAmount.toLocaleString('en-IN')}</p></div>
                 ) : (
-                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance</p><p className="text-lg font-bold text-green-700 flex items-center gap-1"><CheckCircle className="h-4 w-4" />Fully paid</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500">Balance</p><p className="text-lg sm:text-xl font-bold text-green-700 mt-0.5 flex items-center gap-1"><CheckCircle className="h-4 w-4" />Cleared</p></div>
                 )}
               </div>
+            </div>
+
+            {/* Traveller Details — primary content */}
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
+              <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Traveller Details</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg flex-shrink-0">{(passengerName[0] || '?').toUpperCase()}</div>
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold text-gray-900 truncate">{passengerName}</p>
+                    <p className="text-sm text-gray-500">{booking.primary_passenger_age ? `${booking.primary_passenger_age} yrs` : ''}{booking.primary_passenger_age && booking.primary_passenger_gender ? ' • ' : ''}<span className="capitalize">{booking.primary_passenger_gender || ''}</span></p>
+                  </div>
+                </div>
+                {passengerPhone !== 'N/A' && (
+                  <div className="flex gap-2 flex-shrink-0 print:hidden">
+                    <a href={`tel:${passengerPhone}`} className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold hover:bg-purple-100 transition-colors"><Phone className="h-4 w-4" />Call</a>
+                    <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition-colors"><MessageCircle className="h-4 w-4" />WhatsApp</a>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div className="flex items-center gap-2 min-w-0"><Phone className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Phone</span><span className="text-gray-900 truncate">{passengerPhone}</span></div>
+                <div className="flex items-center gap-2 min-w-0"><Mail className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Email</span><span className="text-gray-900 truncate">{passengerEmail}</span></div>
+              </div>
+
+              {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+                <div className="mt-4 pt-4 border-t border-[#ECECEE]">
+                  <p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5 mb-1"><Heart className="h-3 w-3 text-pink-500" />Emergency contact</p>
+                  <p className="text-sm text-gray-900">{booking.emergency_contact_name || '—'}{booking.emergency_contact_phone ? <span className="text-gray-500"> · {booking.emergency_contact_phone}</span> : ''}</p>
+                </div>
+              )}
+
+              <details className="mt-4 pt-4 border-t border-[#ECECEE] group" {...(booking.passengers && booking.passengers.length > 0 ? { open: true } : {})}>
+                <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
+                  <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+                  Co-passengers ({booking.passengers?.length || 0})
+                </summary>
+                {booking.passengers && booking.passengers.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {booking.passengers.map((p: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3 bg-[#FAFAFA] rounded-lg px-3 py-2">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{((p.name || 'P')[0]).toUpperCase()}</div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.name || `Passenger ${i + 1}`}</p>
+                          <p className="text-xs text-gray-500">{[p.age && `${p.age} yrs`, p.gender, p.phone].filter(Boolean).join(' · ') || '—'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-400">No additional travellers on this booking.</p>
+                )}
+              </details>
             </div>
 
         {/* Payment history — primary content */}
@@ -467,16 +521,20 @@ export default function AdminBookingDetailsPage() {
                 .map((t: any, i: number) => {
                   const isVerified = t.payment_status === 'verified';
                   const isRejected = t.payment_status === 'rejected';
-                  const tone = isVerified ? 'green' : isRejected ? 'red' : 'yellow';
+                  const last = i === booking.payment_transactions.length - 1;
                   return (
-                    <div
-                      key={t.id}
-                      className={`rounded-xl border p-3 sm:p-4 ${
-                        isVerified ? 'border-green-200 bg-green-50/60'
-                        : isRejected ? 'border-red-200 bg-red-50/60'
-                        : 'border-yellow-200 bg-yellow-50/60'
-                      }`}
-                    >
+                    <div key={t.id} className="relative flex gap-3">
+                      <div className="flex flex-col items-center flex-shrink-0 pt-1.5">
+                        <span className={`h-3 w-3 rounded-full ring-4 ring-white ${isVerified ? 'bg-green-500' : isRejected ? 'bg-red-500' : 'bg-amber-500'}`} />
+                        {!last && <span className="w-px flex-1 bg-[#ECECEE] my-1" />}
+                      </div>
+                      <div
+                        className={`flex-1 min-w-0 rounded-xl border p-3 sm:p-4 ${
+                          isVerified ? 'border-green-200 bg-green-50/60'
+                          : isRejected ? 'border-red-200 bg-red-50/60'
+                          : 'border-yellow-200 bg-yellow-50/60'
+                        }`}
+                      >
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <span className={`text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-md bg-white border ${
@@ -528,6 +586,7 @@ export default function AdminBookingDetailsPage() {
                           Review payment
                         </button>
                       )}
+                      </div>
                     </div>
                   );
                 })}
