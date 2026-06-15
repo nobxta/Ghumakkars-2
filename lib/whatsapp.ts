@@ -9,7 +9,9 @@
  *   WHATSAPP_API_SECRET=<shared secret, also set on the worker>
  */
 const API_URL = process.env.WHATSAPP_API_URL;
-const API_SECRET = process.env.WHATSAPP_API_SECRET;
+// Shared VPS internal secret (reusable across self-hosted services).
+// Falls back to the old WHATSAPP_API_SECRET name for compatibility.
+const API_SECRET = process.env.VPS_API_SECRET || process.env.WHATSAPP_API_SECRET;
 
 export interface SendWhatsAppInput {
   to: string;                 // 10-digit or full; country code added if missing

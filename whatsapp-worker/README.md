@@ -15,7 +15,7 @@ WhatsApp itself — it just makes an HTTP call.
 
 ## API
 
-`POST /send`  ·  header `x-api-key: <WHATSAPP_API_SECRET>`
+`POST /send`  ·  header `x-api-key: <VPS_API_SECRET>`
 ```json
 { "to": "9876543210", "body": "Hello 👋", "mediaUrl": "https://…/ticket.pdf", "mediaFilename": "ticket.pdf" }
 ```
@@ -50,7 +50,7 @@ if [[ -d .git ]] && [[ "{{AUTO_UPDATE}}" == "1" ]]; then git pull; fi; cd /home/
 
 **3. Env** — File Manager → open `whatsapp-worker` → New File `.env`:
 ```
-WHATSAPP_API_SECRET=a_long_random_secret
+VPS_API_SECRET=a_long_random_secret
 WA_PAIRING_NUMBER=919876543210
 ```
 > Don't set PORT — the worker auto-binds Pterodactyl's allocated port
@@ -72,7 +72,7 @@ with phone number instead" → enter the code.** When it prints
 Set two env vars on the site:
 ```
 WHATSAPP_API_URL=https://api.ghumakkars.in
-WHATSAPP_API_SECRET=<the same secret as the worker>
+VPS_API_SECRET=<the same secret as the worker>
 ```
 
 ## Test

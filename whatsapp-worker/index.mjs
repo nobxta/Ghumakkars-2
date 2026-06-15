@@ -7,13 +7,15 @@ import pino from 'pino';
 // ── config ──
 // Pterodactyl exposes only its allocated port via SERVER_PORT — bind that.
 const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
-const API_SECRET = process.env.WHATSAPP_API_SECRET;
+// Shared VPS internal secret (reusable across services). Falls back to the old
+// WHATSAPP_API_SECRET name.
+const API_SECRET = process.env.VPS_API_SECRET || process.env.WHATSAPP_API_SECRET;
 // Headless login: set WA_PAIRING_NUMBER (digits, with country code) to log in
 // with an 8-char pairing code instead of scanning a QR — ideal for a console.
 const PAIR_NUMBER = (process.env.WA_PAIRING_NUMBER || '').replace(/\D/g, '');
 
 if (!API_SECRET) {
-  console.error('Missing WHATSAPP_API_SECRET in .env (the shared secret the website sends).');
+  console.error('Missing VPS_API_SECRET in .env (the shared secret the website sends as x-api-key).');
   process.exit(1);
 }
 
