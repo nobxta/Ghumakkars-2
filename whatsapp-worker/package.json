@@ -1,0 +1,18 @@
+{
+  "name": "ghumakkars-whatsapp-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polls the Supabase whatsapp_outbox queue and sends messages via a self-hosted WhatsApp session. Runs on a VPS, not on Vercel.",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "@whiskeysockets/baileys": "^6.7.9",
+    "dotenv": "^16.4.5",
+    "pino": "^9.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

@@ -28,6 +28,11 @@ yarn-error.log*
 .env*.local
 .env.claude
 
+# whatsapp worker (VPS) — never commit session creds, env or deps
+whatsapp-worker/node_modules
+whatsapp-worker/auth
+whatsapp-worker/.env
+
 # vercel
 .vercel
 

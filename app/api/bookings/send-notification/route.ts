@@ -9,6 +9,7 @@ import {
   sendBookingCancelledEmail
 } from '@/lib/email';
 import { notifyPaymentForApproval } from '@/lib/telegram';
+import { enqueueWhatsApp } from '@/lib/whatsapp-outbox';
 
 export const runtime = "nodejs";
 
@@ -267,6 +268,27 @@ export async function POST(request: NextRequest) {
       }
     } catch (tgErr) {
       console.error('Telegram notify failed:', tgErr);
+    }
+
+    // Queue a WhatsApp message for the VPS worker to send (deduped per status).
+    try {
+      const phone = booking?.primary_passenger_phone || (booking as any)?.contact_phone;
+      if (phone) {
+        const name = (userName || booking?.primary_passenger_name || 'traveller').split(' ')[0];
+        const t = trip?.title || 'your trip';
+        const msg: Record<string, string> = {
+          confirmed: `Hi ${name}! Your booking for *${t}* is CONFIRMED ✅\nSee you on the trip. Reply here for any help.`,
+          seat_locked: `Hi ${name}! Your seat for *${t}* is locked 🔒\nPay the remaining balance before the due date to confirm your booking.`,
+          pending: `Hi ${name}! We've received your booking for *${t}*. Our team will confirm it shortly.`,
+          rejected: `Hi ${name}, sorry — your booking for *${t}* could not be confirmed. Reply here and we'll help.`,
+          cancelled: `Hi ${name}, your booking for *${t}* has been cancelled. Reply here if you have questions.`,
+        };
+        if (msg[status]) {
+          await enqueueWhatsApp({ toPhone: phone, kind: status as any, body: msg[status], dedupeKey: `${status}:${booking.id}` });
+        }
+      }
+    } catch (waErr) {
+      console.error('WhatsApp enqueue failed:', waErr);
     }
 
     return NextResponse.json({
