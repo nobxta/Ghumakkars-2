@@ -7,18 +7,43 @@ import { DAY_NAMES } from '@/lib/recurrence';
 
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
 
+type RangePreset = '1d' | '1w' | '1m' | '3m' | 'custom';
+const RANGE_LABELS: Record<RangePreset, string> = { '1d': 'Today', '1w': 'Last 7 days', '1m': 'Last 30 days', '3m': 'Last 3 months', custom: 'Custom' };
+
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [d, setD] = useState<any>(null);
+  const [range, setRange] = useState<RangePreset>('1m');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
-  useEffect(() => { fetchDashboardData(); }, []);
+  // Resolve the selected preset into a from/to window.
+  const resolveRange = (): { from: string; to: string } => {
+    const now = new Date();
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    if (range === 'custom' && customFrom && customTo) return { from: new Date(customFrom).toISOString(), to: new Date(customTo).toISOString() };
+    if (range === '1d') { /* today */ }
+    else if (range === '1w') start.setDate(start.getDate() - 6);
+    else if (range === '1m') start.setDate(start.getDate() - 29);
+    else if (range === '3m') start.setDate(start.getDate() - 89);
+    else start.setDate(start.getDate() - 29);
+    return { from: start.toISOString(), to: now.toISOString() };
+  };
+
+  useEffect(() => {
+    // Don't fetch a half-entered custom range.
+    if (range === 'custom' && !(customFrom && customTo)) return;
+    fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, customFrom, customTo]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
       // Aggregates run server-side (service role) so RLS doesn't scope them to
       // the admin's own rows.
-      const res = await fetch('/api/admin/dashboard');
+      const { from, to } = resolveRange();
+      const res = await fetch(`/api/admin/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
       if (!res.ok) throw new Error('Failed to load dashboard');
       setD(await res.json());
     } catch (error) {
@@ -27,7 +52,7 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  if (loading || !d) {
+  if (!d) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
@@ -38,6 +63,7 @@ export default function AdminDashboard() {
     );
   }
 
+  const period = d.period || {};
   const fmtDate = (x?: string) => x ? new Date(x).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -65,6 +91,29 @@ export default function AdminDashboard() {
         <Link href="/admin/trips/create" className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold shadow-sm whitespace-nowrap">
           <Plus className="h-4 w-4" /> New Trip
         </Link>
+      </div>
+
+      {/* Date-range selector — scopes the activity metrics below */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden self-start">
+          {(['1d', '1w', '1m', '3m', 'custom'] as RangePreset[]).map((r, i) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${range === r ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              {r === 'custom' ? 'Custom' : RANGE_LABELS[r]}
+            </button>
+          ))}
+        </div>
+        {range === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-900 bg-white" />
+            <span className="text-gray-400 text-xs">to</span>
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-900 bg-white" />
+          </div>
+        )}
+        <span className="text-xs text-gray-400 sm:ml-1">{loading ? 'Updating…' : `Activity for: ${range === 'custom' && customFrom && customTo ? `${fmtDate(customFrom)} – ${fmtDate(customTo)}` : RANGE_LABELS[range]}`}</span>
       </div>
 
       {/* Attention required — only when there's something to do */}
@@ -97,8 +146,8 @@ export default function AdminDashboard() {
                 </div>
                 <div className="rounded-2xl p-5 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
                   <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr(d.collected)}</p>
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><TrendingUp className="h-3 w-3" />{inr(d.collectedThisWeek)} this week</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr(period.collected)}</p>
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><TrendingUp className="h-3 w-3" />in {range === 'custom' ? 'selected range' : RANGE_LABELS[range].toLowerCase()}</p>
                 </div>
                 <div className="rounded-2xl p-5 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
                   <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Expected total</p>
@@ -117,35 +166,34 @@ export default function AdminDashboard() {
             <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
               <div className="flex items-center justify-between">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-sm"><Package className="h-4 w-4 text-white" /></div>
-                {d.newBookingsToday > 0 && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">+{d.newBookingsToday}</span>}
               </div>
-              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{d.activeBookings}</p>
-              <p className="text-[11px] text-gray-500 mt-1">Bookings</p>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{period.bookings || 0}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Bookings · {RANGE_LABELS[range].toLowerCase()}</p>
               {(() => {
-                const tot = (d.confirmed || 0) + (d.seatLocked || 0) + (d.pending || 0) || 1;
+                const tot = (period.confirmed || 0) + (period.seatLocked || 0) + (period.pending || 0) || 1;
                 return (
                   <div className="mt-2 flex h-1.5 w-full rounded-full overflow-hidden bg-gray-100">
-                    <div className="bg-green-500" style={{ width: `${(d.confirmed / tot) * 100}%` }} title={`${d.confirmed} confirmed`} />
-                    <div className="bg-amber-400" style={{ width: `${(d.seatLocked / tot) * 100}%` }} title={`${d.seatLocked} seat-lock`} />
-                    <div className="bg-gray-300" style={{ width: `${(d.pending / tot) * 100}%` }} title={`${d.pending} pending`} />
+                    <div className="bg-green-500" style={{ width: `${((period.confirmed || 0) / tot) * 100}%` }} title={`${period.confirmed || 0} confirmed`} />
+                    <div className="bg-amber-400" style={{ width: `${((period.seatLocked || 0) / tot) * 100}%` }} title={`${period.seatLocked || 0} seat-lock`} />
+                    <div className="bg-gray-300" style={{ width: `${((period.pending || 0) / tot) * 100}%` }} title={`${period.pending || 0} pending`} />
                   </div>
                 );
               })()}
             </div>
             <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm"><Users className="h-4 w-4 text-white" /></div>
-              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{d.travellers}</p>
-              <p className="text-[11px] text-gray-500 mt-1">Travellers</p>
-              <p className="text-[11px] text-gray-400 mt-1.5">{d.confirmed} confirmed · {d.seatLocked} seat-lock</p>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{period.travellers || 0}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Travellers · {RANGE_LABELS[range].toLowerCase()}</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">{period.confirmed || 0} confirmed · {period.seatLocked || 0} seat-lock</p>
             </div>
             <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
               <div className="flex items-center justify-between">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-sm"><Users className="h-4 w-4 text-white" /></div>
-                {d.newUsersToday > 0 && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">+{d.newUsersToday}</span>}
+                {(period.newUsers || 0) > 0 && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">+{period.newUsers}</span>}
               </div>
-              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{(d.totalUsers || 0).toLocaleString('en-IN')}</p>
-              <p className="text-[11px] text-gray-500 mt-1">Users</p>
-              <p className="text-[11px] text-gray-400 mt-1.5">{d.verifiedUsers} verified</p>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{(period.newUsers || 0).toLocaleString('en-IN')}</p>
+              <p className="text-[11px] text-gray-500 mt-1">New users · {RANGE_LABELS[range].toLowerCase()}</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">{(d.totalUsers || 0).toLocaleString('en-IN')} total · {d.verifiedUsers} verified</p>
             </div>
             <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center shadow-sm"><MapPin className="h-4 w-4 text-white" /></div>

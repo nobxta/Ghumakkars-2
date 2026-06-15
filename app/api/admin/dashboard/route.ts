@@ -26,7 +26,7 @@ function fullOf(b: any): number {
 }
 const isActive = (b: any) => !['cancelled', 'rejected'].includes(b.booking_status);
 
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -35,10 +35,22 @@ export async function GET() {
   const todayIso = today.toISOString();
   const weekAgoIso = new Date(today.getTime() - 7 * 86400000).toISOString();
 
-  const [usersCountRes, verifiedCountRes, usersTodayRes, adminProfileRes, tripsRes, bookingsRes] = await Promise.all([
+  // Selected period (defaults to last 30 days). Scopes "activity" metrics.
+  const url = new URL(req.url);
+  const fromParam = url.searchParams.get('from');
+  const toParam = url.searchParams.get('to');
+  const rangeStart = fromParam ? new Date(fromParam) : new Date(today.getTime() - 30 * 86400000);
+  if (Number.isNaN(rangeStart.getTime())) rangeStart.setTime(today.getTime() - 30 * 86400000);
+  const rangeEnd = toParam ? new Date(toParam) : new Date();
+  if (Number.isNaN(rangeEnd.getTime())) rangeEnd.setTime(Date.now());
+  rangeEnd.setHours(23, 59, 59, 999);
+  const inRange = (iso?: string) => { if (!iso) return false; const t = new Date(iso).getTime(); return t >= rangeStart.getTime() && t <= rangeEnd.getTime(); };
+
+  const [usersCountRes, verifiedCountRes, usersTodayRes, usersRangeRes, adminProfileRes, tripsRes, bookingsRes] = await Promise.all([
     admin.from('profiles').select('*', { count: 'exact', head: true }),
     admin.from('profiles').select('*', { count: 'exact', head: true }).eq('email_verified', true),
     admin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayIso),
+    admin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', rangeStart.toISOString()).lte('created_at', rangeEnd.toISOString()),
     admin.from('profiles').select('first_name').eq('id', auth.user.id).single(),
     admin.from('trips')
       .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, duration_days, is_active, status, cover_image_url, image_url')
@@ -100,7 +112,27 @@ export async function GET() {
   const nextDated = upcomingTrips.find((t: any) => !t.is_recurring && t.start_date && new Date(t.start_date) >= today);
   const nextTripDays = nextDated ? Math.round((new Date(nextDated.start_date).setHours(0, 0, 0, 0) - today.getTime()) / 86400000) : null;
 
+  // ── Period-scoped "activity" (controlled by the date-range selector) ──
+  const periodCollected = active.reduce((s: number, b: any) =>
+    s + (b.payment_transactions || []).filter((t: any) => t.payment_status === 'verified' && inRange(t.created_at)).reduce((x: number, t: any) => x + parseFloat(String(t.amount || 0)), 0), 0);
+  const periodBookingsArr = active.filter((b: any) => inRange(b.created_at));
+  const periodTravellers = periodBookingsArr
+    .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
+    .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0);
+  const period = {
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    collected: periodCollected,
+    bookings: periodBookingsArr.length,
+    confirmed: periodBookingsArr.filter((b: any) => b.booking_status === 'confirmed').length,
+    seatLocked: periodBookingsArr.filter((b: any) => b.booking_status === 'seat_locked').length,
+    pending: periodBookingsArr.filter((b: any) => b.booking_status === 'pending').length,
+    travellers: periodTravellers,
+    newUsers: usersRangeRes.count || 0,
+  };
+
   return NextResponse.json({
+    period,
     adminName: adminProfileRes.data?.first_name || null,
     totalUsers: usersCountRes.count || 0,
     verifiedUsers: verifiedCountRes.count || 0,
