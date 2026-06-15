@@ -62,13 +62,16 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // WhatsApp Settings
-  const [whatsappStatus, setWhatsappStatus] = useState<'ready' | 'not_ready' | 'initializing' | 'checking'>('checking');
-  const [whatsappQRCode, setWhatsappQRCode] = useState<string | null>(null);
-  const [whatsappInitializing, setWhatsappInitializing] = useState(false);
-  const [testPhoneNumber, setTestPhoneNumber] = useState('');
-  const [testUserName, setTestUserName] = useState('');
-  const [testSending, setTestSending] = useState(false);
+  // WhatsApp (self-hosted VPS worker — linked from here via pairing code)
+  const [waLoading, setWaLoading] = useState(true);
+  const [waConfigured, setWaConfigured] = useState(true);
+  const [waConnected, setWaConnected] = useState(false);
+  const [waNumber, setWaNumber] = useState<string | null>(null);
+  const [waOnline, setWaOnline] = useState(true);      // is the VPS worker reachable
+  const [waPhone, setWaPhone] = useState('');          // number to link
+  const [waPairingCode, setWaPairingCode] = useState<string | null>(null);
+  const [waBusy, setWaBusy] = useState<'' | 'login' | 'logout'>('');
+  const [waError, setWaError] = useState<string | null>(null);
   
   // General Settings
   const [settings, setSettings] = useState({
@@ -165,15 +168,69 @@ export default function AdminSettingsPage() {
     }
   };
 
-  // WhatsApp now runs on the self-hosted VPS worker (Baileys). Linking + sending
-  // happen there; this dashboard only shows setup info.
+  // WhatsApp runs on the self-hosted VPS worker (Baileys). We link/unlink it
+  // from here through a server-side proxy (/api/admin/whatsapp) so the secret
+  // stays on the server.
+  const refreshWhatsApp = async () => {
+    try {
+      const res = await fetch('/api/admin/whatsapp', { cache: 'no-store' });
+      const data = await res.json();
+      setWaConfigured(data.configured !== false);
+      setWaConnected(!!data.connected);
+      setWaNumber(data.number || null);
+      setWaOnline(data.online !== false);
+      if (data.connected) setWaPairingCode(null);
+    } catch {
+      setWaOnline(false);
+    } finally {
+      setWaLoading(false);
+    }
+  };
+
+  const linkWhatsApp = async () => {
+    setWaError(null); setWaPairingCode(null); setWaBusy('login');
+    try {
+      const res = await fetch('/api/admin/whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', phone: waPhone }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setWaError(data.error || 'Could not start linking.'); return; }
+      if (data.alreadyConnected) { setWaConnected(true); setWaNumber(data.number || null); return; }
+      setWaPairingCode(data.pairingCode || null);
+    } catch { setWaError('Could not reach the worker.'); }
+    finally { setWaBusy(''); }
+  };
+
+  const unlinkWhatsApp = async () => {
+    if (!confirm('Unlink WhatsApp? The worker will stop sending until you link a number again.')) return;
+    setWaError(null); setWaBusy('logout');
+    try {
+      const res = await fetch('/api/admin/whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setWaError(data.error || 'Logout failed.'); return; }
+      setWaConnected(false); setWaNumber(null); setWaPairingCode(null);
+    } catch { setWaError('Could not reach the worker.'); }
+    finally { setWaBusy(''); }
+  };
 
   useEffect(() => {
     fetchPaymentSettings();
     fetchCoupons();
     loadTelegram();
+    refreshWhatsApp();
     setLoading(false);
   }, []);
+
+  // While a pairing code is on screen, poll for the connection completing.
+  useEffect(() => {
+    if (!waPairingCode || waConnected) return;
+    const t = setInterval(refreshWhatsApp, 4000);
+    return () => clearInterval(t);
+  }, [waPairingCode, waConnected]);
 
   const handleSavePaymentSettings = async () => {
     setSaving(true);
@@ -800,30 +857,96 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {/* WhatsApp Settings Tab */}
-      {/* WhatsApp Tab — now handled by the self-hosted VPS worker */}
+      {/* WhatsApp Tab — link/unlink the self-hosted VPS worker from here */}
       {activeTab === 'whatsapp' && (
         <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-6 md:p-8 max-w-3xl">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center">
-            <MessageSquare className="h-6 w-6 mr-3 text-purple-600" />
-            WhatsApp
-          </h2>
-          <p className="text-sm text-gray-500 mb-6">WhatsApp now runs on a self-hosted worker (Baileys) on your VPS — not from this dashboard.</p>
-
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 space-y-3 text-sm text-gray-700">
-            <p className="font-semibold text-gray-900">How it works</p>
-            <ul className="list-disc ml-5 space-y-1.5">
-              <li>The website calls <code className="font-mono text-xs bg-white px-1 py-0.5 rounded border">api.ghumakkars.in</code> directly to send messages — no Green API, no queue.</li>
-              <li>Booking updates (pending, seat-locked, confirmed, rejected, cancelled) are sent automatically.</li>
-              <li>Linking the WhatsApp number is a one-time step done in the <strong>VPS worker console</strong> (a pairing code), not here.</li>
-            </ul>
-            <p className="font-semibold text-gray-900 pt-2">Required env on the website (Vercel)</p>
-            <ul className="list-disc ml-5 space-y-1.5">
-              <li><code className="font-mono text-xs bg-white px-1 py-0.5 rounded border">WHATSAPP_API_URL=https://api.ghumakkars.in</code></li>
-              <li><code className="font-mono text-xs bg-white px-1 py-0.5 rounded border">WHATSAPP_API_SECRET</code> (same secret set on the worker)</li>
-            </ul>
-            <p className="text-xs text-gray-500 pt-2">Setup &amp; testing instructions live in <code className="font-mono">whatsapp-worker/README.md</code>.</p>
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center">
+                <MessageSquare className="h-6 w-6 mr-3 text-purple-600" />
+                WhatsApp
+              </h2>
+              <p className="text-sm text-gray-500">Link the WhatsApp number your self-hosted worker sends from — right here, no console needed.</p>
+            </div>
+            <button onClick={refreshWhatsApp} className="text-xs font-medium text-purple-600 hover:text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-50 whitespace-nowrap">
+              Refresh
+            </button>
           </div>
+
+          {/* Status banner */}
+          <div className={`rounded-xl border p-4 mb-5 flex items-center gap-3 ${
+            waLoading ? 'border-gray-200 bg-gray-50'
+            : !waConfigured ? 'border-amber-200 bg-amber-50'
+            : !waOnline ? 'border-red-200 bg-red-50'
+            : waConnected ? 'border-green-200 bg-green-50'
+            : 'border-amber-200 bg-amber-50'
+          }`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${
+              waLoading ? 'bg-gray-400'
+              : !waConfigured ? 'bg-amber-500'
+              : !waOnline ? 'bg-red-500'
+              : waConnected ? 'bg-green-500 animate-pulse'
+              : 'bg-amber-500'
+            }`} />
+            <div className="text-sm">
+              {waLoading ? (
+                <span className="text-gray-600">Checking worker…</span>
+              ) : !waConfigured ? (
+                <span className="text-amber-800">Not configured — set <code className="font-mono text-xs">WHATSAPP_API_URL</code> &amp; <code className="font-mono text-xs">VPS_API_SECRET</code> on Vercel.</span>
+              ) : !waOnline ? (
+                <span className="text-red-800">Worker unreachable. Is the VPS up at your <code className="font-mono text-xs">WHATSAPP_API_URL</code>?</span>
+              ) : waConnected ? (
+                <span className="text-green-800">Connected{waNumber ? <> as <strong>+{waNumber}</strong></> : ''} — messages are sending.</span>
+              ) : (
+                <span className="text-amber-800">Not linked. Enter a number below to connect WhatsApp.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Connected → show unlink. Not connected → show link form. */}
+          {waConfigured && waOnline && !waLoading && (
+            waConnected ? (
+              <div className="rounded-xl border border-gray-200 p-5">
+                <p className="text-sm text-gray-700 mb-4">This number is linked and active. Unlink it to switch to a different WhatsApp number.</p>
+                <button onClick={unlinkWhatsApp} disabled={waBusy === 'logout'}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60">
+                  {waBusy === 'logout' ? 'Unlinking…' : 'Unlink WhatsApp'}
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-gray-200 p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp number to link</label>
+                  <input
+                    value={waPhone}
+                    onChange={(e) => setWaPhone(e.target.value)}
+                    placeholder="919876543210 (with country code)"
+                    inputMode="numeric"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Country code + number, digits only. This is the number that will send messages.</p>
+                </div>
+                <button onClick={linkWhatsApp} disabled={waBusy === 'login' || !waPhone.replace(/\D/g, '')}
+                  className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
+                  {waBusy === 'login' ? 'Generating code…' : 'Get pairing code'}
+                </button>
+
+                {waPairingCode && (
+                  <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                    <p className="text-sm text-gray-700 mb-2">On the phone for <strong>+{waPhone.replace(/\D/g, '')}</strong>, open <strong>WhatsApp → Settings → Linked devices → Link a device → “Link with phone number instead”</strong> and enter:</p>
+                    <div className="text-2xl font-bold tracking-[0.3em] text-purple-700 font-mono text-center py-2">{waPairingCode}</div>
+                    <p className="text-xs text-gray-500 text-center">Waiting for you to enter the code… this updates automatically once linked.</p>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {waError && <p className="text-sm text-red-600 mt-3">{waError}</p>}
+
+          <p className="text-xs text-gray-500 mt-5">
+            Booking updates (pending, seat-locked, confirmed, rejected, cancelled) send automatically once linked. Setup details: <code className="font-mono">whatsapp-worker/README.md</code>.
+          </p>
         </div>
       )}
 

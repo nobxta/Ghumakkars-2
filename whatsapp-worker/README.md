@@ -21,7 +21,13 @@ WhatsApp itself — it just makes an HTTP call.
 ```
 `to` may be 10 digits or full (country code added if missing). `mediaUrl`/`mediaFilename` are optional (attaches a PDF/image). Returns `{ "ok": true }`.
 
-`GET /health` → `{ "ok": true, "ready": true }` (ready = WhatsApp is connected).
+`GET /health` → `{ "ok": true, "ready": true }` (ready = WhatsApp is connected, public).
+
+**Admin / control** (header `x-api-key: <VPS_API_SECRET>`) — used by the website's
+Settings → WhatsApp panel so you link from the browser, not the console:
+- `GET /status` → `{ "connected": true, "number": "9198…" }`
+- `POST /login` `{ "phone": "919876543210" }` → `{ "pairingCode": "ABCD1234" }` (or `{ "alreadyConnected": true }`)
+- `POST /logout` → unlinks the number and wipes the saved session.
 
 ---
 
@@ -51,20 +57,21 @@ if [[ -d .git ]] && [[ "{{AUTO_UPDATE}}" == "1" ]]; then git pull; fi; cd /home/
 **3. Env** — File Manager → open `whatsapp-worker` → New File `.env`:
 ```
 VPS_API_SECRET=a_long_random_secret
-WA_PAIRING_NUMBER=919876543210
 ```
 > Don't set PORT — the worker auto-binds Pterodactyl's allocated port
 > (`SERVER_PORT`). That's the only port the panel exposes externally.
+> `WA_PAIRING_NUMBER` is optional now — you link from the admin panel instead.
 
 **4. Expose it as api.ghumakkars.in**
 Point the subdomain at the server's **primary allocation** (IP:port shown in the
 panel). For HTTPS, put **nginx/Caddy** in front proxying `:443 → that port`. Test
 the raw allocation first: `curl http://SERVER_IP:PORT/health`.
 
-**5. Start → log in with the pairing code** (printed in the console). On the
-sending phone: **WhatsApp → Settings → Linked devices → Link a device → "Link
-with phone number instead" → enter the code.** When it prints
-`✅ WhatsApp connected. API is live.` you're done (session saved in `auth/` — keep it).
+**5. Start → link from the admin panel.** Open **ghumakkars.in → Admin →
+Settings → WhatsApp**, type the sending number, hit **Get pairing code**, then on
+that phone: **WhatsApp → Settings → Linked devices → Link a device → "Link with
+phone number instead" → enter the code.** The panel flips to **Connected**
+automatically (session saved in `auth/` — keep it; it survives restarts).
 
 ---
 
