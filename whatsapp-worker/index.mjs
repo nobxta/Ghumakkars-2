@@ -5,7 +5,8 @@ import qrcode from 'qrcode-terminal';
 import pino from 'pino';
 
 // ── config ──
-const PORT = Number(process.env.PORT || 8080);
+// Pterodactyl exposes only its allocated port via SERVER_PORT — bind that.
+const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
 const API_SECRET = process.env.WHATSAPP_API_SECRET;
 // Headless login: set WA_PAIRING_NUMBER (digits, with country code) to log in
 // with an 8-char pairing code instead of scanning a QR — ideal for a console.
@@ -120,4 +121,4 @@ const server = http.createServer(async (req, res) => {
 });
 
 await startSock();
-server.listen(PORT, () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));
+server.listen(PORT, '0.0.0.0', () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));

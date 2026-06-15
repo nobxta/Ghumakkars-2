@@ -25,36 +25,41 @@ WhatsApp itself — it just makes an HTTP call.
 
 ---
 
-## Run it on Pterodactyl (Node.js egg)
+## Run it on Pterodactyl (node.js generic egg)
 
-**1. Startup tab**
-| Field | Value |
-|---|---|
-| Git Repo Address | `https://github.com/nobxta/Ghumakkars-2.git` |
-| Branch | `main` |
-| (private repo) Username + Token | your GitHub username + a token |
-| Main File | `whatsapp-worker/index.mjs` |
+The generic egg clones the **whole repo** to `/home/container`, so the worker
+lives in the `whatsapp-worker` **subfolder**. Two gotchas: `MAIN_FILE` is capped
+at 16 chars (can't point at the subfolder), and the default startup runs
+`npm install` on the root Next.js `package.json`. So **override the Startup
+Command** to `cd` into the worker:
 
-The egg clones the repo into `/home/container`, so the worker is at
-`/home/container/whatsapp-worker`.
+**1. Service config**
+- Egg: **node.js generic** · Image: Node 20 or 22 (Node 25 also works).
+- Git Repo Address: `https://github.com/nobxta/Ghumakkars-2`
+- Branch: `main` · Auto Update: `1`
+- If the repo is **private**: set Git **Username** + a **Personal Access Token**.
+- **NODE_PACKAGES: leave empty** (deps are installed from the worker's own
+  package.json by the command below — you don't need `@hapi/boom`/`groq-sdk`).
+- **MAIN_FILE:** anything short (e.g. `index.mjs`) — it's required by the form
+  but the custom startup below ignores it.
 
-**2. Startup command** (install its own deps inside the folder):
-```
-cd /home/container/whatsapp-worker && npm install --omit=dev --no-audit --no-fund && node index.mjs
+**2. Startup Command** — paste exactly this:
+```bash
+if [[ -d .git ]] && [[ "{{AUTO_UPDATE}}" == "1" ]]; then git pull; fi; cd /home/container/whatsapp-worker && /usr/local/bin/npm install --omit=dev --no-audit --no-fund && exec /usr/local/bin/node index.mjs
 ```
 
 **3. Env** — File Manager → open `whatsapp-worker` → New File `.env`:
 ```
 WHATSAPP_API_SECRET=a_long_random_secret
-PORT=8080
 WA_PAIRING_NUMBER=919876543210
 ```
+> Don't set PORT — the worker auto-binds Pterodactyl's allocated port
+> (`SERVER_PORT`). That's the only port the panel exposes externally.
 
-**4. Expose the port as api.ghumakkars.in**
-Point the subdomain at the server's allocated port. Two common ways:
-- **DNS A record** `api.ghumakkars.in → your VPS IP`, then put **nginx/Caddy** in
-  front to proxy `:443` → the Pterodactyl port (gives you HTTPS).
-- Or use Pterodactyl's port + a reverse proxy you already run.
+**4. Expose it as api.ghumakkars.in**
+Point the subdomain at the server's **primary allocation** (IP:port shown in the
+panel). For HTTPS, put **nginx/Caddy** in front proxying `:443 → that port`. Test
+the raw allocation first: `curl http://SERVER_IP:PORT/health`.
 
 **5. Start → log in with the pairing code** (printed in the console). On the
 sending phone: **WhatsApp → Settings → Linked devices → Link a device → "Link
