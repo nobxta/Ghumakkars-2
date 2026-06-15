@@ -2,245 +2,229 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
+import { Plus, MapPin, Calendar, Users, IndianRupee, TrendingUp, Clock, Package, ArrowRight, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { DAY_NAMES } from '@/lib/recurrence';
 
-interface Trip {
-  id: string;
-  title: string;
-  description?: string;
-  destination: string;
-  original_price: number;
-  discounted_price: number;
-  discount_percentage: number;
-  duration_days: number;
-  max_participants: number;
-  current_participants: number;
-  start_date: string;
-  end_date: string;
-  image_url?: string;
-  is_active: boolean;
-  booking_disabled?: boolean;
+// ── discount-aware money (same rules as every other screen) ──
+function paidOf(b: any): number {
+  if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
+  return (b.payment_transactions || [])
+    .filter((t: any) => t.payment_status === 'verified')
+    .reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
 }
+function fullOf(b: any): number {
+  const pax = Number(b.number_of_participants) || 1;
+  const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
+  const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
+  const disc = Number(b.trips?.discounted_price) || 0;
+  if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked' || b.booking_status === 'remaining_submitted') {
+    return Math.max(0, disc * pax - coupon - wallet);
+  }
+  const fa = parseFloat(String(b.final_amount || 0));
+  if (fa > 0) return fa;
+  return Math.max(0, (parseFloat(String(b.total_price || 0)) || disc * pax) - coupon - wallet);
+}
+const isActiveBooking = (b: any) => !['cancelled', 'rejected'].includes(b.booking_status);
+const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
 export default function AdminDashboard() {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [stats, setStats] = useState({
-    totalTrips: 0, activeTrips: 0,
-    totalBookings: 0, confirmedBookings: 0, pendingBookings: 0,
-    totalUsers: 0, verifiedUsers: 0,
-    totalRevenue: 0,
-  });
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalUsers: 0, verifiedUsers: 0,
+    activeBookings: 0, confirmed: 0, seatLocked: 0, pending: 0,
+    travellers: 0, collected: 0, outstanding: 0,
+    activeTrips: 0,
+  });
+  const [upcoming, setUpcoming] = useState<any[]>([]);
   const supabase = createClient();
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchDashboardData(); }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [tripsRes, statsRes] = await Promise.all([
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+
+      const [usersCountRes, verifiedCountRes, tripsRes, bookingsRes] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('email_verified', true),
         supabase.from('trips')
-          .select('id, title, destination, original_price, discounted_price, discount_percentage, duration_days, max_participants, current_participants, start_date, end_date, is_active, booking_disabled')
-          .order('created_at', { ascending: false })
-          .limit(6),
-        Promise.all([
-          supabase.from('trips').select('id, is_active', { count: 'exact', head: false }),
-          supabase.from('bookings').select('booking_status, total_price', { count: 'exact', head: false }),
-          supabase.from('profiles').select('email_verified', { count: 'exact', head: false }),
-        ]),
+          .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, duration_days, is_active, status, cover_image_url, image_url')
+          .order('start_date', { ascending: true }),
+        supabase.from('bookings')
+          .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, amount_paid, is_offline_booking, user_id, trips(discounted_price), payment_transactions(amount, payment_status)')
+          .limit(5000),
       ]);
 
-      setTrips(tripsRes.data || []);
+      const tripsData = tripsRes.data || [];
+      const bookings = bookingsRes.data || [];
+      const active = bookings.filter(isActiveBooking);
 
-      const [allTrips, allBookings, allUsers] = statsRes;
-      const bookingsData = allBookings.data || [];
-      const usersData = allUsers.data || [];
-      const tripsData = allTrips.data || [];
+      // Money — collected vs still-to-collect, discount-aware.
+      const collected = active.reduce((s, b) => s + paidOf(b), 0);
+      const outstanding = active.reduce((s, b) => s + Math.max(0, fullOf(b) - paidOf(b)), 0);
 
-      const confirmedBookings = bookingsData.filter((b: any) => b.booking_status === 'confirmed');
-      setStats({
-        totalTrips: tripsData.length,
-        activeTrips: tripsData.filter((t: any) => t.is_active).length,
-        totalBookings: bookingsData.length,
-        confirmedBookings: confirmedBookings.length,
-        pendingBookings: bookingsData.filter((b: any) => b.booking_status === 'pending').length,
-        totalUsers: usersData.length,
-        verifiedUsers: usersData.filter((u: any) => u.email_verified).length,
-        totalRevenue: confirmedBookings.reduce((sum: number, b: any) => sum + (parseFloat(b.total_price) || 0), 0),
+      const confirmed = bookings.filter((b: any) => b.booking_status === 'confirmed').length;
+      const seatLocked = bookings.filter((b: any) => b.booking_status === 'seat_locked').length;
+      const pending = bookings.filter((b: any) => b.booking_status === 'pending').length;
+      const travellers = active
+        .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
+        .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0);
+
+      // Per-trip booked pax + collected (active bookings only).
+      const perTrip = new Map<string, { pax: number; collected: number }>();
+      active.forEach((b: any) => {
+        if (!b.trip_id) return;
+        const g = perTrip.get(b.trip_id) || { pax: 0, collected: 0 };
+        if (['confirmed', 'seat_locked'].includes(b.booking_status)) g.pax += Number(b.number_of_participants) || 1;
+        g.collected += paidOf(b);
+        perTrip.set(b.trip_id, g);
       });
+
+      // Upcoming = active, non-cancelled trips that haven't ended (recurring always count).
+      const upcomingTrips = tripsData
+        .filter((t: any) => t.is_active !== false && t.status !== 'cancelled' && t.status !== 'completed')
+        .filter((t: any) => t.is_recurring || !t.end_date || new Date(t.end_date) >= today)
+        .map((t: any) => ({ ...t, booked: perTrip.get(t.id) || { pax: 0, collected: 0 } }))
+        .sort((a: any, b: any) => {
+          if (a.is_recurring && !b.is_recurring) return 1;
+          if (!a.is_recurring && b.is_recurring) return -1;
+          return new Date(a.start_date || 0).getTime() - new Date(b.start_date || 0).getTime();
+        })
+        .slice(0, 8);
+
+      setStats({
+        totalUsers: usersCountRes.count || 0,
+        verifiedUsers: verifiedCountRes.count || 0,
+        activeBookings: active.length,
+        confirmed, seatLocked, pending,
+        travellers, collected, outstanding,
+        activeTrips: tripsData.filter((t: any) => t.is_active !== false && t.status !== 'cancelled').length,
+      });
+      setUpcoming(upcomingTrips);
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     }
     setLoading(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this trip?')) return;
-    try {
-      const { error } = await supabase.from('trips').delete().eq('id', id);
-      if (error) throw error;
-      fetchDashboardData();
-    } catch (error: any) {
-      alert('Error: ' + error.message);
-    }
-  };
-
-  const { totalRevenue, activeTrips, totalBookings, confirmedBookings, pendingBookings, totalUsers, verifiedUsers } = stats;
-  const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-lg text-purple-600 tracking-wide font-medium">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-14 w-14 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500 font-medium">Loading dashboard…</p>
         </div>
       </div>
     );
   }
 
+  const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
+
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Dashboard Header */}
-      <div className="flex justify-between items-center gap-3 animate-slide-in">
+    <div className="space-y-5 tabular-nums">
+      {/* Header */}
+      <div className="flex justify-between items-center gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
-            Dashboard
-          </h1>
-          <p className="text-[11px] sm:text-xs md:text-sm text-gray-500">Real-time insights</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-gray-500">Live overview of bookings, money and trips</p>
         </div>
-        <Link
-          href="/admin/trips/create"
-          className="neon-button px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold flex items-center space-x-1.5 shadow-md whitespace-nowrap"
-        >
-          <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-          <span>New Trip</span>
+        <Link href="/admin/trips/create" className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold shadow-sm whitespace-nowrap">
+          <Plus className="h-4 w-4" /> New Trip
         </Link>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-5">
-        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg sm:rounded-xl">
-              <MapPin className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <span className={`text-[10px] sm:text-xs font-semibold ${activeTrips > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-              {activeTrips} Active
-            </span>
-          </div>
-          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Total Trips</p>
-          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{stats.totalTrips}</p>
+      {/* Revenue hero */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5 text-green-600" />Collected</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{inr(stats.collected)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">verified payments</p>
         </div>
-
-        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.15s' }}>
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg sm:rounded-xl">
-              <Calendar className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] sm:text-[10px] bg-green-100 text-green-700 px-1 sm:px-1.5 py-0.5 rounded-full font-bold">{confirmedBookings}</span>
-              <span className="text-[9px] sm:text-[10px] bg-yellow-100 text-yellow-700 px-1 sm:px-1.5 py-0.5 rounded-full font-bold">{pendingBookings}</span>
-            </div>
-          </div>
-          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Bookings</p>
-          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{totalBookings}</p>
+        <div className="sm:border-l sm:border-gray-100 sm:pl-6">
+          <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-orange-500" />To collect</p>
+          <p className="text-3xl font-bold text-orange-600 mt-1">{inr(stats.outstanding)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">balance on seat-locks &amp; partials</p>
         </div>
-
-        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.2s' }}>
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-green-500 to-green-600 rounded-lg sm:rounded-xl">
-              <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-green-600">{verifiedUsers} ✓</span>
-          </div>
-          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Users</p>
-          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">{totalUsers}</p>
-        </div>
-
-        <div className="stat-card neon-card rounded-xl sm:rounded-2xl border border-purple-200 p-2.5 sm:p-4 md:p-5 shadow-md animate-scale-in" style={{ animationDelay: '0.25s' }}>
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <div className="p-1.5 sm:p-2.5 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg sm:rounded-xl">
-              <DollarSign className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-semibold text-gray-400">Revenue</span>
-          </div>
-          <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-medium">Total</p>
-          <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center">
-            <IndianRupee className="h-3.5 w-3.5 sm:h-5 sm:w-5 mr-0.5" />
-            {totalRevenue.toLocaleString()}
-          </p>
+        <div className="sm:border-l sm:border-gray-100 sm:pl-6">
+          <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-purple-600" />Expected total</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{inr(stats.collected + stats.outstanding)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">collected + outstanding</p>
         </div>
       </div>
 
-      {/* Recent Trips */}
-      <div className="neon-card rounded-xl sm:rounded-2xl border border-purple-200 shadow-md p-2.5 sm:p-4 md:p-6">
-        <div className="flex justify-between items-center mb-3 sm:mb-5">
-          <h2 className="text-sm sm:text-lg md:text-xl font-bold text-gray-900">Recent Trips</h2>
-          <Link href="/admin/trips" className="neon-button px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-sm font-semibold">
-            View All
-          </Link>
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 bg-white border border-gray-200 rounded-xl divide-x divide-y lg:divide-y-0 divide-gray-100">
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><Package className="h-3.5 w-3.5 text-purple-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Bookings</span></div>
+          <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{stats.activeBookings}</p>
+          <p className="text-[11px] text-gray-400">{stats.confirmed} confirmed · {stats.seatLocked} seat-lock · {stats.pending} pending</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
-          {trips.slice(0, 6).map((trip, index) => (
-            <div
-              key={trip.id}
-              className="bg-gradient-to-br from-purple-50 to-white border border-purple-200 rounded-lg sm:rounded-xl p-2.5 sm:p-4 hover:border-purple-400 hover:shadow-md transition-all animate-fade-in-up"
-              style={{ animationDelay: `${index * 0.05}s` }}
-            >
-              <div className="flex justify-between items-start mb-2 sm:mb-3">
-                <h3 className="text-sm sm:text-base font-bold text-gray-900 pr-2 leading-tight truncate">{trip.title}</h3>
-                <div className="flex space-x-1 flex-shrink-0">
-                  <Link
-                    href={`/admin/trips/edit/${trip.id}`}
-                    className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-md transition-colors inline-block"
-                  >
-                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(trip.id)}
-                    className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                  >
-                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-700">
-                <div className="flex items-center">
-                  <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
-                  <span className="font-medium truncate">{trip.destination}</span>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
-                  <span className="font-medium">{trip.duration_days} Days</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 text-purple-500" />
-                  <span className="font-medium">{trip.current_participants}/{trip.max_participants}</span>
-                </div>
-                <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-purple-100">
-                  <div className="flex items-center">
-                    <IndianRupee className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 text-purple-500" />
-                    <span className="font-bold text-sm sm:text-base text-gray-900">{trip.discounted_price.toLocaleString()}</span>
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><Users className="h-3.5 w-3.5 text-blue-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Travellers</span></div>
+          <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{stats.travellers}</p>
+          <p className="text-[11px] text-gray-400">confirmed + seat-locked</p>
+        </div>
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><Users className="h-3.5 w-3.5 text-green-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Users</span></div>
+          <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{stats.totalUsers.toLocaleString('en-IN')}</p>
+          <p className="text-[11px] text-gray-400">{stats.verifiedUsers} verified</p>
+        </div>
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-1.5 text-gray-500"><MapPin className="h-3.5 w-3.5 text-orange-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Active trips</span></div>
+          <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{stats.activeTrips}</p>
+          <p className="text-[11px] text-gray-400">{upcoming.length} upcoming</p>
+        </div>
+      </div>
+
+      {/* Upcoming trips */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Calendar className="h-4 w-4 text-purple-600" />Upcoming trips</h2>
+          <Link href="/admin/trips" className="text-xs font-semibold text-purple-600 hover:text-purple-700 inline-flex items-center gap-1">All trips <ArrowRight className="h-3 w-3" /></Link>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No upcoming trips. Create one to get started.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {upcoming.map((t: any) => {
+              const cap = Number(t.max_participants) || 0;
+              const pct = cap > 0 ? Math.min(100, Math.round((t.booked.pax / cap) * 100)) : 0;
+              const cover = t.cover_image_url || t.image_url;
+              return (
+                <Link key={t.id} href={`/admin/trips/${t.id}`} className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 hover:bg-gray-50/70 transition-colors">
+                  {cover
+                    ? <img src={cover} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-gray-100" />
+                    : <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0"><MapPin className="h-5 w-5 text-purple-300" /></div>}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 truncate text-sm">{t.title}</p>
+                    <p className="text-xs text-gray-500 truncate flex items-center gap-1.5">
+                      <MapPin className="h-3 w-3" />{t.destination}
+                      <span className="text-gray-300">·</span>
+                      {t.is_recurring ? `Every ${DAY_NAMES[t.recurrence_day] || ''}` : fmtDate(t.start_date)}
+                    </p>
                   </div>
-                  {trip.discount_percentage > 0 && (
-                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] sm:text-xs font-semibold">
-                      {trip.discount_percentage}%
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        {trips.length === 0 && (
-          <div className="text-center py-8 sm:py-12 bg-purple-50 border border-purple-100 rounded-lg">
-            <MapPin className="h-8 w-8 sm:h-12 sm:w-12 text-purple-300 mx-auto mb-3" />
-            <p className="text-sm sm:text-lg text-gray-700 font-medium mb-1">No trips created yet</p>
-            <p className="text-xs sm:text-sm text-gray-600">Tap &quot;New Trip&quot; to get started</p>
+                  <div className="text-right flex-shrink-0 hidden sm:block">
+                    <p className="text-xs text-gray-400">Collected</p>
+                    <p className="text-sm font-semibold text-gray-900">{inr(t.booked.collected)}</p>
+                  </div>
+                  <div className="w-24 sm:w-32 flex-shrink-0">
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-gray-700">{t.booked.pax}{cap > 0 ? `/${cap}` : ''} pax</span>
+                      {cap > 0 && <span className="text-gray-400">{pct}%</span>}
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-purple-500' : 'bg-amber-400'}`} style={{ width: `${cap > 0 ? pct : (t.booked.pax > 0 ? 100 : 0)}%` }} />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
