@@ -10,6 +10,9 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const POLL_MS = Number(process.env.POLL_MS || 2000);
 const BATCH = Number(process.env.BATCH || 5);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 3);
+// Headless login: set WA_PAIRING_NUMBER (e.g. 919876543210) to log in with an
+// 8-char pairing code instead of scanning a QR — ideal for a Pterodactyl console.
+const PAIR_NUMBER = (process.env.WA_PAIRING_NUMBER || '').replace(/\D/g, '');
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
@@ -27,10 +30,22 @@ async function startSock() {
   const { version } = await fetchLatestBaileysVersion();
   sock = makeWASocket({ version, auth: state, logger, printQRInTerminal: false, browser: ['Ghumakkars', 'Chrome', '1.0'] });
 
+  // Headless pairing-code login (no QR scan). Run once on a fresh ./auth.
+  if (PAIR_NUMBER && !sock.authState.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(PAIR_NUMBER);
+        console.log(`\n🔗 PAIRING CODE: ${code}\n   WhatsApp → Settings → Linked devices → Link a device → "Link with phone number instead" → enter this code.\n`);
+      } catch (e) {
+        console.error('Could not get a pairing code:', e?.message || e);
+      }
+    }, 3000);
+  }
+
   sock.ev.on('creds.update', saveCreds);
   sock.ev.on('connection.update', (u) => {
     const { connection, lastDisconnect, qr } = u;
-    if (qr) {
+    if (qr && !PAIR_NUMBER) {
       console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
       qrcode.generate(qr, { small: true });
     }
