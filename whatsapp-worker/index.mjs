@@ -1,25 +1,21 @@
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import http from 'node:http';
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
 
 // ── config ──
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const POLL_MS = Number(process.env.POLL_MS || 2000);
-const BATCH = Number(process.env.BATCH || 5);
-const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 3);
-// Headless login: set WA_PAIRING_NUMBER (e.g. 919876543210) to log in with an
-// 8-char pairing code instead of scanning a QR — ideal for a Pterodactyl console.
+const PORT = Number(process.env.PORT || 8080);
+const API_SECRET = process.env.WHATSAPP_API_SECRET;
+// Headless login: set WA_PAIRING_NUMBER (digits, with country code) to log in
+// with an 8-char pairing code instead of scanning a QR — ideal for a console.
 const PAIR_NUMBER = (process.env.WA_PAIRING_NUMBER || '').replace(/\D/g, '');
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
+if (!API_SECRET) {
+  console.error('Missing WHATSAPP_API_SECRET in .env (the shared secret the website sends).');
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 const logger = pino({ level: 'warn' });
 let sock = null;
 let ready = false;
@@ -30,7 +26,6 @@ async function startSock() {
   const { version } = await fetchLatestBaileysVersion();
   sock = makeWASocket({ version, auth: state, logger, printQRInTerminal: false, browser: ['Ghumakkars', 'Chrome', '1.0'] });
 
-  // Headless pairing-code login (no QR scan). Run once on a fresh ./auth.
   if (PAIR_NUMBER && !sock.authState.creds.registered) {
     setTimeout(async () => {
       try {
@@ -49,12 +44,12 @@ async function startSock() {
       console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
       qrcode.generate(qr, { small: true });
     }
-    if (connection === 'open') { ready = true; console.log('✅ WhatsApp connected. Worker is live.'); }
+    if (connection === 'open') { ready = true; console.log('✅ WhatsApp connected. API is live.'); }
     if (connection === 'close') {
       ready = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
-      console.log(`⚠️ Connection closed (code ${code}).`, loggedOut ? 'Logged out — delete ./auth and re-scan.' : 'Reconnecting…');
+      console.log(`⚠️ Connection closed (code ${code}).`, loggedOut ? 'Logged out — delete ./auth and re-link.' : 'Reconnecting…');
       if (!loggedOut) startSock();
     }
   });
@@ -62,71 +57,67 @@ async function startSock() {
 
 const jidOf = (phone) => `${String(phone).replace(/\D/g, '')}@s.whatsapp.net`;
 
-async function sendJob(job) {
-  const jid = jidOf(job.to_phone);
+async function sendMessage({ to, body, mediaUrl, mediaFilename }) {
+  if (!ready) throw new Error('WhatsApp not connected yet');
+  const digits = String(to || '').replace(/\D/g, '');
+  if (!digits || !body?.trim()) throw new Error('to and body are required');
+  const phone = digits.length === 10 ? `91${digits}` : digits;
+  const jid = jidOf(phone);
 
-  // Optional: skip numbers that aren't on WhatsApp.
+  // Skip numbers that aren't on WhatsApp.
   try {
     const [res] = await sock.onWhatsApp(jid);
     if (!res?.exists) throw new Error('Number is not on WhatsApp');
   } catch (e) {
     if (String(e.message).includes('not on WhatsApp')) throw e;
-    // onWhatsApp can be flaky; ignore lookup errors and try sending anyway.
   }
 
-  if (job.media_url) {
-    const resp = await fetch(job.media_url);
+  if (mediaUrl) {
+    const resp = await fetch(mediaUrl);
     if (!resp.ok) throw new Error(`media fetch ${resp.status}`);
     const buf = Buffer.from(await resp.arrayBuffer());
     const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('pdf') || (job.media_filename || '').toLowerCase().endsWith('.pdf')) {
-      await sock.sendMessage(jid, { document: buf, mimetype: 'application/pdf', fileName: job.media_filename || 'document.pdf', caption: job.body });
+    if (ct.includes('pdf') || (mediaFilename || '').toLowerCase().endsWith('.pdf')) {
+      await sock.sendMessage(jid, { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: body });
     } else {
-      await sock.sendMessage(jid, { image: buf, caption: job.body });
+      await sock.sendMessage(jid, { image: buf, caption: body });
     }
   } else {
-    await sock.sendMessage(jid, { text: job.body });
+    await sock.sendMessage(jid, { text: body });
   }
 }
 
-// ── poll loop ──
-async function tick() {
-  if (!ready) return;
-  const { data: jobs, error } = await supabase
-    .from('whatsapp_outbox')
-    .select('*')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(BATCH);
-  if (error) { console.error('poll error:', error.message); return; }
-  if (!jobs?.length) return;
+// ── HTTP API (called directly by the website) ──
+function readJson(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => { data += c; if (data.length > 1_000_000) req.destroy(); });
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve(null); } });
+  });
+}
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
-  for (const job of jobs) {
-    // Claim the row so a second worker instance won't double-send.
-    const { data: claimed } = await supabase
-      .from('whatsapp_outbox')
-      .update({ status: 'sending', attempts: (job.attempts || 0) + 1 })
-      .eq('id', job.id)
-      .eq('status', 'pending')
-      .select('id')
-      .single();
-    if (!claimed) continue;
+const server = http.createServer(async (req, res) => {
+  const url = req.url?.split('?')[0];
 
+  if (req.method === 'GET' && url === '/health') return json(res, 200, { ok: true, ready });
+
+  if (req.method === 'POST' && url === '/send') {
+    if (req.headers['x-api-key'] !== API_SECRET) return json(res, 401, { ok: false, error: 'unauthorized' });
+    const payload = await readJson(req);
+    if (!payload) return json(res, 400, { ok: false, error: 'invalid json' });
     try {
-      await sendJob(job);
-      await supabase.from('whatsapp_outbox').update({ status: 'sent', sent_at: new Date().toISOString(), error: null }).eq('id', job.id);
-      console.log(`→ sent ${job.kind} to ${job.to_phone}`);
+      await sendMessage(payload);
+      console.log(`→ sent to ${payload.to}`);
+      return json(res, 200, { ok: true });
     } catch (e) {
-      const attempts = (job.attempts || 0) + 1;
-      const dead = attempts >= MAX_ATTEMPTS;
-      await supabase.from('whatsapp_outbox').update({ status: dead ? 'failed' : 'pending', error: String(e.message || e) }).eq('id', job.id);
-      console.error(`✗ ${job.kind} to ${job.to_phone}: ${e.message}${dead ? ' (gave up)' : ' (will retry)'}`);
+      console.error('send failed:', e?.message || e);
+      return json(res, ready ? 400 : 503, { ok: false, error: String(e?.message || e) });
     }
-    // gentle pacing so we don't hammer WhatsApp
-    await new Promise((r) => setTimeout(r, 700));
   }
-}
+
+  json(res, 404, { ok: false, error: 'not found' });
+});
 
 await startSock();
-setInterval(() => { tick().catch((e) => console.error('tick error:', e)); }, POLL_MS);
-console.log(`Worker started · polling every ${POLL_MS}ms · batch ${BATCH}`);
+server.listen(PORT, () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));

@@ -9,7 +9,7 @@ import {
   sendBookingCancelledEmail
 } from '@/lib/email';
 import { notifyPaymentForApproval } from '@/lib/telegram';
-import { enqueueWhatsApp } from '@/lib/whatsapp-outbox';
+import { sendWhatsApp } from '@/lib/whatsapp';
 
 export const runtime = "nodejs";
 
@@ -209,22 +209,6 @@ export async function POST(request: NextRequest) {
           }
         );
 
-        // Send WhatsApp notification
-        try {
-          const phoneNumber = booking.primary_passenger_phone || (booking as any).phone;
-          if (phoneNumber) {
-            await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/send-booking-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                bookingId: booking.id,
-              }),
-            });
-          }
-        } catch (whatsappError) {
-          console.error('Error sending WhatsApp notification:', whatsappError);
-          // Don't fail the whole process if WhatsApp fails
-        }
         break;
 
       case 'rejected':
@@ -270,7 +254,7 @@ export async function POST(request: NextRequest) {
       console.error('Telegram notify failed:', tgErr);
     }
 
-    // Queue a WhatsApp message for the VPS worker to send (deduped per status).
+    // WhatsApp via the self-hosted Baileys worker (direct HTTP, no queue).
     try {
       const phone = booking?.primary_passenger_phone || (booking as any)?.contact_phone;
       if (phone) {
@@ -284,11 +268,11 @@ export async function POST(request: NextRequest) {
           cancelled: `Hi ${name}, your booking for *${t}* has been cancelled. Reply here if you have questions.`,
         };
         if (msg[status]) {
-          await enqueueWhatsApp({ toPhone: phone, kind: status as any, body: msg[status], dedupeKey: `${status}:${booking.id}` });
+          await sendWhatsApp({ to: phone, body: msg[status] });
         }
       }
     } catch (waErr) {
-      console.error('WhatsApp enqueue failed:', waErr);
+      console.error('WhatsApp send failed:', waErr);
     }
 
     return NextResponse.json({

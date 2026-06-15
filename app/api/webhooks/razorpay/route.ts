@@ -211,20 +211,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       console.error('Telegram notify failed:', tgErr);
     }
 
-    // Send WhatsApp notification
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/send-booking-notification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: booking.id,
-        }),
-      });
-    } catch (whatsappError) {
-      console.error('Error sending WhatsApp notification:', whatsappError);
-      // Don't fail the whole process if WhatsApp fails
-    }
-
+    // (WhatsApp is sent by send-notification('confirmed') above.)
     console.log('Payment success processed for booking:', booking.id);
   } catch (error: any) {
     console.error('Error handling payment success:', error);

@@ -1,134 +1,102 @@
-# Ghumakkars WhatsApp worker
+# Ghumakkars WhatsApp API (self-hosted)
 
-A standalone Node process that runs on **your VPS / Pterodactyl** (not Vercel).
-It connects to WhatsApp with a self-hosted session (Baileys — no Cloud API, no
-domain, no webhook) and polls the Supabase `whatsapp_outbox` table. When the
-website inserts a job (OTP, seat-locked, confirmed, remaining-payment reminder,
-a PDF, etc.), the worker picks it up within ~2 seconds and sends it.
+A small HTTP service that runs on **your VPS / Pterodactyl** and sends WhatsApp
+messages via **Baileys** (`@whiskeysockets/baileys`) — no Green API, no Cloud
+API, no database in between. The website calls it **directly**:
 
 ```
-Website (Vercel)  ──insert row──►  whatsapp_outbox (Supabase)  ──poll every 2s──►  worker (VPS)  ──►  WhatsApp
+Website (Vercel)  ──POST https://api.ghumakkars.in/send──►  worker (VPS) ── Baileys ──►  WhatsApp
 ```
 
-The website never talks to WhatsApp directly — it only writes rows, so a
-serverless restart never drops the session.
+Auth is a single shared secret (`x-api-key` header). The website never touches
+WhatsApp itself — it just makes an HTTP call.
+
+---
+
+## API
+
+`POST /send`  ·  header `x-api-key: <WHATSAPP_API_SECRET>`
+```json
+{ "to": "9876543210", "body": "Hello 👋", "mediaUrl": "https://…/ticket.pdf", "mediaFilename": "ticket.pdf" }
+```
+`to` may be 10 digits or full (country code added if missing). `mediaUrl`/`mediaFilename` are optional (attaches a PDF/image). Returns `{ "ok": true }`.
+
+`GET /health` → `{ "ok": true, "ready": true }` (ready = WhatsApp is connected).
 
 ---
 
 ## Run it on Pterodactyl (Node.js egg)
 
-### 1. Create the server
-Use a **Node.js** egg (Node **20**). In the server's **Startup** tab:
-
+**1. Startup tab**
 | Field | Value |
 |---|---|
 | Git Repo Address | `https://github.com/nobxta/Ghumakkars-2.git` |
 | Branch | `main` |
-| (if the repo is private) Username + Token | your GitHub username + a personal access token |
-| Main File / Bot JS File | `whatsapp-worker/index.mjs` |
+| (private repo) Username + Token | your GitHub username + a token |
+| Main File | `whatsapp-worker/index.mjs` |
 
-> The egg clones the **whole repo** into `/home/container`, so the worker lives
-> at `/home/container/whatsapp-worker`.
+The egg clones the repo into `/home/container`, so the worker is at
+`/home/container/whatsapp-worker`.
 
-### 2. Set the Startup Command
-The worker has its own dependencies (in `whatsapp-worker/package.json`), so it
-must install **inside that folder**. Set the startup command to:
-
+**2. Startup command** (install its own deps inside the folder):
 ```
 cd /home/container/whatsapp-worker && npm install --omit=dev --no-audit --no-fund && node index.mjs
 ```
 
-(That installs on each boot — fine, it's a tiny dependency set. To skip
-re-installing, run `npm install` once from the console and use just
-`cd /home/container/whatsapp-worker && node index.mjs`.)
-
-### 3. Put the env where it's needed
-Open the **File Manager** → go into the **`whatsapp-worker`** folder → **New File**
-named `.env` with:
-
+**3. Env** — File Manager → open `whatsapp-worker` → New File `.env`:
 ```
-SUPABASE_URL=https://ukkusspqmfhaoyxnsmwu.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=paste_your_service_role_key
-WA_PAIRING_NUMBER=919876543210        # the WhatsApp number that will SEND
-POLL_MS=2000
-BATCH=5
-MAX_ATTEMPTS=3
+WHATSAPP_API_SECRET=a_long_random_secret
+PORT=8080
+WA_PAIRING_NUMBER=919876543210
 ```
 
-- **Service role key**: Supabase → Project Settings → API → `service_role` secret.
-- **WA_PAIRING_NUMBER**: the sending account's number, country code, digits only.
-- (You can also set these as Pterodactyl env variables instead of a `.env` file — the worker reads either.)
+**4. Expose the port as api.ghumakkars.in**
+Point the subdomain at the server's allocated port. Two common ways:
+- **DNS A record** `api.ghumakkars.in → your VPS IP`, then put **nginx/Caddy** in
+  front to proxy `:443` → the Pterodactyl port (gives you HTTPS).
+- Or use Pterodactyl's port + a reverse proxy you already run.
 
-### 4. Start → log in with a pairing code (no QR)
-Click **Start**. On the first run the **console prints an 8-character pairing code**:
-
-```
-🔗 PAIRING CODE: 4F7K-2Q9X
-```
-
-On the sending phone: **WhatsApp → Settings → Linked devices → Link a device →
-"Link with phone number instead" → enter the code.** Once it says
-`✅ WhatsApp connected. Worker is live.` you're done. The login is saved in
-`whatsapp-worker/auth/`, so you only do this once (don't delete that folder).
+**5. Start → log in with the pairing code** (printed in the console). On the
+sending phone: **WhatsApp → Settings → Linked devices → Link a device → "Link
+with phone number instead" → enter the code.** When it prints
+`✅ WhatsApp connected. API is live.` you're done (session saved in `auth/` — keep it).
 
 ---
 
-## How to test it works
-
-**A) Send a manual test message.** In Supabase → SQL editor, insert a row
-(use a number that has WhatsApp, with country code):
-
-```sql
-insert into whatsapp_outbox (to_phone, kind, body)
-values ('919876543210', 'custom', 'Test from the Ghumakkars worker ✅');
+## Connect the website (Vercel)
+Set two env vars on the site:
+```
+WHATSAPP_API_URL=https://api.ghumakkars.in
+WHATSAPP_API_SECRET=<the same secret as the worker>
 ```
 
-Within ~2 seconds the console logs `→ sent custom to 919876543210` and the
-message arrives. The row's `status` flips to `sent`. Check failures with:
+## Test
+```bash
+# health
+curl https://api.ghumakkars.in/health
 
-```sql
-select to_phone, kind, status, attempts, error, created_at
-from whatsapp_outbox order by created_at desc limit 20;
+# send (replace the number + secret)
+curl -X POST https://api.ghumakkars.in/send \
+  -H "x-api-key: a_long_random_secret" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"919876543210","body":"Test from the worker ✅"}'
 ```
+Or just confirm/seat-lock a booking on the site for a user whose phone has
+WhatsApp — the site calls `/send` automatically.
 
-**B) End-to-end.** Make/seat-lock/confirm a booking on the site for a user whose
-phone has WhatsApp — the website auto-queues the status message and the worker
-sends it.
-
----
-
-## Where it's implemented (in the website repo)
-
+## Where it's implemented (website repo)
 | Piece | File |
 |---|---|
-| Queue table | `supabase/migrations/20260615000000_whatsapp_outbox.sql` |
-| Enqueue helper the app calls | `lib/whatsapp-outbox.ts` → `enqueueWhatsApp({ toPhone, kind, body, mediaUrl, dedupeKey })` |
+| Client that calls this API | `lib/whatsapp.ts` → `sendWhatsApp({ to, body, mediaUrl })` |
 | Booking status messages (pending / seat-locked / confirmed / rejected / cancelled) | `app/api/bookings/send-notification/route.ts` |
-| The worker (this folder) | `whatsapp-worker/index.mjs` |
+| The API/worker (this folder) | `whatsapp-worker/index.mjs` |
 
-### Add OTP over WhatsApp
-In your OTP route, after generating the code:
-
-```ts
-import { enqueueWhatsApp } from '@/lib/whatsapp-outbox';
-await enqueueWhatsApp({ toPhone: phone, kind: 'otp', body: `Your Ghumakkars OTP is ${otp}. Valid 10 minutes.` });
-```
-
-### Send the confirmation PDF
-Generate the ticket PDF → upload to a **public** Supabase Storage bucket → enqueue
-with the public URL:
-
-```ts
-await enqueueWhatsApp({ toPhone: phone, kind: 'confirmed', body: 'Your ticket 🎫', mediaUrl: publicPdfUrl, mediaFilename: 'ticket.pdf' });
-```
-
----
+To add **OTP** or the **confirmation PDF**, call `sendWhatsApp(...)` from the
+relevant route (OTP route / after generating the ticket PDF + uploading it
+somewhere public).
 
 ## ⚠️ Unofficial library — ban risk
-Baileys automates a **normal** WhatsApp account; it is **not** the official
-Business Cloud API and is against WhatsApp's Terms. High volume or spammy content
-can get the number **banned**. The worker already mitigates this (skips
-non-WhatsApp numbers, paces ~1 msg/sec, retry cap). Use a **dedicated number you
-can afford to lose** and keep volume reasonable. The ban-safe route for
-transactional/OTP at scale is Meta's official WhatsApp Cloud API (needs a domain,
-webhook and approved templates — the opposite of this self-hosted setup).
+Baileys automates a **normal** WhatsApp account (not the official Cloud API) and
+is against WhatsApp's Terms. High volume or spammy content can get the number
+**banned**. The API skips non-WhatsApp numbers; keep volume reasonable and use a
+**dedicated number you can afford to lose**.
