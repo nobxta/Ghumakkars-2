@@ -84,45 +84,74 @@ export default function AdminDashboard() {
         {/* MAIN */}
         <div className="space-y-4 min-w-0">
           {/* Money — Pending Collection emphasised */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <p className="text-[11px] uppercase tracking-wide font-semibold text-amber-700 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />Pending collection</p>
-              <p className="text-3xl font-extrabold text-orange-600 mt-1.5">{inr(d.outstanding)}</p>
-              <p className="text-xs text-amber-700 mt-1">{d.pendingApproval > 0 ? `${d.pendingApproval} to approve · ` : ''}money stuck in seat-locks</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Collected</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr(d.collected)}</p>
-              <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><TrendingUp className="h-3 w-3" />{inr(d.collectedThisWeek)} this week</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Expected total</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr((d.collected || 0) + (d.outstanding || 0))}</p>
-              <p className="text-xs text-gray-400 mt-1">collected + outstanding</p>
-            </div>
-          </div>
+          {(() => {
+            const expected = (d.collected || 0) + (d.outstanding || 0);
+            const pct = expected > 0 ? Math.round((d.collected / expected) * 100) : 0;
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/20">
+                  <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-white/80 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />Pending collection</p>
+                  <p className="text-3xl sm:text-4xl font-extrabold mt-1.5 leading-none">{inr(d.outstanding)}</p>
+                  <p className="text-xs text-white/85 mt-2">{d.pendingApproval > 0 ? `${d.pendingApproval} to approve · ` : ''}balance in seat-locks</p>
+                </div>
+                <div className="rounded-2xl p-5 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Collected</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr(d.collected)}</p>
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><TrendingUp className="h-3 w-3" />{inr(d.collectedThisWeek)} this week</p>
+                </div>
+                <div className="rounded-2xl p-5 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500">Expected total</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1.5">{inr(expected)}</p>
+                  <div className="mt-2.5">
+                    <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1"><span>{pct}% collected</span><span>{inr(d.collected)}/{inr(expected)}</span></div>
+                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-600" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
-          {/* KPI strip — each card tells a story */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 bg-white border border-gray-200 rounded-xl divide-x divide-y lg:divide-y-0 divide-gray-100">
-            <div className="px-4 py-3.5">
-              <div className="flex items-center gap-1.5 text-gray-500"><Package className="h-3.5 w-3.5 text-purple-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Bookings</span></div>
-              <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{d.activeBookings}</p>
-              <p className="text-[11px] text-green-600 font-medium">{d.newBookingsToday > 0 ? `+${d.newBookingsToday} today` : `${d.pending} pending`}</p>
+          {/* KPI tiles — gradient chips + a story each */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="flex items-center justify-between">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-sm"><Package className="h-4 w-4 text-white" /></div>
+                {d.newBookingsToday > 0 && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">+{d.newBookingsToday}</span>}
+              </div>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{d.activeBookings}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Bookings</p>
+              {(() => {
+                const tot = (d.confirmed || 0) + (d.seatLocked || 0) + (d.pending || 0) || 1;
+                return (
+                  <div className="mt-2 flex h-1.5 w-full rounded-full overflow-hidden bg-gray-100">
+                    <div className="bg-green-500" style={{ width: `${(d.confirmed / tot) * 100}%` }} title={`${d.confirmed} confirmed`} />
+                    <div className="bg-amber-400" style={{ width: `${(d.seatLocked / tot) * 100}%` }} title={`${d.seatLocked} seat-lock`} />
+                    <div className="bg-gray-300" style={{ width: `${(d.pending / tot) * 100}%` }} title={`${d.pending} pending`} />
+                  </div>
+                );
+              })()}
             </div>
-            <div className="px-4 py-3.5">
-              <div className="flex items-center gap-1.5 text-gray-500"><Users className="h-3.5 w-3.5 text-blue-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Travellers</span></div>
-              <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{d.travellers}</p>
-              <p className="text-[11px] text-gray-400">{d.confirmed} confirmed · {d.seatLocked} seat-lock</p>
+            <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm"><Users className="h-4 w-4 text-white" /></div>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{d.travellers}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Travellers</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">{d.confirmed} confirmed · {d.seatLocked} seat-lock</p>
             </div>
-            <div className="px-4 py-3.5">
-              <div className="flex items-center gap-1.5 text-gray-500"><Users className="h-3.5 w-3.5 text-green-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Users</span></div>
-              <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{(d.totalUsers || 0).toLocaleString('en-IN')}</p>
-              <p className="text-[11px] text-green-600 font-medium">{d.newUsersToday > 0 ? `+${d.newUsersToday} today` : `${d.verifiedUsers} verified`}</p>
+            <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="flex items-center justify-between">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-sm"><Users className="h-4 w-4 text-white" /></div>
+                {d.newUsersToday > 0 && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">+{d.newUsersToday}</span>}
+              </div>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{(d.totalUsers || 0).toLocaleString('en-IN')}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Users</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">{d.verifiedUsers} verified</p>
             </div>
-            <div className="px-4 py-3.5">
-              <div className="flex items-center gap-1.5 text-gray-500"><MapPin className="h-3.5 w-3.5 text-orange-600" /><span className="text-[11px] font-semibold uppercase tracking-wide">Trips</span></div>
-              <p className="text-xl font-bold text-gray-900 leading-tight mt-0.5">{d.activeTrips}</p>
-              <p className="text-[11px] text-gray-400">{d.nextTripDays != null ? (d.nextTripDays === 0 ? 'starts today' : `next in ${d.nextTripDays}d`) : `${upcoming.length} upcoming`}</p>
+            <div className="rounded-2xl p-4 bg-white border border-gray-200 shadow-sm ring-1 ring-black/[0.02]">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center shadow-sm"><MapPin className="h-4 w-4 text-white" /></div>
+              <p className="text-2xl font-bold text-gray-900 mt-2.5 leading-none">{d.activeTrips}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Active trips</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">{d.nextTripDays != null ? (d.nextTripDays === 0 ? 'one starts today' : `next in ${d.nextTripDays}d`) : `${upcoming.length} upcoming`}</p>
             </div>
           </div>
 
