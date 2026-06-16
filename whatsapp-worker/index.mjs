@@ -82,16 +82,25 @@ async function startSock() {
   });
 }
 
+// Wipe any saved session and bring up a clean, UNregistered socket. Used when
+// starting a new link so stale/invalid creds can't cause a 401 (and so a fresh
+// QR / pairing code is actually emitted).
+async function freshAuth() {
+  manualLogout = true;
+  try { sock?.ev?.removeAllListeners?.(); sock?.end?.(undefined); } catch {}
+  try { await rm('auth', { recursive: true, force: true }); } catch {}
+  ready = false; currentNumber = null; lastQR = null;
+  manualLogout = false;
+  await startSock();
+}
+
 // Request a fresh pairing code on demand (admin panel → POST /login).
 async function requestPairing(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) throw new Error('phone required');
   if (ready) return { alreadyConnected: true, number: currentNumber };
-  // Start a clean socket and give the WebSocket a moment to open before asking.
-  manualLogout = false;
-  await startSock();
-  await new Promise((r) => setTimeout(r, 2500));
-  if (sock.authState.creds.registered) return { alreadyConnected: true, number: currentNumber };
+  await freshAuth();
+  await new Promise((r) => setTimeout(r, 2500));   // let the WebSocket open
   const code = await sock.requestPairingCode(digits);
   console.log(`🔗 pairing code issued for ${digits}: ${code}`);
   return { pairingCode: code };
@@ -100,10 +109,9 @@ async function requestPairing(phone) {
 // Start a socket for QR login and return the QR as a PNG data URL.
 async function startForQR() {
   if (ready) return { alreadyConnected: true, number: currentNumber };
-  manualLogout = false;
-  if (!sock || sock.authState.creds.registered) { lastQR = null; await startSock(); }
-  // Wait briefly for Baileys to emit the first QR.
-  for (let i = 0; i < 30 && !lastQR; i++) await new Promise((r) => setTimeout(r, 300));
+  await freshAuth();
+  // Wait for Baileys to emit the first QR (usually a few seconds).
+  for (let i = 0; i < 40 && !lastQR; i++) await new Promise((r) => setTimeout(r, 400));
   if (!lastQR) throw new Error('no QR yet — try again in a moment');
   return { qr: await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }) };
 }
