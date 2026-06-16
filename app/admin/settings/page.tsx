@@ -74,6 +74,12 @@ export default function AdminSettingsPage() {
   const [waQr, setWaQr] = useState<string | null>(null);   // QR PNG data URL
   const [waBusy, setWaBusy] = useState<'' | 'login' | 'qr' | 'logout'>('');
   const [waError, setWaError] = useState<string | null>(null);
+  // Test sender
+  const [waTestPhone, setWaTestPhone] = useState('');
+  const [waTestTemplate, setWaTestTemplate] = useState('confirmed');
+  const [waTestCustom, setWaTestCustom] = useState('');
+  const [waTestBusy, setWaTestBusy] = useState(false);
+  const [waTestMsg, setWaTestMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   
   // General Settings
   const [settings, setSettings] = useState({
@@ -234,6 +240,20 @@ export default function AdminSettingsPage() {
       setWaConnected(false); setWaNumber(null); setWaPairingCode(null);
     } catch { setWaError('Could not reach the worker.'); }
     finally { setWaBusy(''); }
+  };
+
+  const sendTestWhatsApp = async () => {
+    setWaTestMsg(null); setWaTestBusy(true);
+    try {
+      const res = await fetch('/api/admin/whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test', phone: waTestPhone, template: waTestTemplate, message: waTestCustom }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setWaTestMsg({ type: 'err', text: data.error || 'Send failed.' }); return; }
+      setWaTestMsg({ type: 'ok', text: 'Sent! Check WhatsApp on that number.' });
+    } catch { setWaTestMsg({ type: 'err', text: 'Could not reach the worker.' }); }
+    finally { setWaTestBusy(false); }
   };
 
   useEffect(() => {
@@ -997,6 +1017,64 @@ export default function AdminSettingsPage() {
           )}
 
           {waError && <p className="text-sm text-red-600 mt-3">{waError}</p>}
+
+          {/* Test sender */}
+          {waConfigured && waOnline && waConnected && !waLoading && (
+            <div className="rounded-xl border border-gray-200 p-5 mt-5">
+              <h3 className="text-sm font-bold text-gray-900 mb-1">Send a test message</h3>
+              <p className="text-xs text-gray-500 mb-4">Send any template (or a custom message) to any number to check formatting.</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Send to (number)</label>
+                    <input
+                      value={waTestPhone}
+                      onChange={(e) => setWaTestPhone(e.target.value)}
+                      placeholder="919876543210"
+                      inputMode="numeric"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Template</label>
+                    <select
+                      value={waTestTemplate}
+                      onChange={(e) => setWaTestTemplate(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      <option value="pending">Booking pending</option>
+                      <option value="seat_locked">Seat locked</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="otp">OTP code</option>
+                      <option value="custom">Custom message…</option>
+                    </select>
+                  </div>
+                </div>
+                {waTestTemplate === 'custom' && (
+                  <textarea
+                    value={waTestCustom}
+                    onChange={(e) => setWaTestCustom(e.target.value)}
+                    rows={4}
+                    placeholder="Type your message… (use *text* for bold)"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={sendTestWhatsApp}
+                    disabled={waTestBusy || !waTestPhone.replace(/\D/g, '')}
+                    className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
+                    {waTestBusy ? 'Sending…' : 'Send test'}
+                  </button>
+                  {waTestMsg && (
+                    <span className={`text-sm ${waTestMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{waTestMsg.text}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <p className="text-xs text-gray-500 mt-5">
             Booking updates (pending, seat-locked, confirmed, rejected, cancelled) send automatically once linked. Setup details: <code className="font-mono">whatsapp-worker/README.md</code>.
