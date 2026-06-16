@@ -54,7 +54,9 @@ async function startSock() {
   sock.ev.on('creds.update', saveCreds);
   sock.ev.on('connection.update', (u) => {
     const { connection, lastDisconnect, qr } = u;
-    if (qr && !PAIR_NUMBER) {
+    // Linking is done from the admin panel (pairing code). Only print a console
+    // QR if you explicitly opt in with WA_PRINT_QR=1 — keeps the console clean.
+    if (qr && process.env.WA_PRINT_QR === '1') {
       console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
       qrcode.generate(qr, { small: true });
     }
@@ -193,7 +195,16 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { ok: false, error: 'not found' });
 });
 
-await startSock();
+// Only auto-connect if WhatsApp was linked before (session already on disk), or
+// if a console pairing number is explicitly set. Otherwise stay idle and wait
+// for the admin panel to start linking — nothing to do in this console.
+const { state: bootState } = await useMultiFileAuthState('auth');
+if (bootState.creds.registered || PAIR_NUMBER) {
+  await startSock();
+} else {
+  console.log('ℹ️  WhatsApp not linked yet — link it from Admin → Settings → WhatsApp. Nothing to do in this console.');
+}
+
 server.listen(PORT, '0.0.0.0', () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));
 
 // Expose it on a domain via Cloudflare Tunnel (no shell needed). Non-blocking:
