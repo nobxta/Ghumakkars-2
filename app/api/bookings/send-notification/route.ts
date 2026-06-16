@@ -265,8 +265,9 @@ export async function POST(request: NextRequest) {
     try {
       const phone = booking?.primary_passenger_phone || (booking as any)?.contact_phone;
       if (phone) {
-        const name = (userName || booking?.primary_passenger_name || 'traveller').split(' ')[0];
-        const t = trip?.title || 'your trip';
+        const name = (userName || booking?.primary_passenger_name || 'traveller').trim().split(' ')[0];
+        // Trim — a trailing space inside *...* stops WhatsApp rendering bold.
+        const t = String(trip?.title || 'your trip').trim();
         const shortId = String(booking?.id || '').slice(0, 8).toUpperCase();
         const fmtDate = (d: string | Date | null) => d
           ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
