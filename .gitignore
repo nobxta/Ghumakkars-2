@@ -32,6 +32,9 @@ yarn-error.log*
 whatsapp-worker/node_modules
 whatsapp-worker/auth
 whatsapp-worker/.env
+# cloudflared tunnel runtime (binary + account cert + tunnel creds)
+whatsapp-worker/cloudflared
+whatsapp-worker/.cloudflared
 
 # vercel
 .vercel

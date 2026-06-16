@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises';
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
+import { startTunnel } from './tunnel.mjs';
 
 // ── config ──
 // Pterodactyl exposes only its allocated port via SERVER_PORT — bind that.
@@ -194,3 +195,7 @@ const server = http.createServer(async (req, res) => {
 
 await startSock();
 server.listen(PORT, '0.0.0.0', () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));
+
+// Expose it on a domain via Cloudflare Tunnel (no shell needed). Non-blocking:
+// the first-run authorize step waits in the background, the API stays up.
+startTunnel(PORT).catch((e) => console.error('[tunnel] setup error:', e?.message || e));

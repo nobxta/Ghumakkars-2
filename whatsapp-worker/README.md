@@ -62,10 +62,29 @@ VPS_API_SECRET=a_long_random_secret
 > (`SERVER_PORT`). That's the only port the panel exposes externally.
 > `WA_PAIRING_NUMBER` is optional now — you link from the admin panel instead.
 
-**4. Expose it as api.ghumakkars.in**
-Point the subdomain at the server's **primary allocation** (IP:port shown in the
-panel). For HTTPS, put **nginx/Caddy** in front proxying `:443 → that port`. Test
-the raw allocation first: `curl http://SERVER_IP:PORT/health`.
+**4. Expose it as api.ghumakkars.in — via Cloudflare Tunnel (no shell needed)**
+The worker can open the tunnel itself, so you never run a command in the
+container. In `.env` set:
+```
+CF_HOSTNAME=api.ghumakkars.in
+```
+On the **first** boot the console prints a one-time **authorize URL** — open it,
+log in, and pick the `ghumakkars.in` zone. The worker then creates the tunnel,
+points DNS (`api.ghumakkars.in` → tunnel) and runs it on every startup. All
+cloudflared state (binary, `cert.pem`, `creds.json`, `config.yml`) lives in
+`whatsapp-worker/.cloudflared/` inside the persisted volume, so it survives
+restarts. No nginx, no open ports, automatic HTTPS.
+
+> **Surviving a full reinstall.** A reinstall wipes the volume. After first
+> setup the console prints `CF_CERT=…` and `CF_CREDS=…` (base64) — paste those
+> into `.env` and the tunnel rebuilds itself with no re-authorize.
+
+<details><summary>Alternative: plain VPS without Cloudflare</summary>
+
+Leave `CF_HOSTNAME` unset and point the subdomain at the server's primary
+allocation (IP:port), with nginx/Caddy proxying `:443 → that port`. Test the raw
+allocation first: `curl http://SERVER_IP:PORT/health`.
+</details>
 
 **5. Start → link from the admin panel.** Open **ghumakkars.in → Admin →
 Settings → WhatsApp**, type the sending number, hit **Get pairing code**, then on
