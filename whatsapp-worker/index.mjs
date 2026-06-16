@@ -28,17 +28,27 @@ let ready = false;
 let currentNumber = null;   // the linked WhatsApp number (digits), once connected
 let manualLogout = false;   // set during /logout so the close handler doesn't auto-reconnect
 let lastQR = null;          // latest QR string from Baileys (for panel QR login)
+let starting = false;       // guard so we never run two socket starts at once
+let reconnectTimer = null;  // single pending reconnect
 
 const numberFromJid = (id) => (id ? String(id).split(':')[0].split('@')[0] : null);
 
 // ── WhatsApp connection (session persisted to ./auth) ──
+// One socket at a time. Overlapping sockets share the same creds and WhatsApp
+// answers with a 401 "logged out", which kills the saved session — that's what
+// forced a re-link on every restart. The `starting` guard prevents that.
 async function startSock() {
+  if (starting) return;
+  starting = true;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
   // Tear down any previous socket so we don't stack listeners / sockets.
   try { sock?.ev?.removeAllListeners?.(); sock?.end?.(undefined); } catch {}
 
   const { state, saveCreds } = await useMultiFileAuthState('auth');
   const { version } = await fetchLatestBaileysVersion();
   sock = makeWASocket({ version, auth: state, logger, printQRInTerminal: false, browser: ['Ghumakkars', 'Chrome', '1.0'] });
+  starting = false;
 
   // Optional console fallback: set WA_PAIRING_NUMBER to auto-print a pairing code
   // on boot. Normally you link from the admin panel via POST /login instead.
@@ -54,7 +64,7 @@ async function startSock() {
   }
 
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', (u) => {
+  sock.ev.on('connection.update', async (u) => {
     const { connection, lastDisconnect, qr } = u;
     // Linking is done from the admin panel (pairing code). Only print a console
     // QR if you explicitly opt in with WA_PRINT_QR=1 — keeps the console clean.
@@ -75,9 +85,19 @@ async function startSock() {
       ready = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
-      if (loggedOut) { currentNumber = null; lastQR = null; }
-      console.log(`⚠️ Connection closed (code ${code}).`, loggedOut ? 'Logged out — re-link from the admin panel.' : 'Reconnecting…');
-      if (!loggedOut && !manualLogout) startSock();
+      if (loggedOut) {
+        // The session is dead. Wipe it so the panel can re-link cleanly, and
+        // stay idle — do NOT loop trying to reconnect a logged-out session.
+        currentNumber = null; lastQR = null;
+        try { await rm('auth', { recursive: true, force: true }); } catch {}
+        console.log('⚠️ WhatsApp logged out (401). Re-link from Admin → Settings → WhatsApp.');
+        return;
+      }
+      if (manualLogout) return;
+      // Transient close (network / 515 restart-required): reconnect once, debounced.
+      console.log(`⚠️ Connection closed (code ${code}). Reconnecting in 3s…`);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => startSock(), 3000);
     }
   });
 }
