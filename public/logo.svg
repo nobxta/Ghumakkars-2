@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ghumakkars Travel Agency">
+  <rect width="512" height="512" fill="#F4F3EE"/>
+  <circle cx="256" cy="256" r="242" fill="none" stroke="#2E6B3E" stroke-width="13"/>
+  <clipPath id="ring"><circle cx="256" cy="256" r="236"/></clipPath>
+  <g clip-path="url(#ring)">
+    <circle cx="256" cy="198" r="66" fill="#D9763C"/>
+    <path d="M120 330 L170 228 L220 330 Z" fill="#3C7A48"/>
+    <path d="M298 330 L350 222 L402 330 Z" fill="#3C7A48"/>
+    <path d="M150 330 L256 150 L362 330 Z" fill="#2F6B3C"/>
+    <path d="M170 228 L156 256 L184 256 Z" fill="#F6F5F0"/>
+    <path d="M350 222 L336 250 L364 250 Z" fill="#F6F5F0"/>
+    <path d="M256 162 L298 232 L276 232 L276 330 L236 330 L236 232 L214 232 Z" fill="#F6F5F0"/>
+    <rect x="120" y="326" width="272" height="8" fill="#2F6B3C"/>
+  </g>
+  <text x="256" y="398" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="700" letter-spacing="2" fill="#1F4D45">GHUMAKKARS</text>
+  <text x="256" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" letter-spacing="6" fill="#3E6B5A">TRAVEL AGENCY</text>
+</svg>
