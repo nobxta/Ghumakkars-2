@@ -69,8 +69,10 @@ export default function AdminSettingsPage() {
   const [waNumber, setWaNumber] = useState<string | null>(null);
   const [waOnline, setWaOnline] = useState(true);      // is the VPS worker reachable
   const [waPhone, setWaPhone] = useState('');          // number to link
+  const [waMethod, setWaMethod] = useState<'pairing' | 'qr'>('pairing');
   const [waPairingCode, setWaPairingCode] = useState<string | null>(null);
-  const [waBusy, setWaBusy] = useState<'' | 'login' | 'logout'>('');
+  const [waQr, setWaQr] = useState<string | null>(null);   // QR PNG data URL
+  const [waBusy, setWaBusy] = useState<'' | 'login' | 'qr' | 'logout'>('');
   const [waError, setWaError] = useState<string | null>(null);
   
   // General Settings
@@ -179,7 +181,9 @@ export default function AdminSettingsPage() {
       setWaConnected(!!data.connected);
       setWaNumber(data.number || null);
       setWaOnline(data.online !== false);
-      if (data.connected) setWaPairingCode(null);
+      if (data.connected) { setWaPairingCode(null); setWaQr(null); }
+      // Refresh a rotated QR only while one is already showing (QR flow active).
+      else if (data.qr) setWaQr((prev) => (prev ? data.qr : prev));
     } catch {
       setWaOnline(false);
     } finally {
@@ -188,16 +192,31 @@ export default function AdminSettingsPage() {
   };
 
   const linkWhatsApp = async () => {
-    setWaError(null); setWaPairingCode(null); setWaBusy('login');
+    setWaError(null); setWaPairingCode(null); setWaQr(null); setWaBusy('login');
     try {
       const res = await fetch('/api/admin/whatsapp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', phone: waPhone }),
+        body: JSON.stringify({ action: 'login', mode: 'pairing', phone: waPhone }),
       });
       const data = await res.json();
       if (!res.ok) { setWaError(data.error || 'Could not start linking.'); return; }
       if (data.alreadyConnected) { setWaConnected(true); setWaNumber(data.number || null); return; }
       setWaPairingCode(data.pairingCode || null);
+    } catch { setWaError('Could not reach the worker.'); }
+    finally { setWaBusy(''); }
+  };
+
+  const showQrCode = async () => {
+    setWaError(null); setWaPairingCode(null); setWaBusy('qr');
+    try {
+      const res = await fetch('/api/admin/whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', mode: 'qr' }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setWaError(data.error || 'Could not start QR login.'); return; }
+      if (data.alreadyConnected) { setWaConnected(true); setWaNumber(data.number || null); return; }
+      setWaQr(data.qr || null);
     } catch { setWaError('Could not reach the worker.'); }
     finally { setWaBusy(''); }
   };
@@ -225,12 +244,13 @@ export default function AdminSettingsPage() {
     setLoading(false);
   }, []);
 
-  // While a pairing code is on screen, poll for the connection completing.
+  // While a pairing code or QR is on screen, poll for the connection completing
+  // (and to refresh a rotated QR).
   useEffect(() => {
-    if (!waPairingCode || waConnected) return;
-    const t = setInterval(refreshWhatsApp, 4000);
+    if ((!waPairingCode && !waQr) || waConnected) return;
+    const t = setInterval(refreshWhatsApp, 3500);
     return () => clearInterval(t);
-  }, [waPairingCode, waConnected]);
+  }, [waPairingCode, waQr, waConnected]);
 
   const handleSavePaymentSettings = async () => {
     setSaving(true);
@@ -915,28 +935,62 @@ export default function AdminSettingsPage() {
               </div>
             ) : (
               <div className="rounded-xl border border-gray-200 p-5 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp number to link</label>
-                  <input
-                    value={waPhone}
-                    onChange={(e) => setWaPhone(e.target.value)}
-                    placeholder="919876543210 (with country code)"
-                    inputMode="numeric"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Country code + number, digits only. This is the number that will send messages.</p>
+                {/* Choose how to link */}
+                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <button
+                    onClick={() => { setWaMethod('pairing'); setWaQr(null); setWaError(null); }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${waMethod === 'pairing' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                    Pairing code
+                  </button>
+                  <button
+                    onClick={() => { setWaMethod('qr'); setWaPairingCode(null); setWaError(null); }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${waMethod === 'qr' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                    QR code
+                  </button>
                 </div>
-                <button onClick={linkWhatsApp} disabled={waBusy === 'login' || !waPhone.replace(/\D/g, '')}
-                  className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
-                  {waBusy === 'login' ? 'Generating code…' : 'Get pairing code'}
-                </button>
 
-                {waPairingCode && (
-                  <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                    <p className="text-sm text-gray-700 mb-2">On the phone for <strong>+{waPhone.replace(/\D/g, '')}</strong>, open <strong>WhatsApp → Settings → Linked devices → Link a device → “Link with phone number instead”</strong> and enter:</p>
-                    <div className="text-2xl font-bold tracking-[0.3em] text-purple-700 font-mono text-center py-2">{waPairingCode}</div>
-                    <p className="text-xs text-gray-500 text-center">Waiting for you to enter the code… this updates automatically once linked.</p>
-                  </div>
+                {waMethod === 'pairing' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp number to link</label>
+                      <input
+                        value={waPhone}
+                        onChange={(e) => setWaPhone(e.target.value)}
+                        placeholder="919876543210 (with country code)"
+                        inputMode="numeric"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Country code + number, digits only. This is the number that will send messages.</p>
+                    </div>
+                    <button onClick={linkWhatsApp} disabled={waBusy === 'login' || !waPhone.replace(/\D/g, '')}
+                      className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
+                      {waBusy === 'login' ? 'Generating code…' : 'Get pairing code'}
+                    </button>
+
+                    {waPairingCode && (
+                      <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                        <p className="text-sm text-gray-700 mb-2">On the phone for <strong>+{waPhone.replace(/\D/g, '')}</strong>, open <strong>WhatsApp → Settings → Linked devices → Link a device → “Link with phone number instead”</strong> and enter:</p>
+                        <div className="text-2xl font-bold tracking-[0.3em] text-purple-700 font-mono text-center py-2">{waPairingCode}</div>
+                        <p className="text-xs text-gray-500 text-center">Waiting for you to enter the code… this updates automatically once linked.</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-700">On the phone, open <strong>WhatsApp → Settings → Linked devices → Link a device</strong> and scan the QR below.</p>
+                    {!waQr ? (
+                      <button onClick={showQrCode} disabled={waBusy === 'qr'}
+                        className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
+                        {waBusy === 'qr' ? 'Generating QR…' : 'Show QR code'}
+                      </button>
+                    ) : (
+                      <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={waQr} alt="WhatsApp QR code" className="mx-auto h-56 w-56 rounded-lg bg-white p-2" />
+                        <p className="text-xs text-gray-500 mt-2">Scan it — this refreshes automatically and flips to Connected once linked.</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )

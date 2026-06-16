@@ -45,7 +45,7 @@ export async function GET() {
     const connected = !!data?.connected;
     const number = data?.number || null;
     await cacheState(connected, number);
-    return NextResponse.json({ configured: true, connected, number });
+    return NextResponse.json({ configured: true, connected, number, qr: data?.qr || null });
   } catch {
     // VPS unreachable — fall back to the last cached value.
     const admin = createAdminClient();
@@ -67,15 +67,20 @@ export async function POST(request: NextRequest) {
 
   try {
     if (action === 'login') {
-      const phone = String(body.phone || '').replace(/\D/g, '');
-      if (!phone) return NextResponse.json({ error: 'Enter the WhatsApp number to link.' }, { status: 400 });
-      const { status, data } = await callWorker('/login', { method: 'POST', body: JSON.stringify({ phone }) });
+      const mode = body.mode === 'qr' ? 'qr' : 'pairing';
+      let payload: Record<string, unknown> = { mode };
+      if (mode === 'pairing') {
+        const phone = String(body.phone || '').replace(/\D/g, '');
+        if (!phone) return NextResponse.json({ error: 'Enter the WhatsApp number to link.' }, { status: 400 });
+        payload = { phone };
+      }
+      const { status, data } = await callWorker('/login', { method: 'POST', body: JSON.stringify(payload) });
       if (status !== 200 || !data?.ok) return NextResponse.json({ error: data?.error || 'Could not start linking.' }, { status: 400 });
       if (data.alreadyConnected) {
         await cacheState(true, data.number || null);
         return NextResponse.json({ alreadyConnected: true, number: data.number || null });
       }
-      return NextResponse.json({ pairingCode: data.pairingCode });
+      return NextResponse.json({ pairingCode: data.pairingCode || null, qr: data.qr || null });
     }
 
     if (action === 'logout') {

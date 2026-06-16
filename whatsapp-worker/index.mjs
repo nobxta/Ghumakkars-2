@@ -3,6 +3,7 @@ import http from 'node:http';
 import { rm } from 'node:fs/promises';
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import pino from 'pino';
 import { startTunnel } from './tunnel.mjs';
 
@@ -26,6 +27,7 @@ let sock = null;
 let ready = false;
 let currentNumber = null;   // the linked WhatsApp number (digits), once connected
 let manualLogout = false;   // set during /logout so the close handler doesn't auto-reconnect
+let lastQR = null;          // latest QR string from Baileys (for panel QR login)
 
 const numberFromJid = (id) => (id ? String(id).split(':')[0].split('@')[0] : null);
 
@@ -56,12 +58,16 @@ async function startSock() {
     const { connection, lastDisconnect, qr } = u;
     // Linking is done from the admin panel (pairing code). Only print a console
     // QR if you explicitly opt in with WA_PRINT_QR=1 — keeps the console clean.
-    if (qr && process.env.WA_PRINT_QR === '1') {
-      console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
-      qrcode.generate(qr, { small: true });
+    if (qr) {
+      lastQR = qr;   // exposed to the admin panel for QR login
+      if (process.env.WA_PRINT_QR === '1') {
+        console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
+        qrcode.generate(qr, { small: true });
+      }
     }
     if (connection === 'open') {
       ready = true;
+      lastQR = null;
       currentNumber = numberFromJid(sock.user?.id);
       console.log(`✅ WhatsApp connected (${currentNumber}). API is live.`);
     }
@@ -69,7 +75,7 @@ async function startSock() {
       ready = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
-      if (loggedOut) currentNumber = null;
+      if (loggedOut) { currentNumber = null; lastQR = null; }
       console.log(`⚠️ Connection closed (code ${code}).`, loggedOut ? 'Logged out — re-link from the admin panel.' : 'Reconnecting…');
       if (!loggedOut && !manualLogout) startSock();
     }
@@ -91,11 +97,22 @@ async function requestPairing(phone) {
   return { pairingCode: code };
 }
 
+// Start a socket for QR login and return the QR as a PNG data URL.
+async function startForQR() {
+  if (ready) return { alreadyConnected: true, number: currentNumber };
+  manualLogout = false;
+  if (!sock || sock.authState.creds.registered) { lastQR = null; await startSock(); }
+  // Wait briefly for Baileys to emit the first QR.
+  for (let i = 0; i < 30 && !lastQR; i++) await new Promise((r) => setTimeout(r, 300));
+  if (!lastQR) throw new Error('no QR yet — try again in a moment');
+  return { qr: await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }) };
+}
+
 // Unlink the current number and wipe the saved session.
 async function logoutAndReset() {
   manualLogout = true;
   try { await sock?.logout(); } catch {}
-  ready = false; currentNumber = null;
+  ready = false; currentNumber = null; lastQR = null;
   try { await rm('auth', { recursive: true, force: true }); } catch {}
   await startSock();   // fresh unregistered socket, ready to re-link
   return { ok: true };
@@ -151,19 +168,23 @@ const server = http.createServer(async (req, res) => {
   // Everything below is admin/control — requires the shared secret.
   const authed = req.headers['x-api-key'] === API_SECRET;
 
-  // Connection status (admin panel polls this).
+  // Connection status (admin panel polls this). Includes a live QR while a QR
+  // login is in progress, so the panel can refresh rotated codes automatically.
   if (req.method === 'GET' && url === '/status') {
     if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
-    return json(res, 200, { ok: true, connected: ready, number: currentNumber });
+    let qr = null;
+    if (!ready && lastQR) { try { qr = await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }); } catch {} }
+    return json(res, 200, { ok: true, connected: ready, number: currentNumber, qr });
   }
 
-  // Start linking: returns an 8-char pairing code to type into WhatsApp.
+  // Start linking. mode:'qr' → returns a QR PNG; otherwise (with phone) → an
+  // 8-char pairing code to type into WhatsApp.
   if (req.method === 'POST' && url === '/login') {
     if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
     const payload = await readJson(req);
     if (!payload) return json(res, 400, { ok: false, error: 'invalid json' });
     try {
-      const result = await requestPairing(payload.phone);
+      const result = payload.mode === 'qr' ? await startForQR() : await requestPairing(payload.phone);
       return json(res, 200, { ok: true, ...result });
     } catch (e) {
       console.error('login failed:', e?.message || e);
