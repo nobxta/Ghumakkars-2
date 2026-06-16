@@ -133,6 +133,10 @@ export async function POST(request: NextRequest) {
       effEnd = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
     }
 
+    // Hoisted for the WhatsApp message (assigned in the seat_locked case).
+    let waRemaining = 0;
+    let waDueDate: Date | null = null;
+
     // Send appropriate email based on status
     switch (status) {
       case 'pending':
@@ -175,6 +179,8 @@ export async function POST(request: NextRequest) {
           if (ps?.seat_lock_due_days_before != null) globalDueDays = Number(ps.seat_lock_due_days_before);
         } catch { /* fall back to 5 */ }
         const dueDate = resolveDueDate(effStart || trip.start_date, (trip as any).payment_due_days_before, globalDueDays) || new Date(effStart || trip.start_date);
+        waRemaining = remainingAmount;
+        waDueDate = dueDate;
 
         await sendSeatLockConfirmedEmail(
           userEmail,
@@ -255,17 +261,52 @@ export async function POST(request: NextRequest) {
     }
 
     // WhatsApp via the self-hosted Baileys worker (direct HTTP, no queue).
+    // NOTE: WhatsApp formatting uses *single* asterisks for bold (not **).
     try {
       const phone = booking?.primary_passenger_phone || (booking as any)?.contact_phone;
       if (phone) {
         const name = (userName || booking?.primary_passenger_name || 'traveller').split(' ')[0];
         const t = trip?.title || 'your trip';
+        const shortId = String(booking?.id || '').slice(0, 8).toUpperCase();
+        const fmtDate = (d: string | Date | null) => d
+          ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+          : '';
+        const rupee = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN');
+        const dates = effStart
+          ? `📅 ${fmtDate(effStart)}${effEnd ? ' – ' + fmtDate(effEnd) : ''}\n`
+          : '';
+        const group = trip?.whatsapp_group_link ? `\n👥 Trip group: ${trip.whatsapp_group_link}` : '';
+        const idLine = shortId ? `🆔 Booking ${shortId}\n` : '';
+
         const msg: Record<string, string> = {
-          confirmed: `Hi ${name}! Your booking for *${t}* is CONFIRMED ✅\nSee you on the trip. Reply here for any help.`,
-          seat_locked: `Hi ${name}! Your seat for *${t}* is locked 🔒\nPay the remaining balance before the due date to confirm your booking.`,
-          pending: `Hi ${name}! We've received your booking for *${t}*. Our team will confirm it shortly.`,
-          rejected: `Hi ${name}, sorry — your booking for *${t}* could not be confirmed. Reply here and we'll help.`,
-          cancelled: `Hi ${name}, your booking for *${t}* has been cancelled. Reply here if you have questions.`,
+          pending:
+            `Hi ${name}! 👋\n\n` +
+            `We've received your booking for *${t}*.\n` +
+            idLine + dates +
+            `\nOur team is reviewing your payment and will confirm shortly — we'll message you right here. 🙌`,
+          seat_locked:
+            `Hi ${name}! 🔒\n\n` +
+            `Your seat for *${t}* is *locked*!\n` +
+            idLine + dates +
+            (waRemaining > 0 ? `💰 Balance due: *${rupee(waRemaining)}*\n` : '') +
+            (waDueDate ? `⏰ Pay before: *${fmtDate(waDueDate)}*\n` : '') +
+            `\nClear the balance to fully confirm your spot.` + group,
+          confirmed:
+            `Hi ${name}! 🎉\n\n` +
+            `Your booking for *${t}* is *CONFIRMED* ✅\n` +
+            idLine + dates +
+            (booking?.pickup_point ? `📍 Pickup: ${booking.pickup_point}\n` : '') +
+            `\nGet ready for an amazing trip! See you soon 🏔️` + group,
+          rejected:
+            `Hi ${name},\n\n` +
+            `Unfortunately we couldn't confirm your booking for *${t}*${shortId ? ` (${shortId})` : ''}.\n` +
+            (rejectionReason ? `Reason: ${rejectionReason}\n` : '') +
+            `\nReply here and our team will help you sort it out. 🙏`,
+          cancelled:
+            `Hi ${name},\n\n` +
+            `Your booking for *${t}*${shortId ? ` (${shortId})` : ''} has been *cancelled*.\n` +
+            (rejectionReason ? `Reason: ${rejectionReason}\n` : '') +
+            `\nReply here if you have any questions — we're happy to help.`,
         };
         if (msg[status]) {
           await sendWhatsApp({ to: phone, body: msg[status] });

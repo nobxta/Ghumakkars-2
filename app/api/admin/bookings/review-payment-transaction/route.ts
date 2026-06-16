@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireAdmin, isInternalRequest } from '@/lib/auth-helpers';
+import { requireAdmin, isInternalRequest, internalFetchHeaders } from '@/lib/auth-helpers';
 
 export const runtime = "nodejs";
 
@@ -176,6 +176,21 @@ export async function POST(request: NextRequest) {
         } catch (referralError) {
           console.error('Error processing referral reward:', referralError);
         }
+      }
+    }
+
+    // Notify the customer (email + WhatsApp) now that the status is decided.
+    // This route previously updated the booking silently — that's why seat-lock
+    // / confirmed messages weren't going out on payment approval.
+    if (['seat_locked', 'confirmed', 'rejected'].includes(finalBookingStatus)) {
+      try {
+        await fetch(`${request.nextUrl.origin}/api/bookings/send-notification`, {
+          method: 'POST',
+          headers: internalFetchHeaders(),
+          body: JSON.stringify({ bookingId, status: finalBookingStatus, rejectionReason }),
+        });
+      } catch (e) {
+        console.error('review-payment-transaction: notify failed', e);
       }
     }
 
