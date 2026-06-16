@@ -26,7 +26,8 @@
  *   CF_CREDS         optional, creds.json contents (raw JSON or base64) to restore
  */
 import { spawn } from 'node:child_process';
-import { mkdirSync, existsSync, writeFileSync, readFileSync, chmodSync, statSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, chmodSync, statSync, copyFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import https from 'node:https';
 
@@ -87,6 +88,20 @@ async function ensureBinary() {
   log('cloudflared ready.');
 }
 
+// `cloudflared tunnel login` always writes cert.pem to its DEFAULT home
+// (~/.cloudflared), ignoring TUNNEL_ORIGIN_CERT. Pull it into our folder.
+function relocateCert() {
+  if (existsSync(CERT)) return true;
+  const candidates = [
+    path.join(os.homedir(), '.cloudflared', 'cert.pem'),
+    '/home/container/.cloudflared/cert.pem',
+    path.join(HERE, '..', '.cloudflared', 'cert.pem'),
+  ];
+  const found = candidates.find((p) => existsSync(p));
+  if (found) { mkdirSync(CF_DIR, { recursive: true }); copyFileSync(found, CERT); log(`cert.pem imported from ${found}.`); return true; }
+  return false;
+}
+
 async function ensureCert() {
   if (existsSync(CERT)) return;
   if (process.env.CF_CERT) {
@@ -94,11 +109,13 @@ async function ensureCert() {
     log('cert.pem restored from CF_CERT.');
     return;
   }
+  // A previous login may have already saved a cert to cloudflared's default home.
+  if (relocateCert()) return;
   log('No cert yet — starting one-time login. AUTHORIZE THE TUNNEL HERE:');
   log('(open the URL below, log in, and pick the zone for ' + HOSTNAME + ')');
-  const r = await run(['tunnel', 'login']);
-  if (!existsSync(CERT)) throw new Error('login did not produce cert.pem — open the URL above and authorize, then restart.');
-  log('Logged in — cert.pem saved.');
+  await run(['tunnel', 'login']);
+  if (relocateCert()) { log('Logged in — cert.pem saved.'); return; }
+  throw new Error('login did not produce cert.pem — open the URL above and authorize, then restart.');
 }
 
 async function ensureTunnel() {
