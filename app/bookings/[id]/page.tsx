@@ -459,6 +459,25 @@ export default function BookingDetailsPage() {
     navigator.clipboard?.writeText(booking.id);
   };
 
+  /** Download the official ticket PDF — the exact same file sent on WhatsApp. */
+  const handleDownloadTicket = async () => {
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/ticket`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Ghumakkars-Ticket-${shortId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setToast({ type: 'error', title: 'Could not download ticket', message: 'Please try again in a moment.' });
+    }
+  };
+
   /** Open a dedicated clean print window with just the ticket info. */
   const handlePrintTicket = () => {
     const w = window.open('', '_blank', 'width=820,height=1100');
@@ -660,9 +679,9 @@ export default function BookingDetailsPage() {
               <Phone className="h-5 w-5 text-blue-600" />
               <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Call us</span>
             </a>
-            <button onClick={handlePrintTicket} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
-              <FileText className="h-5 w-5 text-gray-700" />
-              <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Print ticket</span>
+            <button onClick={handleDownloadTicket} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
+              <Download className="h-5 w-5 text-gray-700" />
+              <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Download ticket</span>
             </button>
             <Link href="/trips" className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
               <Sparkles className="h-5 w-5 text-fuchsia-600" />
@@ -1101,8 +1120,8 @@ export default function BookingDetailsPage() {
             <Phone className="h-5 w-5 text-blue-600" />
             <span className="text-[10px] font-bold text-gray-700">Call</span>
           </a>
-          <button onClick={handlePrintTicket} className="flex flex-col items-center gap-1 px-2 py-2.5 hover:bg-gray-50 rounded-lg">
-            <FileText className="h-5 w-5 text-purple-600" />
+          <button onClick={handleDownloadTicket} className="flex flex-col items-center gap-1 px-2 py-2.5 hover:bg-gray-50 rounded-lg">
+            <Download className="h-5 w-5 text-purple-600" />
             <span className="text-[10px] font-bold text-gray-700">Ticket</span>
           </button>
         </div>

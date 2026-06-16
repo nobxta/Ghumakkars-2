@@ -128,7 +128,7 @@ async function logoutAndReset() {
 
 const jidOf = (phone) => `${String(phone).replace(/\D/g, '')}@s.whatsapp.net`;
 
-async function sendMessage({ to, body, mediaUrl, mediaFilename }) {
+async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
   if (!ready) throw new Error('WhatsApp not connected yet');
   const digits = String(to || '').replace(/\D/g, '');
   if (!digits || !body?.trim()) throw new Error('to and body are required');
@@ -143,12 +143,20 @@ async function sendMessage({ to, body, mediaUrl, mediaFilename }) {
     if (String(e.message).includes('not on WhatsApp')) throw e;
   }
 
-  if (mediaUrl) {
+  // Media can arrive inline (base64 — keeps tickets private) or as a URL.
+  let buf = null;
+  let isPdf = (mediaFilename || '').toLowerCase().endsWith('.pdf');
+  if (mediaBase64) {
+    buf = Buffer.from(String(mediaBase64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+  } else if (mediaUrl) {
     const resp = await fetch(mediaUrl);
     if (!resp.ok) throw new Error(`media fetch ${resp.status}`);
-    const buf = Buffer.from(await resp.arrayBuffer());
-    const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('pdf') || (mediaFilename || '').toLowerCase().endsWith('.pdf')) {
+    buf = Buffer.from(await resp.arrayBuffer());
+    if ((resp.headers.get('content-type') || '').includes('pdf')) isPdf = true;
+  }
+
+  if (buf) {
+    if (isPdf) {
       await sock.sendMessage(jid, { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: body });
     } else {
       await sock.sendMessage(jid, { image: buf, caption: body });
@@ -162,7 +170,7 @@ async function sendMessage({ to, body, mediaUrl, mediaFilename }) {
 function readJson(req) {
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1_000_000) req.destroy(); });
+    req.on('data', (c) => { data += c; if (data.length > 15_000_000) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve(null); } });
   });
 }

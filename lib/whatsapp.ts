@@ -17,6 +17,7 @@ export interface SendWhatsAppInput {
   to: string;                 // 10-digit or full; country code added if missing
   body: string;
   mediaUrl?: string | null;   // optional public PDF/image URL to attach
+  mediaBase64?: string | null; // OR attach inline (base64) — keeps it private
   mediaFilename?: string | null;
 }
 
@@ -30,7 +31,7 @@ export async function sendWhatsApp(input: SendWhatsAppInput): Promise<{ ok: bool
     const res = await fetch(`${API_URL.replace(/\/$/, '')}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': API_SECRET },
-      body: JSON.stringify({ to, body: input.body.trim(), mediaUrl: input.mediaUrl || undefined, mediaFilename: input.mediaFilename || undefined }),
+      body: JSON.stringify({ to, body: input.body.trim(), mediaUrl: input.mediaUrl || undefined, mediaBase64: input.mediaBase64 || undefined, mediaFilename: input.mediaFilename || undefined }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');

@@ -309,7 +309,20 @@ export async function POST(request: NextRequest) {
             `\nReply here if you have any questions — we're happy to help.`,
         };
         if (msg[status]) {
-          await sendWhatsApp({ to: phone, body: msg[status] });
+          // Attach the trip ticket PDF on seat-lock / confirmed — the SAME PDF
+          // the user downloads from the booking page (one generator).
+          let mediaBase64: string | undefined;
+          let mediaFilename: string | undefined;
+          if (status === 'seat_locked' || status === 'confirmed') {
+            try {
+              const { renderTicketBuffer } = await import('@/lib/ticket-pdf');
+              const pdf = await renderTicketBuffer(booking.id);
+              if (pdf) { mediaBase64 = pdf.buffer.toString('base64'); mediaFilename = pdf.filename; }
+            } catch (pdfErr) {
+              console.error('ticket PDF generation failed:', pdfErr);
+            }
+          }
+          await sendWhatsApp({ to: phone, body: msg[status], mediaBase64, mediaFilename });
         }
       }
     } catch (waErr) {
