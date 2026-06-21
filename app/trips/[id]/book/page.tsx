@@ -124,8 +124,8 @@ export default function BookTripPage() {
       return earlyBird || trip.discounted_price || 0;
     })();
     const basePrice = perPersonPrice * totalPassengers;
-    const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
-    const cappedWallet = Math.min(walletBalance, amountAfterCoupon);
+    const amountToPayNowBeforeWallet = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
+    const cappedWallet = Math.min(walletBalance, amountToPayNowBeforeWallet);
     if (walletAmount > cappedWallet) {
       setWalletAmount(cappedWallet);
     }
@@ -360,7 +360,7 @@ export default function BookTripPage() {
             walletAmountUsed = walletData.amountUsed;
             setWalletBalance(walletData.remainingBalance);
             // Recompute final amount from actual server-confirmed wallet spend
-            finalAmount = Math.max(0, amountAfterCoupon - walletAmountUsed);
+            finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
           } else {
             const errorData = await walletResponse.json();
             setError(errorData.error || 'Failed to use wallet balance');
@@ -923,11 +923,8 @@ export default function BookTripPage() {
       const basePrice = getBasePrice();
       const couponDiscount = couponApplied ? couponApplied.discount_amount : 0;
       
-      // Calculate amount after coupon
-      let amountAfterCoupon = basePrice - couponDiscount;
-      if (couponApplied) {
-        amountAfterCoupon = couponApplied.final_amount;
-      }
+      // Calculate amount to pay before wallet
+      const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
       
       // Use wallet if selected
       let walletAmountUsed = 0;
@@ -961,7 +958,7 @@ export default function BookTripPage() {
       }
 
       // Calculate final amount after wallet
-      const finalAmount = Math.max(0, amountAfterCoupon - walletAmountUsed);
+      const finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
       // Create booking
       const { data: bookingData, error: bookingError } = await supabase
@@ -1668,8 +1665,8 @@ export default function BookTripPage() {
                           if (e.target.checked) {
                             // Cap to the actual amount due AFTER coupon
                             const basePrice = getBasePrice();
-                            const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
-                            const maxWalletUse = Math.min(walletBalance, amountAfterCoupon);
+                            const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
+                            const maxWalletUse = Math.min(walletBalance, amountToPayNowBeforeWallet);
                             setWalletAmount(maxWalletUse);
                           } else {
                             setWalletAmount(0);
