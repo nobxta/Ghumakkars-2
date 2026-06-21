@@ -275,7 +275,7 @@ export default function BookTripPage() {
     setCouponError('');
     
     try {
-      const totalAmount = calculateTotalPrice();
+      const totalAmount = getBasePrice();
       const response = await fetch('/api/payment/validate-coupon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -333,14 +333,14 @@ export default function BookTripPage() {
       const totalPassengers = 1 + passengers.length;
       const basePrice = getBasePrice();
       const couponDiscount = couponApplied ? couponApplied.discount_amount : 0;
-      const amountAfterCoupon = couponApplied ? Number(couponApplied.final_amount || 0) : basePrice;
+      const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
 
       // CAP wallet to what's actually needed after coupon.
       // Prevents over-deduction when user toggled wallet BEFORE applying coupon.
       const walletToUse = (useWallet && walletAmount > 0)
-        ? Math.min(walletAmount, walletBalance, amountAfterCoupon)
+        ? Math.min(walletAmount, walletBalance, amountToPayNowBeforeWallet)
         : 0;
-      let finalAmount = Math.max(0, amountAfterCoupon - walletToUse);
+      let finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletToUse);
 
       // Use wallet if selected
       let walletAmountUsed = 0;
@@ -591,22 +591,21 @@ export default function BookTripPage() {
       const totalPassengers = 1 + passengers.length;
       const basePrice = getBasePrice();
       const couponDiscount = couponApplied ? couponApplied.discount_amount : 0;
-      
-      // Calculate amount after coupon
-      let amountAfterCoupon = basePrice - couponDiscount;
-      if (couponApplied) {
-        amountAfterCoupon = couponApplied.final_amount;
-      }
+      const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
       
       // Use wallet if selected
       let walletAmountUsed = 0;
-      if (useWallet && walletAmount > 0) {
+      let walletToUse = (useWallet && walletAmount > 0)
+        ? Math.min(walletAmount, walletBalance, amountToPayNowBeforeWallet)
+        : 0;
+
+      if (walletToUse > 0) {
         try {
           const walletResponse = await fetch('/api/wallet/use', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              amount: walletAmount,
+              amount: walletToUse,
               description: `Booking payment for ${trip.title}`,
             }),
           });
@@ -630,7 +629,7 @@ export default function BookTripPage() {
       }
 
       // Calculate final amount after wallet
-      let finalAmount = Math.max(0, amountAfterCoupon - walletAmountUsed);
+      let finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
       const allPassengers = [
         {
@@ -863,34 +862,32 @@ export default function BookTripPage() {
     return allMet ? earlyBirdPrice : trip.discounted_price;
   };
 
-  const calculateTotalPrice = () => {
+  const getBasePrice = () => {
     if (!trip) return 0;
     const totalPassengers = 1 + passengers.length;
-    const perPersonPrice = getEffectivePrice();
-    let basePrice = 0;
-    if (paymentMethod === 'seat_lock' && trip.seat_lock_price) {
-      basePrice = trip.seat_lock_price * totalPassengers;
-    } else {
-      basePrice = perPersonPrice * totalPassengers;
-    }
+    return getEffectivePrice() * totalPassengers;
+  };
 
-    let finalAmount = basePrice;
+  const getAmountToPayBeforeWallet = () => {
+    if (!trip) return 0;
+    const totalPassengers = 1 + passengers.length;
+    const fullPrice = getBasePrice();
+    let finalFullPrice = fullPrice;
     if (couponApplied) {
-      finalAmount = couponApplied.final_amount;
+      finalFullPrice = Math.max(0, fullPrice - couponApplied.discount_amount);
     }
+    if (paymentMethod === 'seat_lock' && trip.seat_lock_price) {
+      return Math.min(trip.seat_lock_price * totalPassengers, finalFullPrice);
+    }
+    return finalFullPrice;
+  };
+
+  const calculateTotalPrice = () => {
+    let finalAmount = getAmountToPayBeforeWallet();
     if (useWallet && walletAmount > 0) {
       finalAmount = Math.max(0, finalAmount - walletAmount);
     }
     return finalAmount;
-  };
-
-  const getBasePrice = () => {
-    if (!trip) return 0;
-    const totalPassengers = 1 + passengers.length;
-    if (paymentMethod === 'seat_lock' && trip.seat_lock_price) {
-      return trip.seat_lock_price * totalPassengers;
-    }
-    return getEffectivePrice() * totalPassengers;
   };
 
   const handleSubmit = async () => {
@@ -1563,11 +1560,10 @@ export default function BookTripPage() {
             <div className="mb-6 md:mb-8">
               <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">Choose Payment Option</h3>
               {(() => {
-                const fullPrice = trip.discounted_price * totalPassengers;
+                const fullPrice = getBasePrice();
                 const seatLockPrice = trip.seat_lock_price ? trip.seat_lock_price * totalPassengers : 0;
                 // Calculate discounted price - if coupon is applied, use final_amount; otherwise use fullPrice
-                const basePriceForCoupon = fullPrice;
-                const discountedPrice = couponApplied ? couponApplied.final_amount : fullPrice;
+                const discountedPrice = couponApplied ? Math.max(0, fullPrice - couponApplied.discount_amount) : fullPrice;
                 const showSeatLock = trip.seat_lock_price && discountedPrice > seatLockPrice;
 
                 if (showSeatLock) {
@@ -1786,7 +1782,7 @@ export default function BookTripPage() {
               <h3 className="font-semibold text-gray-900 mb-3 md:mb-4 text-base md:text-lg">Payment Summary</h3>
               <div className="space-y-2 md:space-y-3">
                 <div className="flex justify-between text-xs md:text-sm">
-                  <span className="text-gray-600">Base Amount ({totalPassengers} {totalPassengers === 1 ? 'person' : 'people'}):</span>
+                  <span className="text-gray-600">Base Trip Amount ({totalPassengers} {totalPassengers === 1 ? 'person' : 'people'}):</span>
                   <span className="font-medium text-gray-900">₹{getBasePrice().toLocaleString()}</span>
                 </div>
                 {couponApplied && (
@@ -1794,6 +1790,27 @@ export default function BookTripPage() {
                     <span className="text-green-600">Coupon Discount ({couponApplied.coupon.code}):</span>
                     <span className="font-medium text-green-600">-₹{couponApplied.discount_amount.toLocaleString()}</span>
                   </div>
+                )}
+                
+                {paymentMethod === 'seat_lock' && trip.seat_lock_price && (
+                  <>
+                    <div className="flex justify-between text-xs md:text-sm pt-2 border-t border-purple-200">
+                      <span className="text-gray-600 font-medium">Net Trip Price:</span>
+                      <span className="font-medium text-gray-900">
+                        ₹{Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs md:text-sm text-gray-600">
+                      <span>Seat Lock Amount (Paying Now):</span>
+                      <span className="font-medium">₹{Math.min(trip.seat_lock_price * totalPassengers, Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0))).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-xs md:text-sm text-orange-600">
+                      <span>Remaining Balance (Due Later):</span>
+                      <span className="font-medium">
+                        ₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - (trip.seat_lock_price * totalPassengers)).toLocaleString()}
+                      </span>
+                    </div>
+                  </>
                 )}
                 {useWallet && walletAmount > 0 && (
                   <div className="flex justify-between text-xs md:text-sm">

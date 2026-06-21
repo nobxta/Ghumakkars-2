@@ -493,9 +493,16 @@ export default function AdminBookingDetailsPage() {
             <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
               <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
               <dl className="space-y-3">
-                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Total amount</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Paid</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Balance due</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
+                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Base Trip Amount</dt><dd className="text-base font-medium text-gray-900">₹{listGross.toLocaleString('en-IN')}</dd></div>
+                {couponDiscountRaw > 0 && (
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Coupon Discount {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="text-base font-medium text-green-600">-₹{couponDiscountRaw.toLocaleString('en-IN')}</dd></div>
+                )}
+                {walletUsed > 0 && (
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Wallet Used</dt><dd className="text-base font-medium text-green-600">-₹{walletUsed.toLocaleString('en-IN')}</dd></div>
+                )}
+                <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Net Trip Price</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Amount Paid {isSeatLock ? '(Seat Locked)' : ''}</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
               </dl>
               {status === 'seat_locked' && remainingAmount > 0 && (() => {
                 const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);

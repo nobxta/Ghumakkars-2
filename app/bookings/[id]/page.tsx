@@ -918,6 +918,10 @@ export default function BookingDetailsPage() {
                         <dl className="space-y-2">
                           {subtotalRows}
                           <div className={`pt-2 mt-1 border-t ${cfg.sub} flex justify-between items-baseline`}>
+                            <dt className="text-gray-900 font-semibold">Net Trip Price</dt>
+                            <dd className="font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd>
+                          </div>
+                          <div className={`pt-2 mt-1 border-t ${cfg.sub} flex justify-between items-baseline`}>
                             <dt className="text-gray-600">Seat lock paid</dt>
                             <dd className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</dd>
                           </div>
