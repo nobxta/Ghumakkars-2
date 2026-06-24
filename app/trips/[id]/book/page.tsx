@@ -1380,10 +1380,12 @@ export default function BookTripPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8">
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{['Passenger Details', 'ID Verification', 'Complete Payment'][currentStep - 1]}</h1>
-          <p className="text-gray-500 mt-1.5 text-sm">{['Fill in traveller information for your trip', 'Verify your identity to proceed to payment', 'Choose your option and confirm your booking'][currentStep - 1]}</p>
-        </div>
+        {!(currentStep === 3 && showPaymentDetails) && (
+          <div className="mb-6 md:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{['Passenger Details', 'ID Verification', 'Complete Payment'][currentStep - 1]}</h1>
+            <p className="text-gray-500 mt-1.5 text-sm">{['Fill in traveller information for your trip', 'Verify your identity to proceed to payment', 'Choose your option and confirm your booking'][currentStep - 1]}</p>
+          </div>
+        )}
 
         {!canBook && (
           <div className="mb-6 p-4 rounded-2xl" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
@@ -2013,20 +2015,21 @@ export default function BookTripPage() {
             {/* Instructions */}
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-[14px]" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
               <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-700 leading-relaxed">Pay using the QR or UPI ID above, then paste the transaction ID (from your payment SMS / receipt) below and submit.</p>
+              <p className="text-xs text-blue-700 leading-relaxed">Pay using the QR or UPI ID above. After paying, your UPI app shows a <strong>UTR / reference number</strong> — enter it below to confirm your booking.</p>
             </div>
 
-            {/* Transaction ID */}
+            {/* UTR / Transaction reference */}
             <div>
-              <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Transaction ID (Txn ID)</label>
+              <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">UTR / Transaction Reference No.</label>
               <input
                 type="text"
                 value={transactionId}
                 onChange={(e) => { setTransactionId(e.target.value); setError(''); }}
-                placeholder="Enter transaction ID"
+                placeholder="e.g. 4012 3456 7890"
+                inputMode="numeric"
                 className="w-full h-11 px-4 text-sm font-mono rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
               />
-              <p className="text-xs text-[#94a3b8] mt-1.5">Found in your payment confirmation SMS or receipt.</p>
+              <p className="text-xs text-[#94a3b8] mt-1.5">The 12-digit UTR / UPI reference number — shown in your payment app and confirmation SMS.</p>
             </div>
 
             {error && (
