@@ -195,6 +195,71 @@ export default function BookTripPage() {
     }
   };
 
+  // ───────── Draft autosave: survive accidental close / refresh (kept 24h) ─────────
+  // Saved to this browser only (localStorage). People often close or refresh the
+  // page mid-booking; this brings their passenger/Aadhaar details back so they
+  // just click through to payment instead of re-filling everything.
+  const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+  const draftKey = () => `gk_booking_draft_${params.id}_${user?.id || 'anon'}`;
+  const draftRestoredRef = useRef(false);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearDraft = () => {
+    try { if (typeof window !== 'undefined') localStorage.removeItem(draftKey()); } catch { /* ignore */ }
+  };
+
+  // Restore a saved draft once we know the user + trip.
+  useEffect(() => {
+    if (draftRestoredRef.current || !user || !trip) return;
+    draftRestoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(draftKey());
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.savedAt || Date.now() - parsed.savedAt > DRAFT_TTL_MS) { clearDraft(); return; }
+      const d = parsed.data || {};
+      if (d.primaryName) setPrimaryName(d.primaryName);
+      if (d.primaryEmail) setPrimaryEmail(d.primaryEmail);
+      if (d.primaryPhone) setPrimaryPhone(d.primaryPhone);
+      if (d.primaryGender) setPrimaryGender(d.primaryGender);
+      if (d.primaryAge) setPrimaryAge(d.primaryAge);
+      if (d.emergencyContactName) setEmergencyContactName(d.emergencyContactName);
+      if (d.emergencyContactPhone) setEmergencyContactPhone(d.emergencyContactPhone);
+      if (d.aadhaarId) setAadhaarId(d.aadhaarId);
+      if (d.departureDate) setDepartureDate(d.departureDate);
+      if (d.pickupPoint) setPickupPoint(d.pickupPoint);
+      if (Array.isArray(d.passengers)) setPassengers(d.passengers);
+      if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
+      // Stop the profile pre-fill from overriding what we just restored.
+      prefilledRef.current = true;
+      showToast('We brought back your saved details — kept for 24 hours.', 'info');
+    } catch { /* corrupt draft — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, trip]);
+
+  // Save the draft whenever the form changes (debounced).
+  useEffect(() => {
+    if (!draftRestoredRef.current || !user) return; // never save before a restore attempt
+    const hasData = !!(primaryName || primaryPhone || aadhaarId || passengers.length);
+    if (!hasData) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey(), JSON.stringify({
+          savedAt: Date.now(),
+          data: {
+            primaryName, primaryEmail, primaryPhone, primaryGender, primaryAge,
+            emergencyContactName, emergencyContactPhone, aadhaarId,
+            departureDate, pickupPoint, passengers, paymentMethod,
+          },
+        }));
+      } catch { /* storage disabled / full — ignore */ }
+    }, 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryName, primaryEmail, primaryPhone, primaryGender, primaryAge,
+      emergencyContactName, emergencyContactPhone, aadhaarId, departureDate,
+      pickupPoint, passengers, paymentMethod, user]);
+
   const abandonRazorpayBooking = async (bookingId: string) => {
     try {
       await fetch('/api/bookings/abandon-payment', {
@@ -447,7 +512,8 @@ export default function BookTripPage() {
         setPaymentOverlay('idle');
         setProcessingRazorpay(false);
         showToast('Booking confirmed! Fully covered by wallet + coupon.', 'success');
-        router.push(`/booking-success/${bookingData.id}`);
+        clearDraft();
+      router.push(`/booking-success/${bookingData.id}`);
         return;
       }
 
@@ -515,7 +581,8 @@ export default function BookTripPage() {
               setPaymentOverlay('idle');
               setProcessingRazorpay(false);
               showToast('Payment successful! Your booking is confirmed.', 'success');
-              router.push(`/booking-success/${bookingData.id}`);
+              clearDraft();
+      router.push(`/booking-success/${bookingData.id}`);
             } catch (error: any) {
               console.error('Payment verification error:', error);
               setPaymentOverlay('idle');
@@ -693,6 +760,7 @@ export default function BookTripPage() {
       });
 
       showToast('Booking created! Admin will contact you to collect payment and confirm.', 'success');
+      clearDraft();
       router.push(`/booking-success/${bookingData.id}`);
     } catch (error: any) {
       console.error('Error creating cash payment booking:', error);
@@ -1064,6 +1132,7 @@ export default function BookTripPage() {
       // Update trip participants count (but don't increment until payment is verified)
       // We'll do this when admin confirms payment
 
+      clearDraft();
       router.push(`/booking-success/${bookingData.id}`);
     } catch (err: any) {
       console.error('Error creating booking:', err);
