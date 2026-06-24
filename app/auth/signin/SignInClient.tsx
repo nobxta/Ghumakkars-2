@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Mail, Lock, LogIn, ArrowLeft, Smartphone, MessageSquare, Sparkles, CheckCircle, XCircle, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, Smartphone, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
+import AuthShell from '@/components/auth/AuthShell';
+
+const PURPLE_GRAD = 'linear-gradient(135deg,#7C3AED,#9333EA)';
 
 export default function SignInClient() {
   const searchParams = useSearchParams();
@@ -209,239 +212,108 @@ export default function SignInClient() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-50/30">
+      <div className="min-h-[100svh] flex items-center justify-center bg-[#FAFAFC]">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
       </div>
     );
   }
 
+  const isOtp = loginMethod === 'otp';
+
   return (
-    <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
-      {/* Decorative Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-100 rounded-full blur-3xl opacity-10"></div>
-      </div>
+    <AuthShell>
+      <h1 className="text-3xl font-extrabold text-[#0F172A] tracking-tight">Welcome back</h1>
+      <p className="text-[#64748B] mt-1.5">Sign in to continue your next adventure.</p>
 
-      <div className="max-w-md w-full relative z-10">
-        <Link href="/" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-6 md:mb-8 text-sm font-medium transition-all duration-200 group">
-          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Home</span>
-        </Link>
-        
-        <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
-          {/* Decorative corner accent */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
-          
-          {/* Header Section */}
-          <div className="text-center mb-8 relative">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl mb-4 shadow-lg">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-3 tracking-tight">
-              Welcome Back
-            </h1>
-            <p className="text-base text-gray-600 font-light leading-relaxed">
-              Sign in to continue your adventure with Ghumakkars
-            </p>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
-              <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <p className="text-red-600">{error}</p>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {message && (
-            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 text-sm flex items-start space-x-3 animate-in slide-in-from-top-5 duration-300">
-              <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium">{message}</p>
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={handleSignIn} className="space-y-6">
-            {/* Email Field */}
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
-                Email Address
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className={`h-5 w-5 transition-colors ${email ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
-                </div>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={otpSent && loginMethod === 'otp'}
-                  className="w-full pl-12 pr-4 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 disabled:bg-purple-50 disabled:cursor-not-allowed text-gray-900 placeholder-gray-400"
-                  placeholder="your.email@example.com"
-                />
-              </div>
-            </div>
-
-            {/* Password Login */}
-            {loginMethod === 'password' && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
-                  Password
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className={`h-5 w-5 transition-colors ${password ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
-                  </div>
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    className="w-full pl-12 pr-12 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 text-gray-900 placeholder-gray-400"
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-purple-400 hover:text-purple-600 transition-colors"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    type="button"
-                    onClick={handleSwitchToOTP}
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 flex items-center space-x-2 hover:underline underline-offset-2 group"
-                  >
-                    <Smartphone className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                    <span>Login with OTP</span>
-                  </button>
-                  <Link 
-                    href="/auth/forgot-password" 
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 hover:underline underline-offset-2"
-                  >
-                    Forgot Password?
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* OTP Login */}
-            {loginMethod === 'otp' && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                {!otpSent && (
-                  <p className="text-sm text-gray-600 font-light mb-4">
-                    We&apos;ll send a verification code to your email
-                  </p>
-                )}
-                {otpSent && (
-                  <>
-                    <label htmlFor="otp" className="block text-sm font-semibold text-gray-700">
-                      Enter Verification Code
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <MessageSquare className={`h-5 w-5 transition-colors ${otp ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
-                      </div>
-                      <input
-                        id="otp"
-                        type="text"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        required
-                        className="w-full pl-12 pr-4 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 text-center text-2xl tracking-[0.5em] font-semibold text-gray-900 placeholder-gray-300"
-                        placeholder="000000"
-                        maxLength={6}
-                        autoFocus
-                      />
-                    </div>
-                    <p className="text-sm text-gray-500 font-light flex items-center space-x-2">
-                      <Mail className="h-4 w-4" />
-                      <span>Check your email for the 6-digit code</span>
-                    </p>
-                  </>
-                )}
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    type="button"
-                    onClick={handleSwitchToPassword}
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 flex items-center space-x-2 hover:underline underline-offset-2 group"
-                  >
-                    <Lock className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                    <span>Login with Password</span>
-                  </button>
-                  <Link 
-                    href="/auth/forgot-password" 
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-all duration-200 hover:underline underline-offset-2"
-                  >
-                    Forgot Password?
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading || (loginMethod === 'otp' && !otpSent && !email)}
-              className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-4 md:py-4.5 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  {loginMethod === 'otp' && !otpSent ? (
-                    <>
-                      <Mail className="h-5 w-5" />
-                      <span>Send Verification Code</span>
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-5 w-5" />
-                      <span>{loginMethod === 'otp' ? 'Verify & Sign In' : 'Sign In'}</span>
-                    </>
-                  )}
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="my-8 flex items-center">
-            <div className="flex-1 border-t border-purple-200"></div>
-            <span className="px-4 text-sm text-gray-500 font-medium">or</span>
-            <div className="flex-1 border-t border-purple-200"></div>
-          </div>
-
-          {/* Sign Up Link */}
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">
-              Don&apos;t have an account?
-            </p>
-            <Link 
-              href="/auth/signup" 
-              className="inline-flex items-center space-x-2 text-purple-600 hover:text-purple-700 font-semibold transition-all duration-200 hover:underline underline-offset-2 group"
-            >
-              <span>Create New Account</span>
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
+      {error && (
+        <div className="mt-5 flex items-start gap-2 p-3.5 rounded-xl text-sm" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
+          <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span className="break-words">{error}</span>
         </div>
-      </div>
-    </div>
+      )}
+      {message && (
+        <div className="mt-5 flex items-start gap-2 p-3.5 rounded-xl text-sm" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#065f46' }}>
+          <CheckCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span>{message}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSignIn} className="mt-6 space-y-4">
+        {/* Email */}
+        <div>
+          <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Email address</label>
+          <input
+            type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={otpSent && isOtp}
+            placeholder="you@example.com" autoComplete="email"
+            className="w-full h-12 px-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)] disabled:bg-gray-50"
+          />
+        </div>
+
+        {/* Password method */}
+        {!isOtp && (
+          <div>
+            <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password"
+                placeholder="••••••••"
+                className="w-full h-12 pl-4 pr-11 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#94a3b8] hover:text-[#7C3AED]">
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between mt-2.5">
+              <label className="flex items-center gap-2 text-sm text-[#64748B] cursor-pointer select-none">
+                <input type="checkbox" className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" /> Remember me
+              </label>
+              <Link href="/auth/forgot-password" className="text-sm font-semibold text-[#7C3AED] hover:underline">Forgot password?</Link>
+            </div>
+          </div>
+        )}
+
+        {/* OTP method */}
+        {isOtp && (
+          <div>
+            {!otpSent ? (
+              <p className="text-sm text-[#64748B]">We&apos;ll email you a 6-digit verification code.</p>
+            ) : (
+              <>
+                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Verification code</label>
+                <input
+                  type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} required maxLength={6} autoFocus inputMode="numeric"
+                  placeholder="000000"
+                  className="w-full h-12 px-4 text-center text-xl tracking-[0.4em] font-semibold rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#cbd5e1] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
+                />
+                <p className="text-xs text-[#94a3b8] mt-1.5">Check your email for the 6-digit code.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit" disabled={loading || (isOtp && !otpSent && !email)}
+          className="w-full h-12 rounded-[12px] text-white font-bold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50"
+          style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}
+        >
+          {loading ? (
+            <><span className="animate-spin h-5 w-5 rounded-full border-2 border-white border-t-transparent" />Processing…</>
+          ) : isOtp ? (otpSent ? 'Verify & Sign in' : 'Send verification code') : 'Sign In'}
+        </button>
+
+        {/* Method toggle */}
+        <button
+          type="button" onClick={isOtp ? handleSwitchToPassword : handleSwitchToOTP}
+          className="w-full h-12 rounded-[12px] text-sm font-semibold text-[#0F172A] bg-white border-[1.5px] border-[#E2E8F0] hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+        >
+          {isOtp ? <><Lock className="h-4 w-4" />Sign in with Password</> : <><Smartphone className="h-4 w-4" />Sign in with OTP</>}
+        </button>
+      </form>
+
+      <p className="text-center text-sm text-[#64748B] mt-6">
+        Don&apos;t have an account?{' '}
+        <Link href="/auth/signup" className="font-semibold text-[#7C3AED] hover:underline">Create account →</Link>
+      </p>
+    </AuthShell>
   );
 }
 
