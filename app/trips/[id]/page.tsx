@@ -284,7 +284,7 @@ export default function TripDetailPage() {
     <div className="min-h-screen pt-14 sm:pt-16 md:pt-20 pb-24 lg:pb-0 bg-gray-50/30">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tripJsonLd) }} />
       {/* Hero — Swipeable Carousel (Amazon style, infinite loop) */}
-      <div className="relative h-[50vh] sm:h-[55vh] md:h-[60vh] max-h-[640px] overflow-hidden bg-gray-200">
+      <div className="relative mt-3 mx-4 sm:mx-6 lg:mx-auto max-w-[1320px] h-[240px] sm:h-[320px] md:h-[400px] overflow-hidden bg-gray-200 rounded-[24px] border border-gray-200 shadow-sm">
         {heroImages.length > 0 ? (
           <div
             className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
@@ -424,27 +424,27 @@ export default function TripDetailPage() {
           </button>
         </div>
 
-        {/* Trip Title Overlay - bottom-left, above dots */}
-        <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 p-4 sm:p-6 md:p-8 lg:p-12 pointer-events-none z-10">
-          <div className="max-w-7xl mx-auto">
-            {trip.discount_percentage > 0 && (
-              <div className="inline-flex items-center bg-purple-600 text-white px-3 py-1 rounded-md text-xs sm:text-sm font-bold mb-2 sm:mb-3 shadow-lg">
-                <Tag className="h-3 w-3 mr-1" />
-                {trip.discount_percentage}% OFF
-              </div>
-            )}
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-1.5 leading-tight drop-shadow-lg">
-              {trip.title}
-            </h1>
-            <div className="flex items-center text-white/95 text-sm sm:text-base md:text-lg drop-shadow font-medium">
-              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" />
-              {trip.destination}
-            </div>
-          </div>
-        </div>
+        {/* (Title moved out of the image into a clean header below — product-page style.) */}
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Title header — product-page style, premium chips */}
+        <div className="mb-5">
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+            {trip.discount_percentage > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 text-green-700"><Tag className="h-3 w-3" />{trip.discount_percentage}% OFF</span>
+            )}
+            {isLowAvailability && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-100 text-orange-700"><Sparkles className="h-3 w-3" />Limited seats</span>
+            )}
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700"><Shield className="h-3 w-3" />Verified trip</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight">{trip.title}</h1>
+          <div className="flex items-center gap-1.5 text-gray-500 mt-2 text-sm sm:text-base">
+            <MapPin className="h-4 w-4 text-purple-600 flex-shrink-0" />{trip.destination}
+          </div>
+        </div>
+
         {/* Short description tagline */}
         {trip.short_description && (
           <p className="text-sm sm:text-base text-gray-700 mb-5 md:mb-6 leading-relaxed max-w-3xl">
