@@ -100,6 +100,7 @@ export default function BookTripPage() {
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const razorpayPaymentCompletedRef = useRef(false);
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefilledRef = useRef(false); // ensures profile pre-fill runs once, never wiping typed input
   const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
   // Coupon
@@ -152,40 +153,35 @@ export default function BookTripPage() {
   };
 
   useEffect(() => {
+    // Pre-fill ONCE, and only into fields the user hasn't touched. Without this
+    // guard a re-fired effect (e.g. an auth/session refresh changing the `user`
+    // reference) would re-run the setters and wipe what the user already typed —
+    // which then failed validation as "please fill in all details".
+    if (prefilledRef.current) return;
+    const fillIfEmpty = (current: string, value: string, setter: (v: string) => void) => {
+      if (!current && value) setter(value);
+    };
+
     if (profile) {
-      // Pre-fill form with user profile data
-      setPrimaryName(`${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.full_name || '');
-      setPrimaryEmail(profile.email || user?.email || '');
-      setPrimaryPhone(profile.phone || profile.phone_number || '');
-      
-      // Auto-fill gender if available
-      if (profile.gender) {
-        setPrimaryGender(profile.gender);
-      }
-      
-      // Auto-fill age from date of birth
+      prefilledRef.current = true;
+      fillIfEmpty(primaryName, `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.full_name || '', setPrimaryName);
+      fillIfEmpty(primaryEmail, profile.email || user?.email || '', setPrimaryEmail);
+      fillIfEmpty(primaryPhone, profile.phone || profile.phone_number || '', setPrimaryPhone);
+      // Normalise gender so it matches the <select> option values (male/female/…).
+      if (profile.gender) fillIfEmpty(primaryGender, String(profile.gender).toLowerCase(), setPrimaryGender);
       if (profile.date_of_birth) {
         const age = calculateAge(profile.date_of_birth);
-        if (age) {
-          setPrimaryAge(age);
-        }
+        if (age) fillIfEmpty(primaryAge, age, setPrimaryAge);
       }
-      
-      if (profile.aadhaar_id) {
-        setAadhaarId(profile.aadhaar_id);
-      }
-      
-      // Auto-fill emergency contact
-      if (profile.emergency_contact_name) {
-        setEmergencyContactName(profile.emergency_contact_name);
-      }
-      if (profile.emergency_contact) {
-        setEmergencyContactPhone(profile.emergency_contact);
-      }
+      if (profile.aadhaar_id) fillIfEmpty(aadhaarId, profile.aadhaar_id, setAadhaarId);
+      if (profile.emergency_contact_name) fillIfEmpty(emergencyContactName, profile.emergency_contact_name, setEmergencyContactName);
+      if (profile.emergency_contact) fillIfEmpty(emergencyContactPhone, profile.emergency_contact, setEmergencyContactPhone);
     } else if (user?.email) {
-      setPrimaryEmail(user.email);
+      // Profile not loaded yet — only seed the email; keep the guard open so the
+      // full pre-fill still runs once the profile arrives.
+      fillIfEmpty(primaryEmail, user.email, setPrimaryEmail);
     }
-  }, [profile, user]);
+  }, [profile, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     setToast({ message, type });
