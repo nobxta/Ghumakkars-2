@@ -286,100 +286,21 @@ export default function TripDetailPage() {
       {/* Hero — Swipeable Carousel (Amazon style, infinite loop) */}
       <div className="relative mt-3 mx-4 sm:mx-6 lg:mx-auto max-w-[1320px] h-[240px] sm:h-[320px] md:h-[400px] overflow-hidden bg-gray-200 rounded-[24px] border border-gray-200 shadow-sm">
         {heroImages.length > 0 ? (
-          <div
-            className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              const w = el.clientWidth;
-              if (w === 0) return;
-              const raw = Math.round(el.scrollLeft / w);
-              // We render: [last_clone, ...heroImages, first_clone]
-              // raw 0 → last image, raw 1..N → image 0..N-1, raw N+1 → first image
-              const n = heroImages.length;
-              if (raw === 0) {
-                // Jump to last real slide without animation
-                requestAnimationFrame(() => el.scrollTo({ left: n * w, behavior: 'auto' as any }));
-                setGalleryIndex(n - 1);
-              } else if (raw === n + 1) {
-                // Jump to first real slide without animation
-                requestAnimationFrame(() => el.scrollTo({ left: w, behavior: 'auto' as any }));
-                setGalleryIndex(0);
-              } else {
-                const realIdx = raw - 1;
-                if (realIdx !== galleryIndex) setGalleryIndex(realIdx);
-              }
-            }}
-            ref={(el) => {
-              if (el && el.scrollLeft === 0) {
-                // On first render, position at the first real slide (index 1)
-                el.scrollLeft = el.clientWidth;
-              }
-            }}
-            id="hero-scroller"
-          >
-            {/* Clone of last image */}
-            <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(heroImages[heroImages.length - 1])})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
-            </div>
-            {heroImages.map((img, i) => (
-              <button
-                key={i}
-                onClick={() => { setGalleryIndex(i); setLightboxOpen(true); }}
-                className="no-min-touch relative flex-shrink-0 w-full h-full snap-start cursor-pointer"
-                style={{ minWidth: 0, minHeight: 0 }}
-              >
-                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(img)})` }}></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
-              </button>
-            ))}
-            {/* Clone of first image */}
-            <div className="relative flex-shrink-0 w-full h-full snap-start" aria-hidden="true">
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(heroImages[0])})` }}></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
-            </div>
-          </div>
+          <button type="button" onClick={() => setLightboxOpen(true)} className="no-min-touch absolute inset-0 w-full h-full cursor-zoom-in">
+            <div className="absolute inset-0 bg-cover bg-center transition-[background-image] duration-300" style={{ backgroundImage: `url(${IMG.hero(heroImages[galleryIndex])})` }}></div>
+          </button>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-300 flex items-center justify-center">
             <MapPin className="h-24 w-24 text-white/30" />
           </div>
         )}
 
-        {/* Carousel Dots + Counter */}
+        {/* Photo counter */}
         {heroImages.length > 1 && (
-          <>
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full">
-              {heroImages.map((_, i) => (
-                <button
-                  key={i}
-                  aria-label={`Photo ${i + 1}`}
-                  className="no-min-touch"
-                  onClick={() => {
-                    setGalleryIndex(i);
-                    const scroller = document.getElementById('hero-scroller');
-                    // +1 because index 0 is the cloned last slide
-                    if (scroller) scroller.scrollTo({ left: (i + 1) * scroller.clientWidth, behavior: 'smooth' });
-                  }}
-                  style={{
-                    width: i === galleryIndex ? '20px' : '6px',
-                    height: '6px',
-                    minWidth: 0,
-                    minHeight: 0,
-                    backgroundColor: i === galleryIndex ? '#ffffff' : 'rgba(255,255,255,0.6)',
-                    borderRadius: '999px',
-                    transition: 'all 0.3s',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                  }}
-                />
-              ))}
-            </div>
-            <div className="absolute bottom-3 right-3 z-20 bg-black/50 backdrop-blur-sm text-white text-[11px] sm:text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <ImageIcon className="h-3 w-3" />
-              {galleryIndex + 1}/{heroImages.length}
-            </div>
-          </>
+          <div className="absolute bottom-3 right-3 z-20 bg-black/50 backdrop-blur-sm text-white text-[11px] sm:text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+            <ImageIcon className="h-3 w-3" />
+            {galleryIndex + 1}/{heroImages.length}
+          </div>
         )}
 
         {/* Status badge over carousel */}
@@ -426,6 +347,30 @@ export default function TripDetailPage() {
 
         {/* (Title moved out of the image into a clean header below — product-page style.) */}
       </div>
+
+      {/* Thumbnail strip — click to switch the main image */}
+      {heroImages.length > 1 && (
+        <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+          <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+            {heroImages.map((img, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setGalleryIndex(i)}
+                aria-label={`Photo ${i + 1}`}
+                className="no-min-touch flex-shrink-0 w-[72px] h-[52px] sm:w-24 sm:h-[68px] rounded-[12px] overflow-hidden transition-all"
+                style={{
+                  outline: i === galleryIndex ? '2px solid #7C3AED' : '2px solid transparent',
+                  outlineOffset: '2px',
+                  opacity: i === galleryIndex ? 1 : 0.6,
+                }}
+              >
+                <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${IMG.hero(img)})` }}></div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         {/* Title header — product-page style, premium chips */}
@@ -927,7 +872,7 @@ export default function TripDetailPage() {
       </div>
 
       {/* Lightbox for gallery */}
-      {lightboxOpen && galleryImages.length > 0 && (
+      {lightboxOpen && heroImages.length > 0 && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4" onClick={() => setLightboxOpen(false)}>
           <button
             onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }}
@@ -936,25 +881,25 @@ export default function TripDetailPage() {
             <X className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); setGalleryIndex((galleryIndex - 1 + galleryImages.length) % galleryImages.length); }}
+            onClick={(e) => { e.stopPropagation(); setGalleryIndex((galleryIndex - 1 + heroImages.length) % heroImages.length); }}
             className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white bg-white/10 hover:bg-white/20 rounded-full p-2 sm:p-3"
           >
             <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); setGalleryIndex((galleryIndex + 1) % galleryImages.length); }}
+            onClick={(e) => { e.stopPropagation(); setGalleryIndex((galleryIndex + 1) % heroImages.length); }}
             className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white bg-white/10 hover:bg-white/20 rounded-full p-2 sm:p-3 rotate-180"
           >
             <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
           <img
-            src={IMG.lightbox(galleryImages[galleryIndex])}
+            src={IMG.lightbox(heroImages[galleryIndex])}
             alt={`${trip.title} ${galleryIndex + 1}`}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/10 text-white text-xs sm:text-sm px-3 py-1.5 rounded-full">
-            {galleryIndex + 1} / {galleryImages.length}
+            {galleryIndex + 1} / {heroImages.length}
           </div>
         </div>
       )}
