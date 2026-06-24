@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info } from 'lucide-react';
-import { nextOccurrences, formatDeparture, batchEndDate } from '@/lib/recurrence';
+import { nextOccurrences, formatDeparture } from '@/lib/recurrence';
 
 interface Passenger {
   name: string;
@@ -109,7 +109,6 @@ export default function BookTripPage() {
   const [pickupPoint, setPickupPoint] = useState('');
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickupSearch, setPickupSearch] = useState('');
-  const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
 
   // Additional Passengers
@@ -874,8 +873,11 @@ export default function BookTripPage() {
           setError('Please enter a valid age');
           return false;
         }
-        // Emergency contact is optional — validate the number only if provided.
-        if (emergencyContactPhone && !/^\d{10}$/.test(emergencyContactPhone.replace(/\D/g, ''))) {
+        if (!emergencyContactName || !emergencyContactPhone) {
+          setError('Please provide emergency contact details');
+          return false;
+        }
+        if (!/^\d{10}$/.test(emergencyContactPhone.replace(/\D/g, ''))) {
           setError('Please enter a valid 10-digit emergency contact number');
           return false;
         }
@@ -1344,24 +1346,6 @@ export default function BookTripPage() {
         </div>
       </div>
 
-      {/* Trip summary bar */}
-      <div style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.05),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.07)' }}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
-          <span className="flex items-center gap-1.5 min-w-0">
-            <MapPin className="h-4 w-4 text-purple-600 flex-shrink-0" />
-            <span className="text-sm font-bold text-gray-900 truncate">{trip.title}</span>
-          </span>
-          {trip.destination && (
-            <span className="text-xs text-gray-500 truncate">{trip.destination}</span>
-          )}
-          {trip.is_recurring && departureDate && (
-            <span className="ml-auto text-[11px] font-semibold text-purple-700 bg-white/70 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.15)' }}>
-              {formatDeparture(departureDate, { weekday: 'short', day: 'numeric', month: 'short' })}
-            </span>
-          )}
-        </div>
-      </div>
-
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8">
         <div className="mb-6 md:mb-8">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{['Passenger Details', 'ID Verification', 'Complete Payment'][currentStep - 1]}</h1>
@@ -1389,7 +1373,7 @@ export default function BookTripPage() {
             {trip?.is_recurring && typeof trip.recurrence_day === 'number' && (
               <section>
                 <h2 className={BOOK_SECTION_TITLE}>Select Departure Date</h2>
-                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
                   {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => {
                     const selected = departureDate === d;
                     return (
@@ -1397,14 +1381,13 @@ export default function BookTripPage() {
                         key={d}
                         type="button"
                         onClick={() => setDepartureDate(d)}
-                        className="flex-shrink-0 flex flex-col items-start gap-0.5 px-5 py-3.5 rounded-[16px] min-w-[108px] transition-all"
+                        className="flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-[12px] transition-all"
                         style={selected
-                          ? { background: PURPLE_GRAD, color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }
-                          : { background: '#fff', border: '1.5px solid #E2E8F0', boxShadow: '0 2px 8px rgba(15,23,42,0.04)', color: '#0F172A' }}
+                          ? { background: PURPLE_GRAD, color: '#fff', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }
+                          : { background: '#fff', border: '1.5px solid #E2E8F0', color: '#0F172A' }}
                       >
-                        <span className="text-[11px] font-medium" style={{ opacity: 0.75 }}>{formatDeparture(d, { weekday: 'short' })}</span>
-                        <span className="text-base font-bold leading-tight">{formatDeparture(d, { day: 'numeric', month: 'short' })}</span>
-                        <span className="text-[10px] mt-0.5" style={{ color: selected ? 'rgba(255,255,255,0.8)' : '#94a3b8' }}>back {formatDeparture(batchEndDate(d, trip.duration_days), { day: 'numeric', month: 'short' })}</span>
+                        <span className="text-[10px] font-medium" style={{ opacity: 0.7 }}>{formatDeparture(d, { weekday: 'short' })}</span>
+                        <span className="text-[13px] font-bold leading-none">{formatDeparture(d, { day: 'numeric', month: 'short' })}</span>
                       </button>
                     );
                   })}
@@ -1475,23 +1458,19 @@ export default function BookTripPage() {
               </div>
             </section>
 
-            {/* Emergency contact — collapsible */}
+            {/* Emergency contact (required) */}
             <section>
-              <button type="button" onClick={() => setEmergencyOpen(!emergencyOpen)}
-                className="w-full flex items-center justify-between px-5 py-3.5 bg-white rounded-[16px] border border-[#E2E8F0] hover:bg-[#faf9ff] transition-colors" style={BOOK_CARD_SHADOW}>
+              <h2 className={BOOK_SECTION_TITLE}>Emergency Contact</h2>
+              <div className="rounded-[20px] bg-white p-5 space-y-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
                 <div className="flex items-center gap-2.5">
-                  <Phone className="w-4 h-4 text-[#7C3AED]" />
-                  <span className="text-sm font-semibold text-[#0F172A]">Emergency Contact</span>
-                  <span className="text-xs text-[#64748B] hidden sm:inline">(Optional but recommended)</span>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><Phone className="w-4 h-4 text-[#7C3AED]" /></div>
+                  <span className="font-semibold text-[#0F172A]">Emergency Contact</span>
                 </div>
-                {emergencyOpen ? <ChevronUp className="w-4 h-4 text-[#64748B]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
-              </button>
-              {emergencyOpen && (
-                <div className="mt-3 rounded-[20px] bg-white p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <BookField label="Contact Name" value={emergencyContactName} onChange={setEmergencyContactName} placeholder="Contact name" Icon={User} />
                   <BookField label="Contact Number" value={emergencyContactPhone} onChange={(v) => setEmergencyContactPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit number" Icon={Phone} maxLength={10} inputMode="numeric" />
                 </div>
-              )}
+              </div>
             </section>
 
             {/* Additional passengers */}
