@@ -110,6 +110,7 @@ export default function BookTripPage() {
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickupSearch, setPickupSearch] = useState('');
   const [couponOpen, setCouponOpen] = useState(false);
+  const [seatLockModal, setSeatLockModal] = useState(false);
 
   // Additional Passengers
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -1307,6 +1308,38 @@ export default function BookTripPage() {
         </div>
       )}
 
+      {/* Seat-lock agreement modal */}
+      {seatLockModal && (() => {
+        const net = Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0));
+        const lockNow = Math.min((trip?.seat_lock_price || 0) * totalPassengers, net);
+        const remaining = Math.max(0, net - lockNow);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="seatlock-title">
+            <div className="bg-white rounded-[20px] shadow-2xl max-w-sm w-full p-6" style={{ border: '1px solid #E2E8F0' }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                <AlertCircle className="w-6 h-6 text-amber-500" />
+              </div>
+              <h3 id="seatlock-title" className="text-lg font-bold text-[#0F172A] mb-2">Before you lock your seat</h3>
+              <div className="text-sm text-[#64748B] space-y-2.5 mb-5">
+                <p>You&apos;ll pay <strong className="text-[#0F172A]">₹{lockNow.toLocaleString('en-IN')}</strong> now to reserve your seat.</p>
+                <p>The remaining <strong className="text-[#0F172A]">₹{remaining.toLocaleString('en-IN')}</strong> must be paid <strong>5 days before departure</strong>.</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-500 mt-0.5">•</span><span>The seat-lock amount is <strong className="text-[#0F172A]">non-refundable</strong>.</span></p>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setSeatLockModal(false)}
+                  className="flex-1 py-3 rounded-[12px] text-sm font-semibold bg-white transition-colors hover:bg-gray-50" style={{ border: '1.5px solid #E2E8F0', color: '#64748B' }}>
+                  Cancel
+                </button>
+                <button type="button" onClick={() => { setPaymentMethod('seat_lock'); setSeatLockModal(false); }}
+                  className="flex-1 py-3 rounded-[12px] text-sm font-bold text-white transition-all hover:opacity-95" style={{ background: PURPLE_GRAD }}>
+                  I Agree
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Pay in Person confirmation modal */}
       {showCashConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="cash-confirm-title">
@@ -1584,8 +1617,9 @@ export default function BookTripPage() {
 
         {/* Step 3: Payment */}
         {currentStep === 3 && !showPaymentDetails && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8 items-start">
-            <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 lg:gap-8 lg:items-start">
+            {/* A — options, wallet, coupon */}
+            <div className="lg:col-start-1 lg:row-start-1 space-y-6">
 
             {/* Payment option */}
             <div>
@@ -1623,7 +1657,7 @@ export default function BookTripPage() {
                       </button>
 
                       {!isEarlyBirdActive() ? (
-                        <button type="button" onClick={() => setPaymentMethod('seat_lock')}
+                        <button type="button" onClick={() => { if (paymentMethod === 'seat_lock') setPaymentMethod('full'); else setSeatLockModal(true); }}
                           className="w-full text-left p-5 transition-all rounded-[20px]"
                           style={paymentMethod === 'seat_lock'
                             ? { background: 'rgba(124,58,237,0.03)', border: '2px solid #7C3AED', boxShadow: '0 0 0 4px rgba(124,58,237,0.08)' }
@@ -1636,10 +1670,6 @@ export default function BookTripPage() {
                               <div>
                                 <p className="font-semibold text-[#0F172A]">Seat Lock <span className="text-sm font-normal text-[#64748B]">(Partial)</span></p>
                                 <p className="text-sm text-[#64748B] mt-0.5">Pay ₹{seatLockPrice.toLocaleString()} now to reserve your seat.</p>
-                                <div className="mt-3 rounded-xl px-3.5 py-2.5 space-y-1" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-                                  <p className="text-xs text-amber-700">Remaining <strong>₹{(discountedPrice - seatLockPrice).toLocaleString()}</strong> due 5 days before departure.</p>
-                                  <p className="text-xs text-amber-600">Seat lock amount is non-refundable.</p>
-                                </div>
                               </div>
                             </div>
                             <p className="text-xl font-bold text-[#0F172A] flex-shrink-0">₹{seatLockPrice.toLocaleString()}</p>
@@ -1819,11 +1849,47 @@ export default function BookTripPage() {
               )}
             </div>
 
-            {/* (Full price breakdown lives in the Order Summary sidebar.) */}
+            </div>
 
-            {/* Payment methods: Pay Now (Razorpay or QR) + Pay in Person (Cash) */}
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-gray-600 mb-2">Choose payment method</p>
+            {/* B — Order summary: above the pay buttons on mobile, sticky sidebar on desktop */}
+            <aside className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-32">
+              <div className="rounded-[20px] bg-white overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.14)' }}>
+                <div className="px-5 py-4" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.07),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.08)' }}>
+                  <p className="text-sm font-bold text-[#0F172A]">Order Summary</p>
+                </div>
+                <div className="px-5 py-5 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><MapPin className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" /><span className="truncate">{trip.title}</span></div>
+                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><Users className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" />{totalPassengers} {totalPassengers === 1 ? 'Traveller' : 'Travellers'}</div>
+                  </div>
+                  <div className="h-px bg-[#f1f5f9]" />
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between"><span className="text-[#64748B]">Base Fare</span><span className="font-medium text-[#0F172A]">₹{getBasePrice().toLocaleString('en-IN')}</span></div>
+                    {couponApplied && <div className="flex justify-between"><span className="text-[#10B981] flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span><span className="font-semibold text-[#10B981]">−₹{couponApplied.discount_amount.toLocaleString('en-IN')}</span></div>}
+                    {useWallet && walletAmount > 0 && <div className="flex justify-between"><span className="text-[#10B981]">Wallet Used</span><span className="font-semibold text-[#10B981]">−₹{walletAmount.toLocaleString('en-IN')}</span></div>}
+                    {paymentMethod === 'seat_lock' && trip.seat_lock_price && <div className="flex justify-between"><span className="text-[#D97706]">Due Later</span><span className="font-medium text-[#D97706]">₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - getAmountToPayBeforeWallet()).toLocaleString('en-IN')}</span></div>}
+                  </div>
+                  <div className="h-px bg-[#f1f5f9]" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-[#0F172A]">{paymentMethod === 'seat_lock' ? 'Paying Today' : 'Total Amount'}</span>
+                    <span className="text-2xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+                  </div>
+                  <p className="text-[11px] text-[#94a3b8] text-center">All taxes &amp; fees included · No hidden charges</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-[20px] bg-white px-4 py-4 grid grid-cols-3 gap-2 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                {[{ Icon: Lock, label: 'Secure' }, { Icon: Zap, label: 'Instant' }, { Icon: Headphones, label: '24/7 Help' }].map((t) => (
+                  <div key={t.label} className="flex flex-col items-center text-center gap-1.5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><t.Icon className="w-4 h-4 text-[#7C3AED]" /></div>
+                    <p className="text-[10px] font-semibold text-[#0F172A] leading-tight">{t.label}</p>
+                  </div>
+                ))}
+              </div>
+            </aside>
+
+            {/* C — Pay buttons (bottom of the flow) */}
+            <div className="lg:col-start-1 lg:row-start-2 space-y-3">
+              <p className="text-sm font-medium text-gray-600 mb-1">Choose payment method</p>
               <div className="space-y-2 md:space-y-3">
                 {/* Pay Now — primary: Razorpay or QR based on settings */}
                 {paymentMode === 'manual' ? (
@@ -1882,44 +1948,13 @@ export default function BookTripPage() {
                   <p className="text-red-700 text-xs md:text-sm font-medium break-words">{error}</p>
                 </div>
               )}
+              <p className="text-[11px] text-[#94a3b8] text-center leading-relaxed pt-1.5">
+                By booking, you agree to our{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Terms &amp; Conditions</a>,{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Privacy Policy</a>{' '}and{' '}
+                <a href="/cancellation-policy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Refund Policy</a>, and confirm you have read them.
+              </p>
             </div>
-            </div>
-
-            {/* Order summary sidebar */}
-            <aside className="lg:sticky lg:top-32">
-              <div className="rounded-[20px] bg-white overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.14)' }}>
-                <div className="px-5 py-4" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.07),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.08)' }}>
-                  <p className="text-sm font-bold text-[#0F172A]">Order Summary</p>
-                </div>
-                <div className="px-5 py-5 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><MapPin className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" /><span className="truncate">{trip.title}</span></div>
-                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><Users className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" />{totalPassengers} {totalPassengers === 1 ? 'Traveller' : 'Travellers'}</div>
-                  </div>
-                  <div className="h-px bg-[#f1f5f9]" />
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="text-[#64748B]">Base Fare</span><span className="font-medium text-[#0F172A]">₹{getBasePrice().toLocaleString('en-IN')}</span></div>
-                    {couponApplied && <div className="flex justify-between"><span className="text-[#10B981] flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span><span className="font-semibold text-[#10B981]">−₹{couponApplied.discount_amount.toLocaleString('en-IN')}</span></div>}
-                    {useWallet && walletAmount > 0 && <div className="flex justify-between"><span className="text-[#10B981]">Wallet Used</span><span className="font-semibold text-[#10B981]">−₹{walletAmount.toLocaleString('en-IN')}</span></div>}
-                    {paymentMethod === 'seat_lock' && trip.seat_lock_price && <div className="flex justify-between"><span className="text-[#D97706]">Due Later</span><span className="font-medium text-[#D97706]">₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - getAmountToPayBeforeWallet()).toLocaleString('en-IN')}</span></div>}
-                  </div>
-                  <div className="h-px bg-[#f1f5f9]" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-[#0F172A]">{paymentMethod === 'seat_lock' ? 'Paying Today' : 'Total Amount'}</span>
-                    <span className="text-2xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
-                  </div>
-                  <p className="text-[11px] text-[#94a3b8] text-center">All taxes &amp; fees included · No hidden charges</p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-[20px] bg-white px-4 py-4 grid grid-cols-3 gap-2 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
-                {[{ Icon: Lock, label: 'Secure' }, { Icon: Zap, label: 'Instant' }, { Icon: Headphones, label: '24/7 Help' }].map((t) => (
-                  <div key={t.label} className="flex flex-col items-center text-center gap-1.5">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><t.Icon className="w-4 h-4 text-[#7C3AED]" /></div>
-                    <p className="text-[10px] font-semibold text-[#0F172A] leading-tight">{t.label}</p>
-                  </div>
-                ))}
-              </div>
-            </aside>
           </div>
         )}
 
