@@ -333,7 +333,7 @@ export default function SignUpClient() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-50/30">
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFC]">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
       </div>
     );
@@ -342,7 +342,7 @@ export default function SignUpClient() {
   // Step 3: OTP Verification
   if (step === 3) {
     return (
-      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
+      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-[#FAFAFC] flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
@@ -355,7 +355,7 @@ export default function SignUpClient() {
             <span>Back to Home</span>
           </Link>
           
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
+          <div className="bg-white border border-[#E8E8EF] rounded-[24px] p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
             
             <div className="text-center mb-5 md:mb-6 relative shrink-0">
@@ -488,7 +488,7 @@ export default function SignUpClient() {
   // Step 2: Password Setup
   if (step === 2) {
     return (
-      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
+      <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-[#FAFAFC] flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
           <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -500,7 +500,7 @@ export default function SignUpClient() {
             <span>Back to Home</span>
           </Link>
           
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
+          <div className="bg-white border border-[#E8E8EF] rounded-[24px] p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
             
           <div className="text-center mb-5 md:mb-6 relative shrink-0">
@@ -632,7 +632,7 @@ export default function SignUpClient() {
 
   // Step 1: Personal Information
   return (
-    <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
+    <div className="min-h-[100dvh] min-h-screen pt-14 md:pt-16 pb-20 md:pb-8 bg-[#FAFAFC] flex flex-col items-center justify-center px-3 sm:px-4 py-4 md:py-6 relative overflow-auto">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
         <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -644,7 +644,7 @@ export default function SignUpClient() {
           <span>Back to Home</span>
         </Link>
         
-        <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0">
+        <div className="bg-white border border-[#E8E8EF] rounded-[24px] p-5 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden flex-1 flex flex-col min-h-0">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
           
           <div className="text-center mb-5 md:mb-6 relative shrink-0">
