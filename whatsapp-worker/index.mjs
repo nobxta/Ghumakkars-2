@@ -47,7 +47,17 @@ async function startSock() {
 
   const { state, saveCreds } = await useMultiFileAuthState('auth');
   const { version } = await fetchLatestBaileysVersion();
-  sock = makeWASocket({ version, auth: state, logger, printQRInTerminal: false, browser: ['Ghumakkars', 'Chrome', '1.0'] });
+  sock = makeWASocket({
+    version, auth: state, logger,
+    printQRInTerminal: false,
+    browser: ['Ghumakkars', 'Chrome', '1.0'],
+    markOnlineOnConnect: false,  // less presence churn after connect
+    syncFullHistory: false,      // we never read chat history
+    retryRequestDelayMs: 2000,
+    // Cap resends so a media message WhatsApp keeps rejecting can't loop forever
+    // (this was crashing the stream over and over with the same message id).
+    maxMsgRetryCount: 2,
+  });
   starting = false;
 
   // Optional console fallback: set WA_PAIRING_NUMBER to auto-print a pairing code
@@ -176,14 +186,30 @@ async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
   }
 
   if (buf) {
-    if (isPdf) {
-      await sock.sendMessage(jid, { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: body });
-    } else {
-      await sock.sendMessage(jid, { image: buf, caption: body });
+    const content = isPdf
+      ? { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: body }
+      : { image: buf, caption: body };
+    try {
+      // Bound the media send so a hung upload can't block, and so a stream error
+      // on the attachment never takes the whole send down with it.
+      await withTimeout(sock.sendMessage(jid, content), 30000, 'media send');
+    } catch (e) {
+      // Attachment failed (WhatsApp media can be flaky over an unofficial client).
+      // Still deliver the text so the customer gets the booking update.
+      console.error('media send failed — falling back to text:', e?.message || e);
+      await sock.sendMessage(jid, { text: body });
     }
   } else {
     await sock.sendMessage(jid, { text: body });
   }
+}
+
+// Reject if a promise doesn't settle in time (keeps a stuck media send from hanging).
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms)),
+  ]);
 }
 
 // ── HTTP API (called directly by the website) ──
