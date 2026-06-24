@@ -84,6 +84,20 @@ body {
   }
 }
 
+/* Stop iOS Safari's auto-zoom on input focus.
+   iOS zooms into any focused field whose font-size is < 16px — and that zoomed
+   state shifts the layout and clips the page's side edges. Forcing form controls
+   to 16px on touch devices removes that unwanted zoom entirely. Pinch-to-zoom is
+   left fully enabled (viewport maximumScale: 5) so accessibility zoom still works
+   — this only kills the involuntary focus-zoom. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
