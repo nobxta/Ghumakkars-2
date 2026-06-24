@@ -26,7 +26,7 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <Link href="/" className="relative z-10 flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.svg" alt="Ghumakkars" className="w-9 h-9 rounded-lg" />
+          <img src="/apple-touch-icon.png" alt="Ghumakkars" className="w-9 h-9 rounded-lg border border-gray-100" />
           <span className="text-lg font-extrabold text-[#0F172A] tracking-tight">Ghumakkars</span>
         </Link>
 
@@ -71,7 +71,7 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
           {/* Mobile logo */}
           <Link href="/" className="lg:hidden flex items-center gap-2.5 mb-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.svg" alt="Ghumakkars" className="w-9 h-9 rounded-lg" />
+            <img src="/apple-touch-icon.png" alt="Ghumakkars" className="w-9 h-9 rounded-lg border border-gray-100" />
             <span className="text-lg font-extrabold text-[#0F172A] tracking-tight">Ghumakkars</span>
           </Link>
           {children}

@@ -1,45 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-import { Mail, ArrowLeft, CheckCircle, ArrowRight, XCircle, Sparkles } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import AuthShell from '@/components/auth/AuthShell';
+
+const PURPLE_GRAD = 'linear-gradient(135deg,#7C3AED,#9333EA)';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const router = useRouter();
-  const supabase = createClient();
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
       const response = await fetch('/api/auth/send-password-reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-
       const data = await response.json();
-
       if (!response.ok) {
-        if (data.suggestion === 'signup') {
-          setError('no_account');
-        } else {
-          setError(data.error || 'Failed to send reset email');
-        }
+        setError(data.suggestion === 'signup' ? 'no_account' : data.error || 'Failed to send reset email');
         return;
       }
-
       setSuccess(true);
-    } catch (error: any) {
-      setError(error.message || 'An error occurred');
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -47,145 +38,65 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-green-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-green-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-        </div>
-
-        <div className="max-w-md w-full relative z-10">
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-green-200 rounded-3xl p-8 md:p-10 shadow-2xl text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-100 to-transparent rounded-bl-full opacity-50"></div>
-            
-            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-in zoom-in duration-500">
-              <CheckCircle className="h-8 w-8 text-white" />
-            </div>
-            
-            <h2 className="text-3xl md:text-4xl font-light text-gray-900 mb-4 tracking-tight">Check Your Email</h2>
-            <p className="text-base text-gray-600 mb-6 font-light leading-relaxed">
-              We&apos;ve sent a password reset link to<br />
-              <span className="font-semibold text-purple-600 break-all">{email}</span>
-            </p>
-            <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 mb-8">
-              <p className="text-sm text-gray-700 font-light">
-                Click the link in the email to reset your password. The link will expire in <span className="font-semibold text-green-700">1 hour</span>.
-              </p>
-            </div>
-            <Link
-              href="/auth/signin"
-              className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>Return to Sign In</span>
-              <ArrowRight className="h-5 w-5" />
-            </Link>
+      <AuthShell>
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+            <CheckCircle className="h-7 w-7 text-[#10B981]" />
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">Check your email</h1>
+          <p className="text-[#64748B] mt-2">
+            We&apos;ve sent a password reset link to<br />
+            <span className="font-semibold text-[#7C3AED] break-all">{email}</span>
+          </p>
+          <div className="mt-5 p-3.5 rounded-xl text-sm text-[#64748B]" style={{ background: '#FAFAFC', border: '1px solid #E2E8F0' }}>
+            Click the link in the email to reset your password. The link expires in 1 hour.
+          </div>
+          <Link href="/auth/signin" className="mt-6 inline-flex items-center justify-center gap-2 w-full h-12 rounded-[12px] text-white font-bold text-sm transition-all hover:opacity-95" style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}>
+            Return to sign in <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 bg-gradient-to-br from-purple-50 via-white to-purple-50/30 flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -right-20 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-        <div className="absolute bottom-1/4 -left-20 w-96 h-96 bg-purple-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-      </div>
+    <AuthShell>
+      <Link href="/auth/signin" className="inline-flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#7C3AED] transition-colors mb-6">
+        <ArrowLeft className="h-4 w-4" />Back to sign in
+      </Link>
+      <h1 className="text-3xl font-extrabold text-[#0F172A] tracking-tight">Forgot password?</h1>
+      <p className="text-[#64748B] mt-1.5">Enter your email and we&apos;ll send you a reset link.</p>
 
-      <div className="max-w-md w-full relative z-10">
-        <Link href="/auth/signin" className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-6 md:mb-8 text-sm font-medium transition-all duration-200 group">
-          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Sign In</span>
-        </Link>
-        
-        <div className="bg-white/95 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-100 to-transparent rounded-bl-full opacity-50"></div>
-          
-          <div className="text-center mb-8 relative">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl mb-4 shadow-lg">
-              <Mail className="h-7 w-7 text-white" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-3 tracking-tight">Forgot Password?</h1>
-            <p className="text-base text-gray-600 font-light leading-relaxed">
-              No worries! Enter your email and we&apos;ll send you a reset link
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl text-amber-800 text-sm animate-in slide-in-from-top-5 duration-300">
-              {error === 'no_account' ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-amber-800">No account found with this email.</p>
-                  <Link
-                    href="/auth/signup"
-                    className="inline-flex items-center justify-center space-x-2 w-full py-3 bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 rounded-xl font-semibold text-amber-900 transition-colors"
-                  >
-                    <span>Create account</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex items-start space-x-3">
-                  <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
-                  <p className="text-red-600">{error}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <form onSubmit={handleForgotPassword} className="space-y-6">
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
-                Email Address
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className={`h-5 w-5 transition-colors ${email ? 'text-purple-600' : 'text-purple-400 group-focus-within:text-purple-600'}`} />
-                </div>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full pl-12 pr-4 py-3.5 md:py-4 border-2 border-purple-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none rounded-xl text-base transition-all duration-200 text-gray-900 placeholder-gray-400"
-                  placeholder="your.email@example.com"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-600 via-purple-600 to-purple-700 text-white py-4 text-base font-semibold rounded-xl hover:from-purple-700 hover:via-purple-700 hover:to-purple-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  <span>Sending Reset Link...</span>
-                </>
-              ) : (
-                <>
-                  <Mail className="h-5 w-5" />
-                  <span>Send Reset Link</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600 mb-2">
-              Remember your password?
-            </p>
-            <Link 
-              href="/auth/signin" 
-              className="inline-flex items-center space-x-2 text-purple-600 hover:text-purple-700 font-semibold transition-all duration-200 hover:underline underline-offset-2 group"
-            >
-              <span>Sign In</span>
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
+      {error && error !== 'no_account' && (
+        <div className="mt-5 flex items-start gap-2 p-3.5 rounded-xl text-sm" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
+          <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span className="break-words">{error}</span>
         </div>
-      </div>
-    </div>
+      )}
+      {error === 'no_account' && (
+        <div className="mt-5 p-3.5 rounded-xl text-sm" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+          <p className="text-amber-800 mb-2.5">No account found with this email.</p>
+          <Link href="/auth/signup" className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-[12px] font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-colors">
+            Create account <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
+
+      <form onSubmit={handleForgotPassword} className="mt-6 space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Email address</label>
+          <input
+            type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" autoComplete="email"
+            className="w-full h-12 px-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
+          />
+        </div>
+        <button type="submit" disabled={loading} className="w-full h-12 rounded-[12px] text-white font-bold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50" style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}>
+          {loading ? (<><span className="animate-spin h-5 w-5 rounded-full border-2 border-white border-t-transparent" />Sending…</>) : 'Send reset link'}
+        </button>
+      </form>
+
+      <p className="text-center text-sm text-[#64748B] mt-6">
+        Remember your password? <Link href="/auth/signin" className="font-semibold text-[#7C3AED] hover:underline">Sign in</Link>
+      </p>
+    </AuthShell>
   );
 }
