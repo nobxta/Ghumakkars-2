@@ -4,56 +4,56 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Home } from 'lucide-react';
 
-// Animated 404 page — Ghumakkars purple theme.
-// White circles sweep in to reveal the message; playful stick figures run across.
+// Animated 404 — Ghumakkars purple theme.
+// A smooth white "reveal sweep" wipes in over the brand gradient, then the
+// message fades in. No characters — just a clean, premium reveal.
 export default function NotFoundPage() {
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-[#7C3AED] to-[#9333EA] overflow-x-hidden flex justify-center items-center relative">
+    <div className="w-full min-h-[100svh] bg-gradient-to-br from-[#7C3AED] to-[#9333EA] overflow-hidden flex justify-center items-center relative">
+      <RevealSweep />
       <MessageDisplay />
-      <CharactersAnimation />
-      <CircleAnimation />
     </div>
   );
 }
 
-// 1. Message + actions
+// ── Message + actions ──
 function MessageDisplay() {
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), 1200);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setIsVisible(true), 900);
+    return () => clearTimeout(t);
   }, []);
 
   return (
-    <div className="absolute flex flex-col justify-center items-center w-[90%] h-[90%] z-[100] px-4">
+    <div className="absolute inset-0 z-[100] flex flex-col justify-center items-center px-6">
       <div
-        className={`flex flex-col items-center text-center transition-opacity duration-500 ${
-          isVisible ? 'opacity-100' : 'opacity-0'
+        className={`flex flex-col items-center text-center transition-all duration-700 ease-out ${
+          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
         }`}
       >
-        <div className="text-2xl sm:text-[35px] font-semibold text-[#0F172A]">Page Not Found</div>
         <div
-          className="text-6xl sm:text-[80px] font-extrabold leading-none my-2 bg-clip-text text-transparent"
+          className="text-[clamp(64px,18vw,128px)] font-extrabold leading-none bg-clip-text text-transparent"
           style={{ backgroundImage: 'linear-gradient(135deg,#7C3AED,#9333EA)' }}
         >
           404
         </div>
-        <p className="text-sm sm:text-[15px] max-w-md text-[#64748B] mt-1">
-          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
+        <h1 className="mt-2 text-xl sm:text-3xl font-bold text-[#0F172A]">Page Not Found</h1>
+        <p className="mt-3 max-w-md text-sm sm:text-base text-[#64748B] leading-relaxed">
+          This page might have been deleted or no longer exists.
         </p>
-        <div className="flex flex-wrap justify-center gap-4 mt-8">
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mt-8">
           <button
             onClick={() => router.back()}
-            className="group inline-flex items-center gap-2 rounded-xl border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-[#7C3AED] hover:text-white transition-all duration-300 px-6 py-2.5 text-base font-semibold hover:scale-105"
+            className="group inline-flex items-center gap-2 rounded-xl border-2 border-[#7C3AED] text-[#7C3AED] hover:bg-[#7C3AED] hover:text-white transition-all duration-300 px-5 sm:px-6 py-2.5 text-sm sm:text-base font-semibold active:scale-95"
           >
             <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
             Go Back
           </button>
           <button
             onClick={() => router.push('/')}
-            className="group inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] text-white hover:bg-[#6d28d9] transition-all duration-300 px-6 py-2.5 text-base font-semibold hover:scale-105 shadow-lg shadow-purple-500/30"
+            className="group inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] text-white hover:bg-[#6d28d9] transition-all duration-300 px-5 sm:px-6 py-2.5 text-sm sm:text-base font-semibold active:scale-95 shadow-lg shadow-purple-500/30"
           >
             <Home className="w-5 h-5 transition-transform group-hover:scale-110" />
             Go Home
@@ -64,143 +64,90 @@ function MessageDisplay() {
   );
 }
 
-// 2. Running stick figures
-type StickFigure = {
-  top?: string;
-  bottom?: string;
-  src: string;
-  transform?: string;
-  speedX: number;
-  speedRotation?: number;
-};
+// ── White reveal sweep (canvas) ──
+// Crisp (device-pixel-ratio aware) circles that ease-out and sweep left→right,
+// merging into a full white background. Re-runs and rescales on resize.
+type Bubble = { x: number; y: number; delay: number; target: number };
 
-const STICK_BASE =
-  'https://raw.githubusercontent.com/RicardoYare/imagenes/9ef29f5bbe075b1d1230a996d87bca313b9b6a63/sticks';
-
-function CharactersAnimation() {
-  const charactersRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const stickFigures: StickFigure[] = [
-      { top: '0%', src: `${STICK_BASE}/stick0.svg`, transform: 'rotateZ(-90deg)', speedX: 1500 },
-      { top: '10%', src: `${STICK_BASE}/stick1.svg`, speedX: 3000, speedRotation: 2000 },
-      { top: '20%', src: `${STICK_BASE}/stick2.svg`, speedX: 5000, speedRotation: 1000 },
-      { top: '25%', src: `${STICK_BASE}/stick0.svg`, speedX: 2500, speedRotation: 1500 },
-      { top: '35%', src: `${STICK_BASE}/stick0.svg`, speedX: 2000, speedRotation: 300 },
-      { bottom: '5%', src: `${STICK_BASE}/stick3.svg`, speedX: 0 },
-    ];
-
-    const container = charactersRef.current;
-    if (container) container.innerHTML = '';
-
-    stickFigures.forEach((figure, index) => {
-      const stick = document.createElement('img');
-      stick.style.position = 'absolute';
-      stick.style.width = '18%';
-      stick.style.height = '18%';
-      if (figure.top) stick.style.top = figure.top;
-      if (figure.bottom) stick.style.bottom = figure.bottom;
-      stick.src = figure.src;
-      if (figure.transform) stick.style.transform = figure.transform;
-      container?.appendChild(stick);
-
-      if (index === 5) return;
-      // Glide across only — no spinning/flipping (looked fake).
-      stick.animate([{ left: '100%' }, { left: '-20%' }], {
-        duration: figure.speedX,
-        easing: 'linear',
-        fill: 'forwards',
-      });
-    });
-
-    return () => {
-      if (container) container.innerHTML = '';
-    };
-  }, []);
-
-  return <div ref={charactersRef} className="absolute w-[99%] h-[95%] pointer-events-none" />;
-}
-
-// 3. Expanding circle reveal (canvas)
-interface Circulo {
-  x: number;
-  y: number;
-  size: number;
-}
-
-function CircleAnimation() {
+function RevealSweep() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestIdRef = useRef<number>();
-  const timerRef = useRef(0);
-  const circulosRef = useRef<Circulo[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const initArr = () => {
-      circulosRef.current = [];
-      for (let index = 0; index < 300; index++) {
-        const randomX =
-          Math.floor(Math.random() * (canvas.width * 3 - canvas.width * 1.2 + 1)) + canvas.width * 1.2;
-        const randomY =
-          Math.floor(Math.random() * (canvas.height - (canvas.height * -0.2 + 1))) + canvas.height * -0.2;
-        const size = canvas.width / 1000;
-        circulosRef.current.push({ x: randomX, y: randomY, size });
+    let raf = 0;
+    let startTs = 0;
+    const DURATION = 1300; // ms
+    let W = 0;
+    let H = 0;
+    let bubbles: Bubble[] = [];
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const setup = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // crisp but capped for perf
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = `${W}px`;
+      canvas.style.height = `${H}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const diag = Math.hypot(W, H);
+      // Density scales with screen so it always fully covers (mobile → desktop).
+      const count = Math.round(Math.min(140, Math.max(60, (W * H) / 16000)));
+      bubbles = [];
+      for (let i = 0; i < count; i++) {
+        const x = Math.random() * W;
+        bubbles.push({
+          x,
+          y: Math.random() * H,
+          // left starts first → smooth left-to-right sweep, with a little jitter
+          delay: (x / W) * 0.5 + Math.random() * 0.12,
+          target: diag * (0.16 + Math.random() * 0.16),
+        });
       }
     };
 
-    const draw = () => {
-      const context = canvas.getContext('2d');
-      if (!context) return;
-
-      timerRef.current++;
-      context.setTransform(1, 0, 0, 1, 0, 0);
-
-      const distanceX = canvas.width / 80;
-      const growthRate = canvas.width / 1000;
-
-      context.fillStyle = 'white';
-      context.clearRect(0, 0, canvas.width, canvas.height);
-
-      circulosRef.current.forEach((circulo) => {
-        context.beginPath();
-        if (timerRef.current < 65) {
-          circulo.x = circulo.x - distanceX;
-          circulo.size = circulo.size + growthRate;
-        }
-        if (timerRef.current > 65 && timerRef.current < 500) {
-          circulo.x = circulo.x - distanceX * 0.02;
-          circulo.size = circulo.size + growthRate * 0.2;
-        }
-        context.arc(circulo.x, circulo.y, circulo.size, 0, 360);
-        context.fill();
-      });
-
-      if (timerRef.current > 500) {
-        if (requestIdRef.current) cancelAnimationFrame(requestIdRef.current);
-        return;
+    const draw = (now: number) => {
+      if (!startTs) startTs = now;
+      const p = Math.min(1, (now - startTs) / DURATION);
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#ffffff';
+      for (const b of bubbles) {
+        const local = (p - b.delay) / (1 - b.delay);
+        if (local <= 0) continue;
+        const r = easeOutCubic(Math.min(1, local)) * b.target;
+        if (r <= 0) continue;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx.fill();
       }
-      requestIdRef.current = requestAnimationFrame(draw);
+      if (p < 1) {
+        raf = requestAnimationFrame(draw);
+      } else {
+        ctx.fillRect(0, 0, W, H); // guarantee a clean, fully-white finish
+      }
     };
 
-    const start = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      timerRef.current = 0;
-      if (requestIdRef.current) cancelAnimationFrame(requestIdRef.current);
-      (canvas.getContext('2d') as any)?.reset?.();
-      initArr();
-      draw();
+    const run = () => {
+      cancelAnimationFrame(raf);
+      startTs = 0;
+      setup();
+      raf = requestAnimationFrame(draw);
     };
 
-    start();
-    window.addEventListener('resize', start);
+    run();
+    window.addEventListener('resize', run);
     return () => {
-      window.removeEventListener('resize', start);
-      if (requestIdRef.current) cancelAnimationFrame(requestIdRef.current);
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', run);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="w-full h-full" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
 }
