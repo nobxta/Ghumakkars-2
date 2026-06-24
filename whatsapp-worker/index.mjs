@@ -30,6 +30,7 @@ let manualLogout = false;   // set during /logout so the close handler doesn't a
 let lastQR = null;          // latest QR string from Baileys (for panel QR login)
 let starting = false;       // guard so we never run two socket starts at once
 let reconnectTimer = null;  // single pending reconnect
+let reconnectAttempts = 0;  // backoff counter, reset on a successful connect
 
 const numberFromJid = (id) => (id ? String(id).split(':')[0].split('@')[0] : null);
 
@@ -88,26 +89,43 @@ async function startSock() {
     if (connection === 'open') {
       ready = true;
       lastQR = null;
+      reconnectAttempts = 0;
       currentNumber = numberFromJid(sock.user?.id);
       console.log(`✅ WhatsApp connected (${currentNumber}). API is live.`);
     }
     if (connection === 'close') {
       ready = false;
       const code = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = code === DisconnectReason.loggedOut;
-      if (loggedOut) {
-        // The session is dead. Wipe it so the panel can re-link cleanly, and
-        // stay idle — do NOT loop trying to reconnect a logged-out session.
+      const reasonName = Object.keys(DisconnectReason).find((k) => DisconnectReason[k] === code) || 'unknown';
+      const detail = lastDisconnect?.error?.message || '';
+      console.log(`⚠️ Connection closed — code ${code} (${reasonName})${detail ? ` — ${detail}` : ''}`);
+
+      // Logged out, or a corrupt/bad session: the saved creds are dead. Wipe them
+      // so the panel can re-link, and stay idle (reconnecting would 401/500 forever).
+      if (code === DisconnectReason.loggedOut || code === DisconnectReason.badSession) {
         currentNumber = null; lastQR = null;
         try { await rm('auth', { recursive: true, force: true }); } catch {}
-        console.log('⚠️ WhatsApp logged out (401). Re-link from Admin → Settings → WhatsApp.');
+        console.log('   → Session ended by WhatsApp. Re-link ONCE from Admin → Settings → WhatsApp.');
         return;
       }
+
+      // Another session is using this number (WhatsApp Web open in a browser, or a
+      // second worker copy). Reconnecting starts a tug-of-war that ends in a logout,
+      // so STOP and let the user close the other session.
+      if (code === DisconnectReason.connectionReplaced) {
+        console.log('   → This number is connected somewhere ELSE (WhatsApp Web in a browser, or another worker/server still running). NOT reconnecting — close that other session, then restart here. This is the usual cause of "keeps disconnecting".');
+        return;
+      }
+
       if (manualLogout) return;
-      // Transient close (network / 515 restart-required): reconnect once, debounced.
-      console.log(`⚠️ Connection closed (code ${code}). Reconnecting in 3s…`);
+
+      // Transient close (network / 408 timeout / 515 restart-required): reconnect
+      // with a capped backoff so we never hammer in a tight loop.
+      reconnectAttempts = Math.min(reconnectAttempts + 1, 6);
+      const delay = code === DisconnectReason.restartRequired ? 1000 : Math.min(3000 * reconnectAttempts, 20000);
+      console.log(`   → Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})…`);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(() => startSock(), 3000);
+      reconnectTimer = setTimeout(() => startSock(), delay);
     }
   });
 }
