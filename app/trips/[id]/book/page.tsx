@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info, Wallet, Copy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info } from 'lucide-react';
 import { nextOccurrences, formatDeparture, batchEndDate } from '@/lib/recurrence';
 
 interface Passenger {
@@ -39,6 +39,47 @@ const BOOK_CARD_SHADOW = { boxShadow: '0 8px 24px rgba(15,23,42,0.06)' } as cons
 const BOOK_FIELD = 'w-full h-11 px-4 text-sm rounded-[14px] bg-white border-2 border-gray-200 text-gray-900 placeholder-gray-400 outline-none transition-all focus:border-purple-500 focus:ring-4 focus:ring-purple-100';
 const BOOK_LABEL = 'block text-sm font-semibold text-[#0F172A] mb-1.5';
 const BOOK_SECTION_TITLE = 'text-sm font-semibold text-[#0F172A] mb-3 uppercase tracking-wide';
+const BOOK_INPUT = 'w-full h-11 pr-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]';
+
+// Labelled input with an optional leading icon (mockup "Field").
+function BookField({ label, value, onChange, placeholder, type = 'text', Icon, maxLength, inputMode }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  type?: string; Icon?: React.ElementType; maxLength?: number; inputMode?: 'numeric' | 'text' | 'email' | 'tel';
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-semibold text-[#0F172A]">{label}</label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8] pointer-events-none" />}
+        <input
+          type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+          maxLength={maxLength} inputMode={inputMode}
+          className={`${BOOK_INPUT} ${Icon ? 'pl-10' : 'pl-4'}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Labelled native select (mockup "SelectField").
+function BookSelect({ label, value, onChange, children }: {
+  label: string; value: string; onChange: (v: string) => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-semibold text-[#0F172A]">{label}</label>
+      <div className="relative">
+        <select
+          value={value} onChange={(e) => onChange(e.target.value)}
+          className={`${BOOK_INPUT} pl-4 appearance-none ${value ? '' : 'text-[#94a3b8]'}`}
+        >
+          {children}
+        </select>
+        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8] pointer-events-none" />
+      </div>
+    </div>
+  );
+}
 
 export default function BookTripPage() {
   const params = useParams();
@@ -66,6 +107,10 @@ export default function BookTripPage() {
   const [aadhaarId, setAadhaarId] = useState('');
   const [departureDate, setDepartureDate] = useState('');
   const [pickupPoint, setPickupPoint] = useState('');
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const [pickupSearch, setPickupSearch] = useState('');
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
 
   // Additional Passengers
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -829,11 +874,8 @@ export default function BookTripPage() {
           setError('Please enter a valid age');
           return false;
         }
-        if (!emergencyContactName || !emergencyContactPhone) {
-          setError('Please provide emergency contact details');
-          return false;
-        }
-        if (!/^\d{10}$/.test(emergencyContactPhone.replace(/\D/g, ''))) {
+        // Emergency contact is optional — validate the number only if provided.
+        if (emergencyContactPhone && !/^\d{10}$/.test(emergencyContactPhone.replace(/\D/g, ''))) {
           setError('Please enter a valid 10-digit emergency contact number');
           return false;
         }
@@ -855,7 +897,11 @@ export default function BookTripPage() {
         }
         return true;
       case 2:
-        // College is optional, so no validation needed
+        // Aadhaar is optional, but if entered it must be a valid 12-digit number.
+        if (aadhaarId && aadhaarId.replace(/\D/g, '').length !== 12) {
+          setError('Please enter a valid 12-digit Aadhaar number');
+          return false;
+        }
         return true;
       case 3:
         if (!transactionId.trim()) {
@@ -1328,19 +1374,13 @@ export default function BookTripPage() {
 
         {/* Step 1: Passenger Details */}
         {currentStep === 1 && (
-          <div className="max-w-[760px] rounded-[20px] bg-white p-5 sm:p-7 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+          <div className="max-w-[680px] mx-auto space-y-6">
 
-            {/* Departure date picker — recurring trips only */}
+            {/* Departure date — horizontal cards */}
             {trip?.is_recurring && typeof trip.recurrence_day === 'number' && (
-              <div className="mb-8">
-                <div className="flex items-center mb-3">
-                  <Calendar className="h-5 w-5 text-purple-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Choose your departure date</h3>
-                </div>
-                <p className="text-sm text-gray-500 mb-3">
-                  This trip departs every {formatDeparture(nextOccurrences(trip.recurrence_day, 1)[0], { weekday: 'long' })}. Pick the date you want to travel.
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <section>
+                <h2 className={BOOK_SECTION_TITLE}>Select Departure Date</h2>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => {
                     const selected = departureDate === d;
                     return (
@@ -1348,290 +1388,208 @@ export default function BookTripPage() {
                         key={d}
                         type="button"
                         onClick={() => setDepartureDate(d)}
-                        className="px-4 py-3 rounded-[16px] text-left transition-all"
+                        className="flex-shrink-0 flex flex-col items-start gap-0.5 px-5 py-3.5 rounded-[16px] min-w-[108px] transition-all"
                         style={selected
                           ? { background: PURPLE_GRAD, color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }
-                          : { background: '#fff', border: '1.5px solid #E2E8F0', boxShadow: '0 2px 8px rgba(15,23,42,0.04)' }}
+                          : { background: '#fff', border: '1.5px solid #E2E8F0', boxShadow: '0 2px 8px rgba(15,23,42,0.04)', color: '#0F172A' }}
                       >
-                        <p className="text-sm font-bold">
-                          {formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </p>
-                        <p className="text-[11px] mt-0.5" style={{ color: selected ? 'rgba(255,255,255,0.85)' : '#64748B' }}>
-                          back {formatDeparture(batchEndDate(d, trip.duration_days), { day: 'numeric', month: 'short' })}
-                        </p>
+                        <span className="text-[11px] font-medium" style={{ opacity: 0.75 }}>{formatDeparture(d, { weekday: 'short' })}</span>
+                        <span className="text-base font-bold leading-tight">{formatDeparture(d, { day: 'numeric', month: 'short' })}</span>
+                        <span className="text-[10px] mt-0.5" style={{ color: selected ? 'rgba(255,255,255,0.8)' : '#94a3b8' }}>back {formatDeparture(batchEndDate(d, trip.duration_days), { day: 'numeric', month: 'short' })}</span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Pickup point dropdown */}
+            {/* Pickup — searchable dropdown */}
             {trip?.pickup_points && trip.pickup_points.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center mb-3">
-                  <MapPin className="h-5 w-5 text-purple-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Choose your pickup point</h3>
+              <section>
+                <h2 className={BOOK_SECTION_TITLE}>Pickup Location</h2>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPickupOpen(!pickupOpen)}
+                    className="w-full h-11 px-4 flex items-center justify-between text-sm rounded-[14px] bg-white transition-all"
+                    style={{ border: `1.5px solid ${pickupOpen ? '#7C3AED' : '#E2E8F0'}`, color: pickupPoint ? '#0F172A' : '#94a3b8', boxShadow: pickupOpen ? '0 0 0 3px rgba(124,58,237,0.1)' : 'none' }}
+                  >
+                    <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-[#7C3AED]" />{pickupPoint || 'Select your pickup city'}</span>
+                    {pickupOpen ? <ChevronUp className="w-4 h-4 text-[#64748B]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
+                  </button>
+                  {pickupOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white z-20 overflow-hidden rounded-[16px]" style={{ boxShadow: '0 16px 40px rgba(15,23,42,0.14)', border: '1px solid #E2E8F0' }}>
+                      <div className="p-2 border-b border-[#f1f5f9]">
+                        <input autoFocus value={pickupSearch} onChange={(e) => setPickupSearch(e.target.value)} placeholder="Search city..."
+                          className="w-full px-3 py-2 text-sm rounded-xl outline-none bg-[#FAFAFC] text-[#0F172A]" style={{ border: '1px solid #E2E8F0' }} />
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        {trip.pickup_points.filter((c) => c.toLowerCase().includes(pickupSearch.toLowerCase())).map((city) => (
+                          <button key={city} type="button" onClick={() => { setPickupPoint(city); setPickupOpen(false); setPickupSearch(''); }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-[#f5f3ff] transition-colors text-left"
+                            style={{ color: city === pickupPoint ? '#7C3AED' : '#0F172A' }}>
+                            <MapPin className="w-3.5 h-3.5 text-[#94a3b8]" />{city}
+                            {city === pickupPoint && <Check className="w-3.5 h-3.5 text-[#7C3AED] ml-auto" strokeWidth={3} />}
+                          </button>
+                        ))}
+                        {trip.pickup_points.filter((c) => c.toLowerCase().includes(pickupSearch.toLowerCase())).length === 0 && (
+                          <p className="px-4 py-3 text-sm text-[#64748B]">No cities found</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <select
-                  value={pickupPoint}
-                  onChange={(e) => setPickupPoint(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all"
-                >
-                  <option value="">Select a pickup point…</option>
-                  {trip.pickup_points.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-2">You&rsquo;ll be picked up from here. Exact time is shared before departure.</p>
-              </div>
+              </section>
             )}
 
-            {/* Primary Passenger */}
-            <div className="mb-8">
-              <div className="flex items-center mb-4">
-                <User className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Primary Passenger</h3>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Full Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={primaryName}
-                      onChange={(e) => setPrimaryName(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                      placeholder="Enter your full name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={primaryEmail}
-                      onChange={(e) => setPrimaryEmail(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                      placeholder="your@email.com"
-                    />
-                  </div>
+            {/* Primary passenger card */}
+            <section>
+              <h2 className={BOOK_SECTION_TITLE}>Primary Passenger</h2>
+              <div className="rounded-[20px] bg-white p-5 space-y-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><User className="w-4 h-4 text-[#7C3AED]" /></div>
+                  <span className="font-semibold text-[#0F172A]">Passenger 1 (Primary)</span>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Mobile Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={primaryPhone}
-                      onChange={(e) => setPrimaryPhone(e.target.value)}
-                      required
-                      maxLength={10}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                      placeholder="10-digit number"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Gender <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={primaryGender}
-                      onChange={(e) => setPrimaryGender(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                    >
-                      <option value="">Select</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer_not_to_say">Prefer not to say</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Age <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={primaryAge}
-                      onChange={(e) => setPrimaryAge(e.target.value)}
-                      required
-                      min="1"
-                      max="120"
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                      placeholder="Age"
-                    />
-                  </div>
-                </div>
-
-                {/* Emergency Contact */}
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-center mb-4">
-                    <AlertCircle className="h-5 w-5 text-purple-600 mr-2" />
-                    <h3 className="text-lg font-semibold text-gray-900">Emergency Contact</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Contact Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={emergencyContactName}
-                        onChange={(e) => setEmergencyContactName(e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                        placeholder="Emergency contact name"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Contact Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        value={emergencyContactPhone}
-                        onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                        required
-                        maxLength={10}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                        placeholder="10-digit number"
-                      />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2"><BookField label="Full Name" value={primaryName} onChange={setPrimaryName} placeholder="Rahul Sharma" Icon={User} /></div>
+                  <BookField label="Email Address" value={primaryEmail} onChange={setPrimaryEmail} placeholder="rahul@example.com" type="email" Icon={Mail} />
+                  <BookField label="Mobile Number" value={primaryPhone} onChange={(v) => setPrimaryPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" Icon={Phone} maxLength={10} inputMode="numeric" />
+                  <BookSelect label="Gender" value={primaryGender} onChange={setPrimaryGender}>
+                    <option value="">Select gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                  </BookSelect>
+                  <BookField label="Age" value={primaryAge} onChange={(v) => setPrimaryAge(v.replace(/\D/g, '').slice(0, 3))} placeholder="25" inputMode="numeric" />
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* Additional Passengers */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <Users className="h-5 w-5 text-purple-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Additional Passengers</h3>
+            {/* Emergency contact — collapsible */}
+            <section>
+              <button type="button" onClick={() => setEmergencyOpen(!emergencyOpen)}
+                className="w-full flex items-center justify-between px-5 py-3.5 bg-white rounded-[16px] border border-[#E2E8F0] hover:bg-[#faf9ff] transition-colors" style={BOOK_CARD_SHADOW}>
+                <div className="flex items-center gap-2.5">
+                  <Phone className="w-4 h-4 text-[#7C3AED]" />
+                  <span className="text-sm font-semibold text-[#0F172A]">Emergency Contact</span>
+                  <span className="text-xs text-[#64748B] hidden sm:inline">(Optional but recommended)</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={addPassenger}
-                  disabled={!!trip.max_participants && trip.max_participants > 0 && totalPassengers >= trip.max_participants}
-                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Add Passenger</span>
-                </button>
-              </div>
-
-              {passengers.map((passenger, index) => (
-                <div key={index} className="mb-4 p-4 border-2 border-purple-100 rounded-xl bg-purple-50/30">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-900">Passenger {index + 2}</h4>
-                    <button
-                      type="button"
-                      onClick={() => removePassenger(index)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={passenger.name}
-                      onChange={(e) => updatePassenger(index, 'name', e.target.value)}
-                      placeholder="Full Name"
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <input
-                      type="tel"
-                      value={passenger.phone}
-                      onChange={(e) => updatePassenger(index, 'phone', e.target.value)}
-                      placeholder="Mobile Number"
-                      maxLength={10}
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <select
-                      value={passenger.gender}
-                      onChange={(e) => updatePassenger(index, 'gender', e.target.value)}
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900"
-                    >
-                      <option value="">Select Gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer_not_to_say">Prefer not to say</option>
-                    </select>
-                    <input
-                      type="number"
-                      value={passenger.age}
-                      onChange={(e) => updatePassenger(index, 'age', e.target.value)}
-                      placeholder="Age"
-                      min="1"
-                      max="120"
-                      className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 outline-none text-gray-900"
-                    />
-                  </div>
+                {emergencyOpen ? <ChevronUp className="w-4 h-4 text-[#64748B]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
+              </button>
+              {emergencyOpen && (
+                <div className="mt-3 rounded-[20px] bg-white p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                  <BookField label="Contact Name" value={emergencyContactName} onChange={setEmergencyContactName} placeholder="Contact name" Icon={User} />
+                  <BookField label="Contact Number" value={emergencyContactPhone} onChange={(v) => setEmergencyContactPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit number" Icon={Phone} maxLength={10} inputMode="numeric" />
                 </div>
-              ))}
-
-              {passengers.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No additional passengers. Click &quot;Add Passenger&quot; to add more.</p>
               )}
-            </div>
+            </section>
+
+            {/* Additional passengers */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-[#0F172A] uppercase tracking-wide">Additional Passengers</h2>
+                  <p className="text-xs text-[#64748B] mt-1">{totalPassengers} of {trip.max_participants && trip.max_participants > 0 ? trip.max_participants : 5} total</p>
+                </div>
+                {(!trip.max_participants || trip.max_participants <= 0 || totalPassengers < trip.max_participants) ? (
+                  <button type="button" onClick={addPassenger}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[#7C3AED] hover:bg-purple-50 transition-colors rounded-xl" style={{ border: '1.5px solid #7C3AED' }}>
+                    <Plus className="w-4 h-4" /> Add Passenger
+                  </button>
+                ) : (
+                  <span className="text-xs font-semibold text-[#D97706] bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">Max reached</span>
+                )}
+              </div>
+
+              {passengers.length === 0 ? (
+                <div className="rounded-[16px] flex flex-col items-center py-8 gap-2" style={{ border: '2px dashed #E2E8F0', background: '#FAFAFC' }}>
+                  <Users className="w-8 h-8 text-[#cbd5e1]" />
+                  <p className="text-sm text-[#64748B]">No additional passengers added</p>
+                  <p className="text-xs text-[#94a3b8]">You can add more travellers</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {passengers.map((passenger, index) => (
+                    <div key={index} className="rounded-[20px] bg-white p-5 space-y-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><User className="w-4 h-4 text-[#7C3AED]" /></div>
+                          <span className="font-semibold text-[#0F172A]">Passenger {index + 2}</span>
+                        </div>
+                        <button type="button" onClick={() => removePassenger(index)} className="p-1.5 rounded-lg text-[#EF4444] hover:bg-red-50 transition-colors"><X className="w-4 h-4" /></button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2"><BookField label="Full Name" value={passenger.name} onChange={(v) => updatePassenger(index, 'name', v)} placeholder="Full name" Icon={User} /></div>
+                        <BookField label="Mobile Number" value={passenger.phone} onChange={(v) => updatePassenger(index, 'phone', v.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit number" Icon={Phone} maxLength={10} inputMode="numeric" />
+                        <BookSelect label="Gender" value={passenger.gender} onChange={(v) => updatePassenger(index, 'gender', v)}>
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer_not_to_say">Prefer not to say</option>
+                        </BookSelect>
+                        <BookField label="Age" value={passenger.age} onChange={(v) => updatePassenger(index, 'age', v.replace(/\D/g, '').slice(0, 3))} placeholder="25" inputMode="numeric" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Continue */}
+            <button type="button" onClick={nextStep} disabled={!canBook}
+              className="w-full py-4 text-white font-bold text-base rounded-[12px] transition-all hover:opacity-95 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.35)' }}>
+              Continue to ID Verification <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         )}
 
-        {/* Step 2: College Info */}
+        {/* Step 2: ID Verification (centered) */}
         {currentStep === 2 && (
-          <div className="max-w-[600px] rounded-[20px] bg-white p-5 sm:p-7 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}>
-                <Shield className="h-5 w-5 text-[#7C3AED]" />
+          <div className="max-w-[560px] mx-auto space-y-5">
+            <div className="rounded-[20px] bg-white p-5 sm:p-6 space-y-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}>
+                  <Shield className="h-5 w-5 text-[#7C3AED]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#0F172A]">Aadhaar Verification</h2>
+                  <p className="text-sm text-[#64748B]">Enter your 12-digit Aadhaar number</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-[#0F172A]">Aadhaar Verification</h2>
-                <p className="text-sm text-[#64748B]">Enter your 12-digit Aadhaar number</p>
-              </div>
+              <input
+                type="text"
+                value={aadhaarId}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                  setAadhaarId(val.replace(/(\d{4})(?=\d)/g, '$1 ').trim());
+                }}
+                placeholder="XXXX XXXX XXXX"
+                maxLength={14}
+                inputMode="numeric"
+                className="w-full h-12 px-4 text-lg font-mono tracking-[0.25em] rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#cbd5e1] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
+              />
+              <p className="text-xs text-[#64748B]">Your Aadhaar is kept confidential and used only for identity verification.</p>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className={BOOK_LABEL}>
-                  Aadhaar Card Number
-                </label>
-                <input
-                  type="text"
-                  value={aadhaarId}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 12);
-                    setAadhaarId(val.replace(/(\d{4})(?=\d)/g, '$1 ').trim());
-                  }}
-                  placeholder="XXXX XXXX XXXX"
-                  maxLength={14}
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono tracking-wider"
-                />
-                <p className="text-xs text-[#64748B] mt-2">
-                  Your Aadhaar is kept confidential and used only for identity verification.
-                </p>
-              </div>
-              <div className="flex items-start gap-3 px-4 py-3.5 rounded-[14px]" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700">We follow strict privacy protocols and never share your information with third parties.</p>
-              </div>
+            <div className="flex items-start gap-3 px-4 py-3.5 rounded-[14px]" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+              <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700">We follow strict privacy protocols and never share your information with third parties.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button type="button" onClick={prevStep}
+                className="flex-1 py-3.5 text-sm font-semibold rounded-[12px] flex items-center justify-center gap-1.5 transition-colors hover:bg-gray-50 bg-white"
+                style={{ border: '1.5px solid #E2E8F0', color: '#64748B' }}>
+                <ArrowLeft className="w-4 h-4" />Back
+              </button>
+              <button type="button" onClick={nextStep}
+                className="flex-[2] py-3.5 text-white font-bold text-sm rounded-[12px] flex items-center justify-center gap-2 transition-all hover:opacity-95"
+                style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}>
+                Continue to Payment <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -1654,52 +1612,54 @@ export default function BookTripPage() {
                 if (showSeatLock) {
                   return (
                     <div className="space-y-3">
-                      <label className="flex items-start p-3 md:p-5 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-300 transition-all bg-white">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="full"
-                          checked={paymentMethod === 'full'}
-                          onChange={(e) => setPaymentMethod(e.target.value as 'full')}
-                          className="mt-1 w-4 h-4 md:w-5 md:h-5 text-purple-600 flex-shrink-0"
-                        />
-                        <div className="ml-3 md:ml-4 flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-1">
-                            <span className="font-semibold text-gray-900 text-base md:text-lg">Full Payment</span>
-                            <span className="text-lg md:text-xl font-bold text-purple-600">
-                              ₹{discountedPrice.toLocaleString()}
+                      {/* Full payment */}
+                      <button type="button" onClick={() => setPaymentMethod('full')}
+                        className="w-full text-left p-5 transition-all relative rounded-[20px]"
+                        style={paymentMethod === 'full'
+                          ? { background: 'linear-gradient(135deg,rgba(124,58,237,0.06),rgba(147,51,234,0.02))', border: '2px solid #7C3AED', boxShadow: '0 0 0 4px rgba(124,58,237,0.08),0 8px 24px rgba(124,58,237,0.15)' }
+                          : { background: '#fff', border: '2px solid #E2E8F0', boxShadow: '0 8px 24px rgba(15,23,42,0.06)' }}>
+                        <span className="absolute -top-2.5 left-5 text-[11px] font-bold px-3 py-0.5 rounded-full text-white" style={{ background: PURPLE_GRAD }}>Recommended</span>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center" style={{ borderColor: paymentMethod === 'full' ? '#7C3AED' : '#cbd5e1', background: paymentMethod === 'full' ? '#7C3AED' : '#fff' }}>
+                              {paymentMethod === 'full' && <span className="w-2 h-2 rounded-full bg-white" />}
                             </span>
-                          </div>
-                          <p className="text-xs md:text-sm text-gray-600">Pay the complete amount now and secure your spot</p>
-                          {couponApplied && (
-                            <p className="text-xs text-green-600 mt-1 font-medium">✓ Coupon applied: Save ₹{couponApplied.discount_amount.toLocaleString()}</p>
-                          )}
-                        </div>
-                      </label>
-                      {!isEarlyBirdActive() ? (
-                        <label className="flex items-start p-3 md:p-5 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-purple-300 transition-all bg-white">
-                          <input
-                            type="radio"
-                            name="paymentMethod"
-                            value="seat_lock"
-                            checked={paymentMethod === 'seat_lock'}
-                            onChange={(e) => setPaymentMethod(e.target.value as 'seat_lock')}
-                            className="mt-1 w-4 h-4 md:w-5 md:h-5 text-purple-600 flex-shrink-0"
-                          />
-                          <div className="ml-3 md:ml-4 flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-1">
-                              <span className="font-semibold text-gray-900 text-sm md:text-lg">Seat Lock (Partial)</span>
-                              <span className="text-lg md:text-xl font-bold text-purple-600">
-                                ₹{seatLockPrice.toLocaleString()}
-                              </span>
+                            <div>
+                              <p className="font-semibold text-[#0F172A]">Full Payment</p>
+                              <p className="text-sm text-[#64748B] mt-0.5">Pay the complete amount now and secure your seat.</p>
+                              {couponApplied && <p className="text-xs text-[#10B981] mt-1 font-medium">✓ Coupon applied: save ₹{couponApplied.discount_amount.toLocaleString()}</p>}
                             </div>
-                            <p className="text-xs md:text-sm text-gray-600">Pay ₹{seatLockPrice.toLocaleString()} now to lock your seat</p>
-                            <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Remaining ₹{(discountedPrice - seatLockPrice).toLocaleString()} due 5 days before departure. Seat lock amount is non-refundable.</p>
                           </div>
-                        </label>
+                          <p className="text-xl font-bold flex-shrink-0" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{discountedPrice.toLocaleString()}</p>
+                        </div>
+                      </button>
+
+                      {!isEarlyBirdActive() ? (
+                        <button type="button" onClick={() => setPaymentMethod('seat_lock')}
+                          className="w-full text-left p-5 transition-all rounded-[20px]"
+                          style={paymentMethod === 'seat_lock'
+                            ? { background: 'rgba(124,58,237,0.03)', border: '2px solid #7C3AED', boxShadow: '0 0 0 4px rgba(124,58,237,0.08)' }
+                            : { background: '#fff', border: '2px solid #E2E8F0', boxShadow: '0 8px 24px rgba(15,23,42,0.06)' }}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <span className="mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center" style={{ borderColor: paymentMethod === 'seat_lock' ? '#7C3AED' : '#cbd5e1', background: paymentMethod === 'seat_lock' ? '#7C3AED' : '#fff' }}>
+                                {paymentMethod === 'seat_lock' && <span className="w-2 h-2 rounded-full bg-white" />}
+                              </span>
+                              <div>
+                                <p className="font-semibold text-[#0F172A]">Seat Lock <span className="text-sm font-normal text-[#64748B]">(Partial)</span></p>
+                                <p className="text-sm text-[#64748B] mt-0.5">Pay ₹{seatLockPrice.toLocaleString()} now to reserve your seat.</p>
+                                <div className="mt-3 rounded-xl px-3.5 py-2.5 space-y-1" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                                  <p className="text-xs text-amber-700">Remaining <strong>₹{(discountedPrice - seatLockPrice).toLocaleString()}</strong> due 5 days before departure.</p>
+                                  <p className="text-xs text-amber-600">Seat lock amount is non-refundable.</p>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-xl font-bold text-[#0F172A] flex-shrink-0">₹{seatLockPrice.toLocaleString()}</p>
+                          </div>
+                        </button>
                       ) : (
-                        <div className="p-3 md:p-4 border-2 border-amber-200 rounded-xl bg-amber-50 flex items-start gap-2">
-                          <span className="text-amber-600 mt-0.5">✨</span>
+                        <div className="p-4 rounded-[16px] flex items-start gap-2" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                          <span className="mt-0.5">✨</span>
                           <div>
                             <p className="text-sm font-semibold text-amber-900">Seat lock unavailable during early bird</p>
                             <p className="text-xs text-amber-800 mt-0.5">You're saving so much already — just pay the early bird amount in full.</p>
@@ -1794,10 +1754,18 @@ export default function BookTripPage() {
               </div>
             )}
 
-            {/* Step 3: Coupon Code Section */}
-            <div className="mb-6 md:mb-8">
-              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">Apply Coupon Code (Optional)</h3>
-              <div className="p-4 md:p-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl border-2 border-purple-200">
+            {/* Coupon — collapsible */}
+            <div className="rounded-[20px] bg-white overflow-hidden border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+              <button type="button" onClick={() => setCouponOpen(!couponOpen)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#faf9ff] transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <Tag className="w-4 h-4 text-[#7C3AED]" />
+                  <span className="text-sm font-semibold text-[#0F172A]">Have a coupon code?</span>
+                  {couponApplied && <span className="text-xs font-bold text-[#10B981] bg-green-50 px-2 py-0.5 rounded-full">₹{couponApplied.discount_amount.toLocaleString()} off</span>}
+                </div>
+                {couponOpen ? <ChevronUp className="w-4 h-4 text-[#64748B]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
+              </button>
+              {couponOpen && (
+              <div className="px-5 pb-5 pt-4 border-t border-[#f1f5f9]">
                 <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
                   <input
                     type="text"
@@ -1860,6 +1828,7 @@ export default function BookTripPage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             {/* (Full price breakdown lives in the Order Summary sidebar.) */}
@@ -2100,39 +2069,12 @@ export default function BookTripPage() {
           </div>
         )}
 
-        {/* Navigation */}
-        <div className="mt-6 md:mt-8 flex justify-between items-center gap-2">
-          <button
-            type="button"
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            className={`px-3 md:px-6 py-2 md:py-3 rounded-xl font-semibold flex items-center space-x-1 md:space-x-2 transition-all text-sm md:text-base ${
-              currentStep === 1
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
-            <span className="hidden sm:inline">Previous</span>
-            <span className="sm:hidden">Prev</span>
+        {/* Step 3 back link (steps 1 & 2 have their own buttons) */}
+        {currentStep === 3 && !showPaymentDetails && (
+          <button type="button" onClick={prevStep} className="mt-5 flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#7C3AED] transition-colors">
+            <ArrowLeft className="w-4 h-4" />Back to ID Verification
           </button>
-
-          <div className="text-xs md:text-sm text-gray-600 flex-shrink-0">
-            Step {currentStep} of {totalSteps}
-          </div>
-
-          {currentStep < totalSteps || (currentStep === 3 && !showPaymentDetails) ? (
-            <button
-              type="button"
-              onClick={nextStep}
-              disabled={!canBook}
-              className="px-3 md:px-6 py-2 md:py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center space-x-1 md:space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-            >
-              <span>Next</span>
-              <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
-          ) : null}
-        </div>
+        )}
       </div>
     </div>
   );
