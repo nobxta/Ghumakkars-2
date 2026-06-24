@@ -1253,7 +1253,7 @@ export default function BookTripPage() {
               </div>
               {i < 2 && (
                 <div
-                  className="h-0.5 w-10 sm:w-16 md:w-24 mx-1.5 md:mx-2 rounded-full transition-all duration-500"
+                  className="h-0.5 w-8 sm:w-14 md:w-20 mx-2 sm:mb-5 rounded-full transition-all duration-500"
                   style={{ background: done ? '#10B981' : '#E2E8F0' }}
                 />
               )}
@@ -1333,23 +1333,32 @@ export default function BookTripPage() {
         </div>
       )}
 
-      {/* Sticky progress header */}
-      <div className="sticky top-16 md:top-20 z-30 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.85)', borderBottom: '1px solid rgba(124,58,237,0.1)' }}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-          <Link href={`/trips/${params.id}`} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-600 transition-colors flex-shrink-0">
+      {/* Sticky progress header — 3-column grid keeps the steps perfectly centred */}
+      <div className="sticky top-16 md:top-20 z-30 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.9)', borderBottom: '1px solid rgba(124,58,237,0.1)' }}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <Link href={`/trips/${params.id}`} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-purple-600 transition-colors">
             <ArrowLeft className="h-4 w-4" /><span className="hidden sm:inline">Back</span>
           </Link>
-          <StepIndicator />
-          <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full flex-shrink-0" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/3</span>
+          <div className="flex justify-center min-w-0"><StepIndicator /></div>
+          <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/3</span>
         </div>
       </div>
 
-      {/* Trip pill */}
+      {/* Trip summary bar */}
       <div style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.05),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.07)' }}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2">
-          <MapPin className="h-3.5 w-3.5 text-purple-600 flex-shrink-0" />
-          <span className="text-sm font-semibold text-gray-900 truncate">{trip.title}</span>
-          {trip.destination && <><span className="text-gray-300">·</span><span className="text-sm text-gray-500 truncate">{trip.destination}</span></>}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+          <span className="flex items-center gap-1.5 min-w-0">
+            <MapPin className="h-4 w-4 text-purple-600 flex-shrink-0" />
+            <span className="text-sm font-bold text-gray-900 truncate">{trip.title}</span>
+          </span>
+          {trip.destination && (
+            <span className="text-xs text-gray-500 truncate">{trip.destination}</span>
+          )}
+          {trip.is_recurring && departureDate && (
+            <span className="ml-auto text-[11px] font-semibold text-purple-700 bg-white/70 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.15)' }}>
+              {formatDeparture(departureDate, { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+          )}
         </div>
       </div>
 
