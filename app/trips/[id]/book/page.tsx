@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, CheckCircle, MapPin } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Calendar, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info, Wallet, Copy } from 'lucide-react';
 import { nextOccurrences, formatDeparture, batchEndDate } from '@/lib/recurrence';
 
 interface Passenger {
@@ -31,6 +31,14 @@ interface Trip {
 }
 
 // Removed college list — no longer needed
+
+// ── Booking redesign tokens ──
+const PURPLE_GRAD = 'linear-gradient(135deg,#7C3AED,#9333EA)';
+const BOOK_CARD = 'rounded-[20px] bg-white border border-[#E2E8F0]';
+const BOOK_CARD_SHADOW = { boxShadow: '0 8px 24px rgba(15,23,42,0.06)' } as const;
+const BOOK_FIELD = 'w-full h-11 px-4 text-sm rounded-[14px] bg-white border-2 border-gray-200 text-gray-900 placeholder-gray-400 outline-none transition-all focus:border-purple-500 focus:ring-4 focus:ring-purple-100';
+const BOOK_LABEL = 'block text-sm font-semibold text-[#0F172A] mb-1.5';
+const BOOK_SECTION_TITLE = 'text-sm font-semibold text-[#0F172A] mb-3 uppercase tracking-wide';
 
 export default function BookTripPage() {
   const params = useParams();
@@ -1168,49 +1176,50 @@ export default function BookTripPage() {
   const availableSpots = unlimitedSeats ? Infinity : trip.max_participants - trip.current_participants;
   const canBook = unlimitedSeats || availableSpots >= totalPassengers;
 
-  // Step Indicator
-  const StepIndicator = () => (
-    <div className="mb-6 md:mb-8">
-      <div className="flex items-center justify-between">
-        {[
-          { num: 1, label: 'Passenger Details' },
-          { num: 2, label: 'ID Verification' },
-          { num: 3, label: 'Payment' },
-        ].map((step, index) => {
-          const isActive = currentStep === step.num;
-          const isCompleted = currentStep > step.num;
-          const isLast = index === 2;
-
+  // Polished progress bar (Passenger → ID → Payment)
+  const StepIndicator = () => {
+    const labels = ['Passenger Details', 'ID Verification', 'Payment'];
+    return (
+      <div className="flex items-center justify-center">
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const done = currentStep > n;
+          const active = currentStep === n;
           return (
-            <div key={step.num} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
+            <div key={n} className="flex items-center">
+              <div className="flex flex-col items-center gap-1.5">
                 <div
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold transition-all text-sm md:text-base ${
-                    isActive
-                      ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-lg scale-110'
-                      : isCompleted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
+                  className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-xs md:text-sm font-bold transition-all duration-300"
+                  style={{
+                    background: done ? '#10B981' : active ? 'linear-gradient(135deg,#7C3AED,#9333EA)' : '#E2E8F0',
+                    color: done || active ? '#fff' : '#94a3b8',
+                    boxShadow: active ? '0 4px 14px rgba(124,58,237,0.4)' : 'none',
+                  }}
                 >
-                  {step.num}
+                  {done ? <Check className="w-4 h-4" strokeWidth={3} /> : n}
                 </div>
-                <span className={`mt-1 md:mt-2 text-xs font-medium hidden sm:block ${isActive ? 'text-purple-600' : isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
-                  {step.label}
+                <span
+                  className="text-[10px] md:text-[11px] font-semibold hidden sm:block whitespace-nowrap"
+                  style={{ color: done ? '#10B981' : active ? '#7C3AED' : '#94a3b8' }}
+                >
+                  {label}
                 </span>
               </div>
-              {!isLast && (
-                <div className={`h-1 flex-1 mx-1 md:mx-2 transition-all ${isCompleted ? 'bg-green-500' : currentStep > step.num ? 'bg-purple-300' : 'bg-gray-200'}`} />
+              {i < 2 && (
+                <div
+                  className="h-0.5 w-10 sm:w-16 md:w-24 mx-1.5 md:mx-2 rounded-full transition-all duration-500"
+                  style={{ background: done ? '#10B981' : '#E2E8F0' }}
+                />
               )}
             </div>
           );
         })}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-br from-purple-50/30 via-white to-purple-50/30 pb-16 md:pb-0">
+    <div className="min-h-screen pt-16 md:pt-20 pb-24 md:pb-12" style={{ background: '#FAFAFC' }}>
       {/* Toast notifications — replaces native alert() */}
       {toast && (
         <div
@@ -1278,39 +1287,48 @@ export default function BookTripPage() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-        <Link
-          href={`/trips/${params.id}`}
-          className="inline-flex items-center text-purple-600 hover:text-purple-700 mb-4 md:mb-6 text-xs md:text-sm font-medium transition-colors group"
-        >
-          <ArrowLeft className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2 group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Trip Details</span>
-        </Link>
+      {/* Sticky progress header */}
+      <div className="sticky top-16 md:top-20 z-30 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.85)', borderBottom: '1px solid rgba(124,58,237,0.1)' }}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <Link href={`/trips/${params.id}`} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-600 transition-colors flex-shrink-0">
+            <ArrowLeft className="h-4 w-4" /><span className="hidden sm:inline">Back</span>
+          </Link>
+          <StepIndicator />
+          <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full flex-shrink-0" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/3</span>
+        </div>
+      </div>
 
-        <div className="mb-4 md:mb-6">
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 md:mb-2">Book Your Trip</h1>
-          <p className="text-sm md:text-base text-gray-600 break-words">{trip.title}</p>
+      {/* Trip pill */}
+      <div style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.05),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.07)' }}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2">
+          <MapPin className="h-3.5 w-3.5 text-purple-600 flex-shrink-0" />
+          <span className="text-sm font-semibold text-gray-900 truncate">{trip.title}</span>
+          {trip.destination && <><span className="text-gray-300">·</span><span className="text-sm text-gray-500 truncate">{trip.destination}</span></>}
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{['Passenger Details', 'ID Verification', 'Complete Payment'][currentStep - 1]}</h1>
+          <p className="text-gray-500 mt-1.5 text-sm">{['Fill in traveller information for your trip', 'Verify your identity to proceed to payment', 'Choose your option and confirm your booking'][currentStep - 1]}</p>
         </div>
 
         {!canBook && (
-          <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700">
-            <p className="font-medium text-sm md:text-base">Not enough spots available</p>
-            <p className="text-xs md:text-sm mt-1">Only {availableSpots} spot(s) available, but you&apos;re trying to book {totalPassengers}.</p>
+          <div className="mb-6 p-4 rounded-2xl" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+            <p className="font-semibold text-sm text-red-800">Not enough spots available</p>
+            <p className="text-xs mt-1 text-red-600">Only {availableSpots} spot(s) available, but you&apos;re trying to book {totalPassengers}.</p>
           </div>
         )}
 
-        <StepIndicator />
-
         {error && (
-          <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-xs md:text-sm break-words">
-            {error}
+          <div className="mb-6 p-3.5 rounded-2xl text-sm flex items-start gap-2" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" /><span className="break-words">{error}</span>
           </div>
         )}
 
         {/* Step 1: Passenger Details */}
         {currentStep === 1 && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 md:p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Passenger Details</h2>
+          <div className="max-w-[760px] rounded-[20px] bg-white p-5 sm:p-7 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
 
             {/* Departure date picker — recurring trips only */}
             {trip?.is_recurring && typeof trip.recurrence_day === 'number' && (
@@ -1330,16 +1348,15 @@ export default function BookTripPage() {
                         key={d}
                         type="button"
                         onClick={() => setDepartureDate(d)}
-                        className={`px-3 py-3 rounded-xl border-2 text-left transition-all ${
-                          selected
-                            ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-100'
-                            : 'border-gray-200 hover:border-purple-300 bg-white'
-                        }`}
+                        className="px-4 py-3 rounded-[16px] text-left transition-all"
+                        style={selected
+                          ? { background: PURPLE_GRAD, color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }
+                          : { background: '#fff', border: '1.5px solid #E2E8F0', boxShadow: '0 2px 8px rgba(15,23,42,0.04)' }}
                       >
-                        <p className={`text-sm font-bold ${selected ? 'text-purple-700' : 'text-gray-900'}`}>
+                        <p className="text-sm font-bold">
                           {formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short' })}
                         </p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">
+                        <p className="text-[11px] mt-0.5" style={{ color: selected ? 'rgba(255,255,255,0.85)' : '#64748B' }}>
                           back {formatDeparture(batchEndDate(d, trip.duration_days), { day: 'numeric', month: 'short' })}
                         </p>
                       </button>
@@ -1580,16 +1597,21 @@ export default function BookTripPage() {
 
         {/* Step 2: College Info */}
         {currentStep === 2 && (
-          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-4 sm:p-6 md:p-8">
-            <div className="flex items-center mb-4 sm:mb-6">
-              <User className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mr-2 sm:mr-3" />
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">ID Verification</h2>
+          <div className="max-w-[600px] rounded-[20px] bg-white p-5 sm:p-7 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}>
+                <Shield className="h-5 w-5 text-[#7C3AED]" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-[#0F172A]">Aadhaar Verification</h2>
+                <p className="text-sm text-[#64748B]">Enter your 12-digit Aadhaar number</p>
+              </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Aadhaar Card Number <span className="text-red-500">*</span>
+                <label className={BOOK_LABEL}>
+                  Aadhaar Card Number
                 </label>
                 <input
                   type="text"
@@ -1602,9 +1624,13 @@ export default function BookTripPage() {
                   maxLength={14}
                   className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono tracking-wider"
                 />
-                <p className="text-xs text-gray-500 mt-2">
-                  Required for trip verification. Your Aadhaar is kept confidential and used only for identity verification.
+                <p className="text-xs text-[#64748B] mt-2">
+                  Your Aadhaar is kept confidential and used only for identity verification.
                 </p>
+              </div>
+              <div className="flex items-start gap-3 px-4 py-3.5 rounded-[14px]" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700">We follow strict privacy protocols and never share your information with third parties.</p>
               </div>
             </div>
           </div>
@@ -1612,15 +1638,12 @@ export default function BookTripPage() {
 
         {/* Step 3: Payment */}
         {currentStep === 3 && !showPaymentDetails && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-4 md:p-8">
-            <div className="flex items-center mb-4 md:mb-6">
-              <CreditCard className="h-5 w-5 md:h-6 md:w-6 text-purple-600 mr-2 md:mr-3" />
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900">Complete Payment</h2>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8 items-start">
+            <div className="space-y-6">
 
-            {/* Step 1: Payment Method Selection */}
-            <div className="mb-6 md:mb-8">
-              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">Choose Payment Option</h3>
+            {/* Payment option */}
+            <div>
+              <h3 className={BOOK_SECTION_TITLE}>Payment Option</h3>
               {(() => {
                 const fullPrice = getBasePrice();
                 const seatLockPrice = trip.seat_lock_price ? trip.seat_lock_price * totalPassengers : 0;
@@ -1839,53 +1862,7 @@ export default function BookTripPage() {
               </div>
             </div>
 
-            {/* Step 4: Final Summary */}
-            <div className="mb-4 md:mb-6 p-4 md:p-6 bg-purple-50 rounded-xl border-2 border-purple-200">
-              <h3 className="font-semibold text-gray-900 mb-3 md:mb-4 text-base md:text-lg">Payment Summary</h3>
-              <div className="space-y-2 md:space-y-3">
-                <div className="flex justify-between text-xs md:text-sm">
-                  <span className="text-gray-600">Base Trip Amount ({totalPassengers} {totalPassengers === 1 ? 'person' : 'people'}):</span>
-                  <span className="font-medium text-gray-900">₹{getBasePrice().toLocaleString()}</span>
-                </div>
-                {couponApplied && (
-                  <div className="flex justify-between text-xs md:text-sm">
-                    <span className="text-green-600">Coupon Discount ({couponApplied.coupon.code}):</span>
-                    <span className="font-medium text-green-600">-₹{couponApplied.discount_amount.toLocaleString()}</span>
-                  </div>
-                )}
-                
-                {paymentMethod === 'seat_lock' && trip.seat_lock_price && (
-                  <>
-                    <div className="flex justify-between text-xs md:text-sm pt-2 border-t border-purple-200">
-                      <span className="text-gray-600 font-medium">Net Trip Price:</span>
-                      <span className="font-medium text-gray-900">
-                        ₹{Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs md:text-sm text-gray-600">
-                      <span>Seat Lock Amount (Paying Now):</span>
-                      <span className="font-medium">₹{Math.min(trip.seat_lock_price * totalPassengers, Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0))).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-xs md:text-sm text-orange-600">
-                      <span>Remaining Balance (Due Later):</span>
-                      <span className="font-medium">
-                        ₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - (trip.seat_lock_price * totalPassengers)).toLocaleString()}
-                      </span>
-                    </div>
-                  </>
-                )}
-                {useWallet && walletAmount > 0 && (
-                  <div className="flex justify-between text-xs md:text-sm">
-                    <span className="text-green-600">Wallet Balance Used:</span>
-                    <span className="font-medium text-green-600">-₹{walletAmount.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="pt-2 md:pt-3 border-t-2 border-purple-300 flex justify-between items-center gap-2">
-                  <span className="text-base md:text-lg font-bold text-gray-900">Amount to Pay:</span>
-                  <span className="text-xl md:text-2xl font-bold text-purple-600">₹{calculateTotalPrice().toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
+            {/* (Full price breakdown lives in the Order Summary sidebar.) */}
 
             {/* Payment methods: Pay Now (Razorpay or QR) + Pay in Person (Cash) */}
             <div className="space-y-3">
@@ -1949,6 +1926,43 @@ export default function BookTripPage() {
                 </div>
               )}
             </div>
+            </div>
+
+            {/* Order summary sidebar */}
+            <aside className="lg:sticky lg:top-32">
+              <div className="rounded-[20px] bg-white overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.14)' }}>
+                <div className="px-5 py-4" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.07),rgba(147,51,234,0.02))', borderBottom: '1px solid rgba(124,58,237,0.08)' }}>
+                  <p className="text-sm font-bold text-[#0F172A]">Order Summary</p>
+                </div>
+                <div className="px-5 py-5 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><MapPin className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" /><span className="truncate">{trip.title}</span></div>
+                    <div className="flex items-center gap-2 text-xs text-[#64748B]"><Users className="w-3.5 h-3.5 text-[#7C3AED] flex-shrink-0" />{totalPassengers} {totalPassengers === 1 ? 'Traveller' : 'Travellers'}</div>
+                  </div>
+                  <div className="h-px bg-[#f1f5f9]" />
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between"><span className="text-[#64748B]">Base Fare</span><span className="font-medium text-[#0F172A]">₹{getBasePrice().toLocaleString('en-IN')}</span></div>
+                    {couponApplied && <div className="flex justify-between"><span className="text-[#10B981] flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span><span className="font-semibold text-[#10B981]">−₹{couponApplied.discount_amount.toLocaleString('en-IN')}</span></div>}
+                    {useWallet && walletAmount > 0 && <div className="flex justify-between"><span className="text-[#10B981]">Wallet Used</span><span className="font-semibold text-[#10B981]">−₹{walletAmount.toLocaleString('en-IN')}</span></div>}
+                    {paymentMethod === 'seat_lock' && trip.seat_lock_price && <div className="flex justify-between"><span className="text-[#D97706]">Due Later</span><span className="font-medium text-[#D97706]">₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - getAmountToPayBeforeWallet()).toLocaleString('en-IN')}</span></div>}
+                  </div>
+                  <div className="h-px bg-[#f1f5f9]" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-[#0F172A]">{paymentMethod === 'seat_lock' ? 'Paying Today' : 'Total Amount'}</span>
+                    <span className="text-2xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+                  </div>
+                  <p className="text-[11px] text-[#94a3b8] text-center">All taxes &amp; fees included · No hidden charges</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-[20px] bg-white px-4 py-4 grid grid-cols-3 gap-2 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+                {[{ Icon: Lock, label: 'Secure' }, { Icon: Zap, label: 'Instant' }, { Icon: Headphones, label: '24/7 Help' }].map((t) => (
+                  <div key={t.label} className="flex flex-col items-center text-center gap-1.5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.08)' }}><t.Icon className="w-4 h-4 text-[#7C3AED]" /></div>
+                    <p className="text-[10px] font-semibold text-[#0F172A] leading-tight">{t.label}</p>
+                  </div>
+                ))}
+              </div>
+            </aside>
           </div>
         )}
 
