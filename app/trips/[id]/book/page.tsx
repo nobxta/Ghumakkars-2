@@ -1371,8 +1371,8 @@ export default function BookTripPage() {
       {/* Sticky progress header — 3-column grid keeps the steps perfectly centred */}
       <div className="sticky top-16 md:top-20 z-30 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.9)', borderBottom: '1px solid rgba(124,58,237,0.1)' }}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-[auto_1fr_auto] items-center gap-3">
-          <Link href={`/trips/${params.id}`} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-purple-600 transition-colors">
-            <ArrowLeft className="h-4 w-4" /><span className="hidden sm:inline">Back</span>
+          <Link href={`/trips/${params.id}`} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-red-500 transition-colors">
+            <X className="h-4 w-4" /><span className="hidden sm:inline">Cancel</span>
           </Link>
           <div className="flex justify-center min-w-0"><StepIndicator /></div>
           <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/3</span>
