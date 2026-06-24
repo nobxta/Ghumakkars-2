@@ -1960,133 +1960,91 @@ export default function BookTripPage() {
 
         {/* Payment Details: QR Code and Transaction ID (Manual Mode Only) */}
         {currentStep === 3 && showPaymentDetails && paymentMode === 'manual' && (
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-4 md:p-8">
-            <div className="flex items-center justify-between mb-4 md:mb-6">
-              <div className="flex items-center min-w-0 flex-1">
-                <QrCode className="h-5 w-5 md:h-6 md:w-6 text-purple-600 mr-2 md:mr-3 flex-shrink-0" />
-                <h2 className="text-lg md:text-2xl font-bold text-gray-900 truncate">Complete Your Payment</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPaymentDetails(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
-              >
-                <ArrowLeft className="h-4 w-4 md:h-5 md:w-5 text-gray-600" />
+          <div className="max-w-[520px] mx-auto space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setShowPaymentDetails(false)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
+                <ArrowLeft className="h-4 w-4 text-[#64748B]" />
               </button>
-            </div>
-
-            {/* Payment Summary */}
-            <div className="mb-4 md:mb-6 p-3 md:p-5 bg-purple-50 rounded-xl border-2 border-purple-200">
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-gray-600 font-medium text-sm md:text-base">Amount to Pay:</span>
-                <span className="text-xl md:text-2xl font-bold text-purple-600">₹{calculateTotalPrice().toLocaleString()}</span>
+              <div>
+                <h2 className="text-base font-semibold text-[#0F172A]">Complete your payment</h2>
+                <p className="text-xs text-[#64748B]">Pay via UPI, then enter the transaction ID</p>
               </div>
             </div>
 
-            {/* Payment Instructions */}
-            <div className="mb-4 md:mb-6 p-3 md:p-5 bg-blue-50 rounded-xl border-2 border-blue-200">
-              <h3 className="font-semibold text-gray-900 mb-2 md:mb-3 flex items-center text-sm md:text-base">
-                <AlertCircle className="h-4 w-4 md:h-5 md:w-5 mr-2 text-blue-600 flex-shrink-0" />
-                Payment Instructions
-              </h3>
-              <ol className="space-y-1 md:space-y-2 text-xs md:text-sm text-gray-700 list-decimal list-inside">
-                <li>Make payment using the QR code or UPI ID below</li>
-                <li>After successful payment, you&apos;ll receive a transaction ID (Txn ID)</li>
-                <li>Enter the transaction ID in the field below</li>
-                <li>Click &quot;Submit Booking&quot; to complete your reservation</li>
-              </ol>
+            {/* Amount */}
+            <div className="rounded-[16px] px-5 py-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.07),rgba(147,51,234,0.02))', border: '1px solid rgba(124,58,237,0.14)' }}>
+              <span className="text-sm font-medium text-[#64748B]">Amount to pay</span>
+              <span className="text-xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
             </div>
 
-            {/* QR Code and UPI ID */}
-            <div className="mb-4 md:mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              <div className="p-3 md:p-6 bg-gray-50 border-2 border-gray-200 rounded-xl text-center">
-                <QrCode className="h-6 w-6 md:h-8 md:w-8 text-purple-600 mx-auto mb-2 md:mb-3" />
-                <p className="text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3">Scan QR Code to Pay</p>
-                {paymentSettings.qrUrl ? (
-                  <div className="w-full h-48 md:h-64 bg-white rounded-lg flex items-center justify-center border-2 border-gray-300 overflow-hidden shadow-inner">
-                    <img
-                      src={paymentSettings.qrUrl}
-                      alt="Payment QR Code"
-                      className="w-full h-full object-contain p-2"
-                    />
+            {/* QR + UPI */}
+            <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+              {paymentSettings.qrUrl ? (
+                <div className="flex flex-col items-center">
+                  <p className="text-xs font-semibold text-[#64748B] mb-3">Scan to pay</p>
+                  <div className="w-44 h-44 rounded-[14px] bg-white flex items-center justify-center overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
+                    <img src={paymentSettings.qrUrl} alt="Payment QR" className="w-full h-full object-contain p-1.5" />
                   </div>
-                ) : (
-                  <div className="w-full h-48 md:h-64 bg-gray-100 rounded-lg flex flex-col items-center justify-center border-2 border-gray-200">
-                    <QrCode className="h-8 w-8 md:h-12 md:w-12 text-gray-400 mb-2" />
-                    <p className="text-xs md:text-sm text-gray-500">QR Code not configured</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 md:p-6 bg-gray-50 border-2 border-gray-200 rounded-xl">
-                <div className="flex items-center mb-3 md:mb-4">
-                  <Phone className="h-4 w-4 md:h-5 md:w-5 text-purple-600 mr-2 flex-shrink-0" />
-                  <p className="font-semibold text-gray-700 text-sm md:text-base">UPI ID</p>
                 </div>
-                {paymentSettings.upiId ? (
-                  <>
-                    <div className="p-3 md:p-4 bg-white rounded-lg border-2 border-purple-200 mb-2 md:mb-3">
-                      <p className="font-mono text-base md:text-xl font-bold text-purple-700 break-all text-center">
-                        {paymentSettings.upiId}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(paymentSettings.upiId || '');
-                        showToast('UPI ID copied to clipboard!', 'success');
-                      }}
-                      className="w-full px-3 md:px-4 py-2 bg-purple-600 text-white rounded-lg text-xs md:text-sm font-semibold hover:bg-purple-700 transition-colors"
-                    >
-                      Copy UPI ID
-                    </button>
-                  </>
-                ) : (
-                  <div className="p-3 md:p-4 bg-gray-100 rounded-lg border-2 border-gray-200">
-                    <p className="text-xs md:text-sm text-gray-500 text-center">UPI ID not configured</p>
+              ) : (
+                <div className="w-44 h-44 mx-auto rounded-[14px] bg-[#FAFAFC] flex flex-col items-center justify-center gap-2" style={{ border: '1px dashed #E2E8F0' }}>
+                  <QrCode className="h-8 w-8 text-[#cbd5e1]" />
+                  <p className="text-xs text-[#94a3b8]">QR not configured</p>
+                </div>
+              )}
+
+              {paymentSettings.upiId && (
+                <>
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-[#E2E8F0]" /><span className="text-xs text-[#94a3b8]">or pay to UPI ID</span><div className="flex-1 h-px bg-[#E2E8F0]" />
                   </div>
-                )}
-              </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 rounded-[12px] px-3.5 py-2.5 bg-[#FAFAFC] min-w-0" style={{ border: '1px solid #E2E8F0' }}>
+                      <p className="font-mono text-sm font-bold text-[#7C3AED] truncate text-center">{paymentSettings.upiId}</p>
+                    </div>
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(paymentSettings.upiId || ''); showToast('UPI ID copied!', 'success'); }}
+                      className="flex-shrink-0 px-4 py-2.5 rounded-[12px] text-sm font-semibold text-white transition-all hover:opacity-95" style={{ background: PURPLE_GRAD }}>Copy</button>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Transaction ID Input */}
-            <div className="mb-4 md:mb-6">
-              <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3">
-                Transaction ID (Txn ID) <span className="text-red-500">*</span>
-              </label>
+            {/* Instructions */}
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-[14px]" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+              <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">Pay using the QR or UPI ID above, then paste the transaction ID (from your payment SMS / receipt) below and submit.</p>
+            </div>
+
+            {/* Transaction ID */}
+            <div>
+              <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Transaction ID (Txn ID)</label>
               <input
                 type="text"
                 value={transactionId}
-                onChange={(e) => {
-                  setTransactionId(e.target.value);
-                  setError('');
-                }}
-                placeholder="Enter transaction ID from payment confirmation"
-                className="w-full px-3 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 md:focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono text-sm md:text-lg"
-                required
+                onChange={(e) => { setTransactionId(e.target.value); setError(''); }}
+                placeholder="Enter transaction ID"
+                className="w-full h-11 px-4 text-sm font-mono rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
               />
-              <p className="text-xs text-gray-500 mt-1 md:mt-2">
-                You can find the Transaction ID in your payment confirmation SMS or receipt
-              </p>
+              <p className="text-xs text-[#94a3b8] mt-1.5">Found in your payment confirmation SMS or receipt.</p>
             </div>
 
-            {/* Submit Button */}
+            {error && (
+              <div className="p-3 rounded-[12px] text-sm" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>{error}</div>
+            )}
+
+            {/* Submit */}
             <button
               type="button"
               onClick={handleSubmit}
               disabled={submitting || !transactionId.trim()}
-              className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3.5 text-white font-bold text-sm rounded-[12px] flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50"
+              style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.3)' }}
             >
               {submitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-white border-t-transparent"></div>
-                  <span>Submitting Booking...</span>
-                </>
+                <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />Submitting…</>
               ) : (
-                <>
-                  <Save className="h-4 w-4 md:h-6 md:w-6" />
-                  <span>Submit Booking</span>
-                </>
+                <><Save className="h-4 w-4" />Submit Booking</>
               )}
             </button>
           </div>
