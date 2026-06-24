@@ -105,20 +105,12 @@ function CharactersAnimation() {
       container?.appendChild(stick);
 
       if (index === 5) return;
+      // Glide across only — no spinning/flipping (looked fake).
       stick.animate([{ left: '100%' }, { left: '-20%' }], {
         duration: figure.speedX,
         easing: 'linear',
         fill: 'forwards',
       });
-
-      if (index === 0) return;
-      if (figure.speedRotation) {
-        stick.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(-360deg)' }], {
-          duration: figure.speedRotation,
-          iterations: Infinity,
-          easing: 'linear',
-        });
-      }
     });
 
     return () => {
