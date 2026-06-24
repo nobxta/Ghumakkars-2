@@ -22,7 +22,11 @@ if (!API_SECRET) {
   process.exit(1);
 }
 
-const logger = pino({ level: 'warn' });
+// Silence Baileys' internal logger. It spams harmless level-50 noise on every
+// connect ("init queries Timed Out" 408) and on transient stream errors (503/515)
+// that the worker already recovers from. Our own console logs below cover every
+// connect/disconnect with a clear reason, so nothing useful is lost.
+const logger = pino({ level: 'silent' });
 let sock = null;
 let ready = false;
 let currentNumber = null;   // the linked WhatsApp number (digits), once connected
