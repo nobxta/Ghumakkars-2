@@ -364,7 +364,7 @@ export default function AdminBookingDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-16 pb-24 bg-[#FAFAFA] tabular-nums print:bg-white print:pt-0 print:pb-0">
+    <div className="min-h-screen pb-8 bg-[#FAFAFA] tabular-nums print:bg-white print:pt-0 print:pb-0">
       {/* Print-only header */}
       <div className="hidden print:block max-w-4xl mx-auto px-6 pt-6 pb-4 border-b border-gray-300">
         <div className="flex items-center justify-between">
@@ -381,7 +381,7 @@ export default function AdminBookingDetailsPage() {
 
       {/* Sticky top header — the only place booking status appears */}
       <div className="sticky top-16 z-30 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
+        <div className="w-full h-14 flex items-center gap-3">
           <Link href="/admin/bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Bookings</span>
@@ -407,7 +407,7 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 print:py-3">
+      <div className="w-full py-3 sm:py-4 print:py-3">
         {/* Conditional action banner — only when an admin action is required */}
         {(() => {
           const pendingTxn = (booking.payment_transactions || []).find((t: any) => t.payment_status === 'pending');
@@ -441,9 +441,9 @@ export default function AdminBookingDetailsPage() {
           return null;
         })()}
 
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4 lg:items-start">
+        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
           {/* Right rail — Actions + Contact */}
-          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-3 lg:mb-0">
+          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-6 lg:mb-0">
             {/* Actions — each opens its own focused panel */}
             <div className="bg-white border border-[#ECECEE] rounded-2xl overflow-hidden print:hidden shadow-sm">
               <p className="px-5 pt-4 pb-2 text-[11px] uppercase tracking-wider font-semibold text-gray-400 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Actions</p>
@@ -486,7 +486,7 @@ export default function AdminBookingDetailsPage() {
           </aside>
 
           {/* Main column */}
-          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-3 min-w-0">
+          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-6 min-w-0">
 
             {/* Booking Overview — the hero / first thing admins read */}
             <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">

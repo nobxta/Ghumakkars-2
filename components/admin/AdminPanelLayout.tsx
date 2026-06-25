@@ -21,7 +21,7 @@ export default function AdminPanelLayout({
       <AdminNavbar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="md:ml-60 pt-12 sm:pt-14 md:pt-16 pb-20 md:pb-4 min-h-screen">
-        <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="px-4 sm:px-6 py-4 sm:py-6 w-full max-w-[1700px] mx-auto">
           {children}
         </div>
       </main>
