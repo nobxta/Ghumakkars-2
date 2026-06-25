@@ -36,6 +36,8 @@ export default function AdminUserDetailsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [impersonating, setImpersonating] = useState(false);
+  const [impersonateLink, setImpersonateLink] = useState<string | null>(null);
 
   // Form states
   const [editForm, setEditForm] = useState<any>(null);
@@ -267,11 +269,22 @@ export default function AdminUserDetailsPage() {
     }
   };
 
-  // Open an isolated "view as user" tab. The new tab establishes the user's session in
-  // its own per-tab sessionStorage (never the shared auth cookie), so the admin stays
-  // logged in here. No magic-link, no redirect, no logout.
-  const handleImpersonate = () => {
-    window.open(`/admin/impersonate/${params.id}`, '_blank', 'noopener');
+  // Mint a one-time login link for this user. Opening it performs a REAL login on the
+  // browser's cookie session, so the whole app works as the user. Since a browser holds
+  // only one login per site, open it in a SEPARATE browser / incognito to keep admin.
+  const handleImpersonate = async () => {
+    setImpersonating(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${params.id}/impersonate`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create a login link');
+      setImpersonateLink(`${window.location.origin}/auth/impersonate?token_hash=${encodeURIComponent(data.token_hash)}`);
+    } catch (e: any) {
+      setActionMessage({ type: 'error', text: e.message });
+    } finally {
+      setImpersonating(false);
+    }
   };
 
   // Permanently delete the user and all their data.
@@ -580,8 +593,8 @@ export default function AdminUserDetailsPage() {
               )}
               {user.email && <a href={`mailto:${user.email}`} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Mail className="h-4 w-4 text-gray-400" />Email user</a>}
               {user.phone && <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><MessageCircle className="h-4 w-4 text-gray-400" />WhatsApp</a>}
-              <button onClick={handleImpersonate} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-purple-700 hover:bg-purple-50 border-t border-gray-100">
-                <LogIn className="h-4 w-4" />View as user
+              <button onClick={handleImpersonate} disabled={impersonating} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-purple-700 hover:bg-purple-50 border-t border-gray-100 disabled:opacity-60">
+                {impersonating ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" /> : <LogIn className="h-4 w-4" />}View as user
               </button>
               <button onClick={() => { setDeleteConfirm(''); setShowDeleteModal(true); }} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-red-600 hover:bg-red-50 border-t border-gray-100">
                 <Trash2 className="h-4 w-4" />Delete user
@@ -883,6 +896,33 @@ export default function AdminUserDetailsPage() {
         )}
 
       </div>
+
+      {/* View as user — one-time login link */}
+      {impersonateLink && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl border border-purple-200 max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-2xl bg-purple-100 flex items-center justify-center flex-shrink-0"><LogIn className="h-5 w-5 text-purple-600" /></div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Log in as this user</h3>
+                <p className="text-xs text-gray-500">Full access to their account, exactly as they see it.</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 mb-4">
+              Open this link in a <strong>separate browser or an incognito window</strong> to keep your admin session here. Opening it in <em>this</em> browser will log you in as the user and replace your admin session (you&apos;d just sign back in as admin afterward).
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <input readOnly value={impersonateLink} onFocus={(e) => e.target.select()} className="flex-1 h-10 px-3 text-xs rounded-lg bg-gray-50 border border-gray-200 text-gray-700 font-mono truncate" />
+              <button onClick={() => { navigator.clipboard?.writeText(impersonateLink); setActionMessage({ type: 'success', text: 'Login link copied.' }); setTimeout(() => setActionMessage(null), 3000); }} className="px-4 h-10 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 flex items-center gap-1.5 flex-shrink-0"><Copy className="h-4 w-4" />Copy</button>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-4">One-time link · expires shortly · keep it private.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { window.open(impersonateLink!, '_blank', 'noopener'); }} className="flex-1 py-2.5 rounded-xl font-semibold text-white bg-purple-600 hover:bg-purple-700">Open here</button>
+              <button onClick={() => setImpersonateLink(null)} className="flex-1 py-2.5 rounded-xl font-semibold border-2 border-gray-200 text-gray-700 hover:bg-gray-50">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Action Message */}
 
