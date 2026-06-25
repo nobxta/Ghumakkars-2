@@ -169,3 +169,36 @@ export async function PATCH(
   }
 }
 
+
+// Permanently delete a user and their data (bookings, payments, coupon usage,
+// wallet, referrals, profile, and the auth account). Irreversible.
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = await requireAdmin();
+    if (auth instanceof NextResponse) return auth;
+
+    const id = params.id;
+    const admin = createAdminClient();
+    const safe = async (fn: () => any) => { try { await fn(); } catch { /* table may not exist */ } };
+
+    // Payment transactions for this user's bookings first.
+    const { data: bks } = await admin.from('bookings').select('id').eq('user_id', id);
+    const bookingIds = (bks || []).map((b: any) => b.id);
+    if (bookingIds.length) await safe(() => admin.from('payment_transactions').delete().in('booking_id', bookingIds));
+
+    await safe(() => admin.from('coupon_usages').delete().eq('user_id', id));
+    await safe(() => admin.from('bookings').delete().eq('user_id', id));
+    // profiles delete cascades referrals + wallet_transactions.
+    await safe(() => admin.from('profiles').delete().eq('id', id));
+
+    const { error } = await admin.auth.admin.deleteUser(id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to delete user' }, { status: 500 });
+  }
+}

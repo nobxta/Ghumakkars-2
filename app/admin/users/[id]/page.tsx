@@ -10,7 +10,7 @@ import {
   GraduationCap, Heart, Eye, AlertCircle, Shield, 
   Wallet, UserCircle, PhoneCall, Calendar as CalendarIcon, 
   Hash, AlertTriangle, Edit, Plus, Send, Gift, X, 
-  Activity, FileText, TrendingUp, History, MessageCircle, Copy
+  Activity, FileText, TrendingUp, History, MessageCircle, Copy, LogIn, Trash2
 } from 'lucide-react';
 
 export default function AdminUserDetailsPage() {
@@ -33,6 +33,10 @@ export default function AdminUserDetailsPage() {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [impersonating, setImpersonating] = useState(false);
 
   // Form states
   const [editForm, setEditForm] = useState<any>(null);
@@ -261,6 +265,39 @@ export default function AdminUserDetailsPage() {
       setActionMessage({ type: 'error', text: error.message });
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Open a one-time magic link to sign in AS this user (debug their account).
+  const handleImpersonate = async () => {
+    setImpersonating(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${params.id}/impersonate`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create a login link');
+      window.open(data.link, '_blank', 'noopener,noreferrer');
+      setActionMessage({ type: 'success', text: 'Opened a login link in a new tab. Tip: use a private/incognito window so it doesn’t replace your admin session.' });
+      setTimeout(() => setActionMessage(null), 6000);
+    } catch (e: any) {
+      setActionMessage({ type: 'error', text: e.message });
+    } finally {
+      setImpersonating(false);
+    }
+  };
+
+  // Permanently delete the user and all their data.
+  const handleDeleteUser = async () => {
+    setDeleting(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${params.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+      router.push('/admin/users');
+    } catch (e: any) {
+      setActionMessage({ type: 'error', text: e.message });
+      setDeleting(false);
     }
   };
 
@@ -516,8 +553,7 @@ export default function AdminUserDetailsPage() {
             {/* Login activity — timeline */}
             {authUser && (() => {
               const events = [
-                authUser.created_at && { dot: 'bg-purple-500', label: 'Account created', when: new Date(authUser.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
-                authUser.email_confirmed_at && { dot: 'bg-green-500', label: 'Email verified', when: new Date(authUser.email_confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
+                authUser.created_at && { dot: 'bg-purple-500', label: 'Account created', when: new Date(authUser.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) },
                 authUser.last_sign_in_at && { dot: 'bg-blue-500', label: 'Last login', when: new Date(authUser.last_sign_in_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) },
               ].filter(Boolean) as { dot: string; label: string; when: string }[];
               return (
@@ -556,6 +592,12 @@ export default function AdminUserDetailsPage() {
               )}
               {user.email && <a href={`mailto:${user.email}`} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><Mail className="h-4 w-4 text-gray-400" />Email user</a>}
               {user.phone && <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-gray-800 hover:bg-gray-50 border-t border-gray-100"><MessageCircle className="h-4 w-4 text-gray-400" />WhatsApp</a>}
+              <button onClick={handleImpersonate} disabled={impersonating} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-purple-700 hover:bg-purple-50 border-t border-gray-100 disabled:opacity-60">
+                {impersonating ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" /> : <LogIn className="h-4 w-4" />}Log in as user
+              </button>
+              <button onClick={() => { setDeleteConfirm(''); setShowDeleteModal(true); }} className="w-full px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-red-600 hover:bg-red-50 border-t border-gray-100">
+                <Trash2 className="h-4 w-4" />Delete user
+              </button>
             </div>
 
             {/* Wallet & referral — compact */}
@@ -855,6 +897,40 @@ export default function AdminUserDetailsPage() {
       </div>
 
       {/* Action Message */}
+      {/* Delete user confirmation */}
+      {showDeleteModal && user && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl border border-red-200 max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-2xl bg-red-100 flex items-center justify-center flex-shrink-0"><Trash2 className="h-5 w-5 text-red-600" /></div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete this user?</h3>
+                <p className="text-xs text-gray-500">This is permanent and cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-3">
+              Deleting <strong>{user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email}</strong> will permanently remove their account and <strong>all</strong> of the data below:
+            </p>
+            <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 text-sm mb-4">
+              <div className="flex justify-between px-4 py-2.5"><span className="text-gray-600">Bookings</span><span className="font-semibold text-gray-900">{bookings.length}</span></div>
+              <div className="flex justify-between px-4 py-2.5"><span className="text-gray-600">Revenue collected</span><span className="font-semibold text-green-700">₹{Number(totalPaid || 0).toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between px-4 py-2.5"><span className="text-gray-600">Pending dues</span><span className="font-semibold text-orange-600">₹{Number(totalPending || 0).toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between px-4 py-2.5"><span className="text-gray-600">Wallet balance</span><span className="font-semibold text-gray-900">₹{parseFloat(String(user.wallet_balance || 0)).toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between px-4 py-2.5"><span className="text-gray-600">Payment records &amp; referrals</span><span className="font-semibold text-gray-900">Erased</span></div>
+            </div>
+            <p className="text-xs text-gray-600 mb-2">Type <strong className="font-mono text-red-600">DELETE</strong> to confirm:</p>
+            <input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder="DELETE"
+              className="w-full h-11 px-4 mb-4 text-sm rounded-xl bg-white border-2 border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100" />
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowDeleteModal(false)} disabled={deleting} className="flex-1 py-3 rounded-xl font-semibold border-2 border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-60">Cancel</button>
+              <button type="button" onClick={handleDeleteUser} disabled={deleting || deleteConfirm.trim().toUpperCase() !== 'DELETE'} className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {deleting ? <><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />Deleting…</> : <>Delete permanently</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {actionMessage && (
         <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-sm border-2 animate-slide-up ${
           actionMessage.type === 'success' 
