@@ -87,6 +87,15 @@ export default function AdminBookingDetailsPage() {
     }
   };
 
+  // "They paid X and nothing more is due" — write off the remaining balance so it
+  // reads Paid with no offline balance. Pass clear=true to undo.
+  const settleBalance = async (clear = false) => {
+    const msg = clear
+      ? 'Remove the write-off and make the full balance due again?'
+      : `Mark this booking as settled — write off the remaining ₹${remainingAmount.toLocaleString('en-IN')}? It will show as paid in full with nothing due.`;
+    await manageBooking({ action: 'settle_balance', clear }, msg);
+  };
+
   const saveInternalNotes = async () => {
     setSavingNotes(true);
     try {
@@ -338,7 +347,8 @@ export default function AdminBookingDetailsPage() {
   const listGross = (parseFloat(String(booking.trips?.discounted_price || 0)) || 0) * pax;
   // Single source of truth for money (independent of booking status).
   const money = moneyOf(booking, booking.trips);
-  const finalAmount = money.owed;
+  const finalAmount = money.fullPrice; // net trip price (before any write-off)
+  const waivedAmount = money.waived;
   const paidAmount = money.paid;
   const remainingAmount = money.remaining;
   const paymentStatus = money.status; // 'pending' | 'partial' | 'paid' | 'refunded'
@@ -582,10 +592,13 @@ export default function AdminBookingDetailsPage() {
                 )}
                 <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Net Trip Price</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
                 <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Paid</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                {waivedAmount > 0 && (
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500 flex items-center gap-1.5">Written off <button onClick={() => settleBalance(true)} className="text-[11px] font-semibold text-purple-600 hover:underline">(undo)</button></dt><dd className="text-base font-medium text-gray-500">-₹{waivedAmount.toLocaleString('en-IN')}</dd></div>
+                )}
                 {money.refunded > 0 && (
                   <div className="flex items-baseline justify-between"><dt className="text-sm text-rose-600">Refunded</dt><dd className="text-base font-medium text-rose-600">-₹{money.refunded.toLocaleString('en-IN')}</dd></div>
                 )}
-                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Offline Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'None'}</dd></div>
+                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Offline Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : waivedAmount > 0 ? 'Settled' : 'None'}</dd></div>
               </dl>
               {/* Payment Status is independent of Booking Status — a confirmed booking can still owe a balance. */}
               {remainingAmount > 0 && !['cancelled', 'rejected'].includes(status) && (
@@ -795,6 +808,14 @@ export default function AdminBookingDetailsPage() {
                   </div>
                   <button disabled={managing || !cashAmount} onClick={async () => { await manageBooking({ action: 'record_payment', amount: cashAmount, method: payMethod, reference: payReference, notes: payNotes }); setPayReference(''); setPayNotes(''); setDrawerMode(null); }} className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all hover:shadow-lg hover:shadow-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record payment</button>
                   <p className="text-[11px] text-gray-400 mt-2 text-center">Updates Paid, Remaining and Payment Status automatically. Booking status is never changed.</p>
+
+                  {/* Settle — when the amount already collected is the final deal and nothing more is due. */}
+                  {remainingAmount > 0 && (
+                    <div className="mt-4 pt-4 border-t border-dashed border-[#ECECEE]">
+                      <button disabled={managing} onClick={async () => { await settleBalance(false); setDrawerMode(null); }} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-sm font-semibold hover:bg-amber-100 disabled:opacity-50 transition-colors"><Check className="h-4 w-4" />Nothing more due — settle at ₹{paidAmount.toLocaleString('en-IN')}</button>
+                      <p className="text-[11px] text-gray-400 mt-1.5 text-center">Writes off the remaining ₹{remainingAmount.toLocaleString('en-IN')}. Marks the booking paid in full.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

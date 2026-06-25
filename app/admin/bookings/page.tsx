@@ -109,22 +109,22 @@ export default function AdminBookingsPage() {
     return txnPaid || parseFloat(b.amount_paid || 0);
   };
 
-  // Full amount owed after the customer's coupon + wallet discounts.
+  // Full amount owed after coupon + wallet discounts AND any written-off (waived) balance.
   const fullOf = (b: any): number => {
     const pax = Number(b.number_of_participants) || 1;
     const coupon = parseFloat(b.coupon_discount || 0);
     const wallet = parseFloat(b.wallet_amount_used || 0);
+    const waived = parseFloat(b.waived_amount || 0);
+    let net: number;
     // Seat-lock: total_price / final_amount only hold the DEPOSIT, so the full
     // trip cost must come from the list price x participants.
     if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
-      const gross = (Number(b.trips?.discounted_price) || 0) * pax;
-      return Math.max(0, gross - coupon - wallet);
+      net = Math.max(0, (Number(b.trips?.discounted_price) || 0) * pax - coupon - wallet);
+    } else {
+      const fa = parseFloat(b.final_amount || 0);
+      net = fa > 0 ? fa : Math.max(0, (parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax) - coupon - wallet);
     }
-    // Full-payment: final_amount is already the net (post-discount) total owed.
-    const fa = parseFloat(b.final_amount || 0);
-    if (fa > 0) return fa;
-    const gross = parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax;
-    return Math.max(0, gross - coupon - wallet);
+    return Math.max(0, net - waived);
   };
 
   // Revenue = money actually collected on active (non-cancelled) bookings,

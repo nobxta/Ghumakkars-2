@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
-import { fullOwed, derivePaymentStatus } from '@/lib/booking-money';
+import { fullOwed, owedOf, derivePaymentStatus } from '@/lib/booking-money';
 
 export const runtime = 'nodejs';
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const { data: b, error: fetchErr } = await adminClient
       .from('bookings')
-      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, amount_paid, departure_date')
+      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, departure_date')
       .eq('id', id)
       .single();
     if (fetchErr || !b) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
@@ -48,7 +48,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq('id', b.trip_id)
       .single();
 
-    const owed = fullOwed(b as any, tripRow as any);
+    // What the customer actually owes = full price minus any waived (written-off) balance.
+    const owed = owedOf(b as any, tripRow as any);
 
     // Pull the full ledger once; reused for money math + recompute.
     const loadLedger = async () =>
@@ -240,6 +241,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }).eq('id', id);
 
       return NextResponse.json({ success: true, bookingStatus: 'referred', message: 'Booking marked as referred.' });
+    }
+
+    // ───────────────────────── settle_balance ─────────────────────────
+    // "They paid X and nothing more is due" — write off the rest. Sets waived so the
+    // amount owed equals what's been paid: remaining -> 0 and payment status -> Paid.
+    if (action === 'settle_balance') {
+      const txns = await loadLedger();
+      const { effective, refunded } = moneyFromLedger(txns);
+      const fullPrice = fullOwed(b as any, tripRow as any);
+
+      if (body.clear) {
+        // Undo the write-off — the full balance is owed again.
+        const status = derivePaymentStatus(effective, fullPrice, refunded > 0);
+        await adminClient.from('bookings').update({ waived_amount: 0, payment_status: status, amount_paid: effective }).eq('id', id);
+        return NextResponse.json({ success: true, paid: effective, remaining: Math.max(0, fullPrice - effective), waived: 0, message: 'Write-off removed — full balance is due again.' });
+      }
+
+      const newWaived = Math.max(0, fullPrice - effective);
+      const status = derivePaymentStatus(effective, effective, refunded > 0); // owed == paid -> Paid
+      await adminClient.from('bookings').update({ waived_amount: newWaived, payment_status: status, amount_paid: effective }).eq('id', id);
+      return NextResponse.json({
+        success: true,
+        paid: effective,
+        remaining: 0,
+        waived: newWaived,
+        message: newWaived > 0
+          ? `Balance settled — ₹${effective.toLocaleString('en-IN')} marked paid in full, ₹${newWaived.toLocaleString('en-IN')} written off.`
+          : 'Already paid in full — nothing to write off.',
+      });
     }
 
     // ───────────────────────── save_internal_notes ─────────────────────────

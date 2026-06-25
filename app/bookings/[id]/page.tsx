@@ -112,7 +112,7 @@ export default function BookingDetailsPage() {
         .select(`
           id, user_id, booking_status, payment_status, payment_method, payment_mode,
           transaction_id, reference_id, payment_amount, amount_paid, total_price, final_amount,
-          coupon_code, coupon_discount, wallet_amount_used, number_of_participants,
+          coupon_code, coupon_discount, wallet_amount_used, waived_amount, number_of_participants,
           primary_passenger_name, primary_passenger_email, primary_passenger_phone,
           primary_passenger_gender, primary_passenger_age, emergency_contact_name,
           emergency_contact_phone, aadhaar_id, passengers, created_at, rejection_reason,
@@ -179,7 +179,8 @@ export default function BookingDetailsPage() {
     // list price x pax here.)
     const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
     const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
-    const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet);
+    const waived = parseFloat(String((booking as any).waived_amount || 0)) || 0;
+    const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet - waived);
     // Paid = verified transactions (source of truth, includes admin-recorded
     // cash), falling back to payment_amount / final_amount.
     const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
@@ -420,8 +421,9 @@ export default function BookingDetailsPage() {
   const totalAmount = isSeatLockBooking
     ? grossFull
     : (parseFloat(String(booking.total_price || 0)) || grossFull);
-  // Net amount actually owed after coupon + wallet.
-  const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed);
+  // Net amount actually owed after coupon + wallet, minus any written-off (waived) balance.
+  const waivedAmount = parseFloat(String((booking as any).waived_amount || 0)) || 0;
+  const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed - waivedAmount);
   // Money actually received = verified transactions (source of truth), else payment_amount.
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
   const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);

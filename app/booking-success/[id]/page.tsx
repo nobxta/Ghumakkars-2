@@ -44,7 +44,7 @@ export default function BookingSuccessPage() {
       try {
         const { data, error } = await supabase
           .from('bookings')
-          .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, payment_amount, payment_method, coupon_code, coupon_discount, wallet_amount_used, departure_date,
+          .select(`id, booking_status, number_of_participants, total_price, amount_paid, final_amount, payment_amount, payment_method, coupon_code, coupon_discount, wallet_amount_used, waived_amount, departure_date,
                    trips:trip_id (title, destination, start_date, end_date, is_recurring, duration_days, discounted_price, payment_due_days_before),
                    payment_transactions ( amount, payment_status )`)
           .eq('id', bookingId)
@@ -94,10 +94,11 @@ export default function BookingSuccessPage() {
   // Seat-lock bookings store only the deposit in final_amount/total_price, so the
   // real trip cost comes from list price × travellers.
   const isSeatLockBooking = (booking as any).payment_method === 'seat_lock' || status === 'seat_locked';
+  const waivedAmount = parseFloat(String((booking as any).waived_amount || 0)) || 0;
   const grossFull = (Number((trip as any)?.discounted_price) || 0) * pax;
-  const fullCost = isSeatLockBooking
+  const fullCost = Math.max(0, (isSeatLockBooking
     ? Math.max(0, grossFull - couponDiscount - walletUsed)
-    : parseFloat(String(booking.final_amount || booking.total_price || 0));
+    : parseFloat(String(booking.final_amount || booking.total_price || 0))) - waivedAmount);
 
   // Money received = verified transactions (the approved deposit), else amount_paid.
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];

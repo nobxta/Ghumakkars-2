@@ -17,6 +17,7 @@ interface BookingLike {
   number_of_participants?: number | null;
   coupon_discount?: number | string | null;
   wallet_amount_used?: number | string | null;
+  waived_amount?: number | string | null;
   total_price?: number | string | null;
   final_amount?: number | string | null;
   payment_method?: string | null;
@@ -83,9 +84,22 @@ export function paidOf(b: BookingLike): number {
   return Math.max(0, verified - refundedOf(b));
 }
 
+/** Admin write-off: part of the price the customer will never pay (settled deal). */
+export function waivedOf(b: BookingLike): number {
+  return Math.max(0, num(b.waived_amount));
+}
+
+/**
+ * What the customer ACTUALLY owes us = full price minus any waived (written-off)
+ * balance. This is what remaining and payment status are measured against.
+ */
+export function owedOf(b: BookingLike, trip?: TripLike | null): number {
+  return Math.max(0, fullOwed(b, trip) - waivedOf(b));
+}
+
 /** Remaining balance (e.g. to be collected offline on the bus). Never forced to 0. */
 export function remainingOf(b: BookingLike, trip?: TripLike | null): number {
-  return Math.max(0, fullOwed(b, trip) - paidOf(b));
+  return Math.max(0, owedOf(b, trip) - paidOf(b));
 }
 
 /**
@@ -101,10 +115,14 @@ export function derivePaymentStatus(paid: number, owed: number, hasRefund: boole
 
 /** Convenience: compute the full money picture for a booking in one call. */
 export function moneyOf(b: BookingLike, trip?: TripLike | null) {
-  const owed = fullOwed(b, trip);
+  const fullPrice = fullOwed(b, trip);
+  const waived = waivedOf(b);
+  const owed = Math.max(0, fullPrice - waived); // what they actually owe us
   const paid = paidOf(b);
   const refunded = refundedOf(b);
   const remaining = Math.max(0, owed - paid);
   const status = derivePaymentStatus(paid, owed, refunded > 0);
-  return { owed, paid, refunded, remaining, status };
+  // `owed` kept as the headline number (post-waiver) for back-compat; `fullPrice`
+  // exposes the original trip price for displays that want to show the write-off.
+  return { owed, fullPrice, waived, paid, refunded, remaining, status };
 }
