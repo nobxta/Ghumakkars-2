@@ -154,8 +154,10 @@ function PaymentSummary({ config, payment, accent }: { config: StatusConfig; pay
     );
   }
 
-  // Paid in full (confirmed)
+  // Confirmed. Paid-in-full OR confirmed-with-an-offline-balance (Payment Status stays
+  // Partial; we never force it to Paid just because the booking is confirmed).
   if (paymentVariant === 'paid') {
+    const hasBalance = remainingAmount > 1;
     return (
       <div className="space-y-3 border-t border-black/[0.06] pt-5">
         <div className="flex items-center justify-between">
@@ -164,12 +166,18 @@ function PaymentSummary({ config, payment, accent }: { config: StatusConfig; pay
               <CreditCard className="h-5 w-5" style={{ color: accent }} />
             </div>
             <div>
-              <span className="block font-bold text-[#191b23]">Paid in Full</span>
-              <span className="block text-xs text-[#727785]">Transaction verified</span>
+              <span className="block font-bold text-[#191b23]">{hasBalance ? 'Paid so far' : 'Paid in Full'}</span>
+              <span className="block text-xs text-[#727785]">{hasBalance ? 'Balance collected offline' : 'Transaction verified'}</span>
             </div>
           </div>
-          <span className="text-2xl font-extrabold" style={{ color: accent }}>{inr(fullCost || paidAmount)}</span>
+          <span className="text-2xl font-extrabold" style={{ color: accent }}>{inr(paidAmount || fullCost)}</span>
         </div>
+        {hasBalance && (
+          <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+            <span className="text-sm font-semibold text-[#9A3412]">Remaining offline balance</span>
+            <span className="text-base font-extrabold text-[#EA580C]">{inr(remainingAmount)}</span>
+          </div>
+        )}
         {couponDiscount > 0 && couponCode && (
           <div className="flex items-center justify-between border-t border-black/[0.06] pt-3 text-xs">
             <span className="font-semibold text-[#059669]">Saved with {couponCode}</span>

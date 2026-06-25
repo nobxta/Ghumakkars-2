@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { IMG } from '@/lib/image';
 import { resolveDueDate } from '@/lib/payment-due';
+import { derivePaymentStatus } from '@/lib/booking-money';
+import { customerBookingStatus, paymentStatusLabel, paymentStatusChip } from '@/lib/booking-status-labels';
 
 interface Trip {
   id: string;
@@ -103,10 +105,18 @@ export default function BookingDetailsPage() {
 
   const fetchBooking = async () => {
     try {
+      // Explicit column list — NEVER select internal_notes / referral_* so admin-only
+      // data is not exposed to the customer, even in the raw network response.
       const { data, error } = await supabase
         .from('bookings')
         .select(`
-          *,
+          id, user_id, booking_status, payment_status, payment_method, payment_mode,
+          transaction_id, reference_id, payment_amount, amount_paid, total_price, final_amount,
+          coupon_code, coupon_discount, wallet_amount_used, number_of_participants,
+          primary_passenger_name, primary_passenger_email, primary_passenger_phone,
+          primary_passenger_gender, primary_passenger_age, emergency_contact_name,
+          emergency_contact_phone, aadhaar_id, passengers, created_at, rejection_reason,
+          departure_date, pickup_point, is_offline_booking,
           trips (
             id,
             title,
@@ -127,7 +137,7 @@ export default function BookingDetailsPage() {
             whatsapp_group_link,
             highlights
           ),
-          payment_transactions ( id, amount, payment_status, created_at )
+          payment_transactions ( id, amount, amount_refunded, payment_status, payment_mode, payment_type, created_at )
         `)
         .eq('id', params.id)
         .single();
@@ -141,7 +151,7 @@ export default function BookingDetailsPage() {
         return;
       }
 
-      setBooking(data);
+      setBooking(data as unknown as Booking);
     } catch (error: any) {
       console.error('Error fetching booking:', error);
       setError(error.message || 'Failed to load booking details');
@@ -317,7 +327,9 @@ export default function BookingDetailsPage() {
 
   // ─────────── derived display values ───────────
   const trip = booking.trips;
-  const status = booking.booking_status || 'pending';
+  // Customer-facing status: a "referred" booking reads as a normal Confirmed booking;
+  // partner/commission/internal data is never sent to or shown to the customer.
+  const status = customerBookingStatus(booking.booking_status);
   const shortId = booking.id.slice(0, 8).toUpperCase();
   const coverImage = trip?.cover_image_url || trip?.image_url || (trip?.gallery_images?.[0]) || '';
   const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -416,6 +428,12 @@ export default function BookingDetailsPage() {
   const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
   // Amount the customer has submitted that we haven't verified yet.
   const submittedPending = txns.filter((t) => t.payment_status === 'pending').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+  // Payment Status is derived from money and is INDEPENDENT of booking status — a
+  // confirmed booking can still be Partial with a balance to collect offline.
+  const refundedTotal = txns.reduce((s, t) => s + parseFloat(String(t.amount_refunded || 0)), 0);
+  const custPaymentStatus = derivePaymentStatus(paidAmount, finalAmount, refundedTotal > 0);
+  const offlineRemaining = Math.max(0, finalAmount - paidAmount);
+  const showOfflineBalance = offlineRemaining > 0 && !['cancelled', 'rejected'].includes(status) && !hasPendingTxn;
 
   const maskPhone = (p?: string) => {
     if (!p) return '—';
@@ -726,8 +744,23 @@ export default function BookingDetailsPage() {
           <InfoCard icon={<Users className="h-5 w-5 text-blue-600" />} label="Travellers" value={String(booking.number_of_participants)} />
           <InfoCard icon={<MapPin className="h-5 w-5 text-orange-600" />} label="Pickup point" value={(booking as any).pickup_point || 'Shared 7 days before trip'} />
           <InfoCard icon={<Clock className="h-5 w-5 text-indigo-600" />} label="Duration" value={trip?.duration_text || (trip?.duration_days ? `${trip.duration_days} day${trip.duration_days > 1 ? 's' : ''}` : '—')} />
-          <InfoCard icon={<CreditCard className="h-5 w-5 text-green-600" />} label="Payment" value={booking.payment_status === 'paid' || status === 'confirmed' ? 'Paid' : (booking.payment_status || 'Pending')} valueClass={booking.payment_status === 'paid' || status === 'confirmed' ? 'text-green-700' : 'text-orange-700'} />
+          <InfoCard icon={<CreditCard className="h-5 w-5 text-green-600" />} label="Payment" value={paymentStatusLabel(custPaymentStatus)} valueClass={custPaymentStatus === 'paid' ? 'text-green-700' : custPaymentStatus === 'refunded' ? 'text-rose-700' : 'text-orange-700'} />
         </div>
+
+        {/* Offline balance — shown when a confirmed/seat-locked booking still owes money to
+            be paid in person. Payment Status stays Partial; we never force it to Paid. */}
+        {showOfflineBalance && !showRemainingPayment && (
+          <div className="mb-4 sm:mb-6 rounded-2xl border border-orange-200 bg-orange-50 px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0"><IndianRupee className="h-5 w-5 text-orange-600" /></div>
+              <div className="min-w-0">
+                <p className="font-bold text-orange-900">Remaining offline balance: ₹{offlineRemaining.toLocaleString('en-IN')}</p>
+                <p className="text-sm text-orange-800/90">To be collected offline during the trip. Trip price ₹{finalAmount.toLocaleString('en-IN')} · Paid ₹{paidAmount.toLocaleString('en-IN')}.</p>
+              </div>
+            </div>
+            <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${paymentStatusChip(custPaymentStatus)}`}>{paymentStatusLabel(custPaymentStatus)}</span>
+          </div>
+        )}
 
         {/* ─────────── MAIN 2-COL ─────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

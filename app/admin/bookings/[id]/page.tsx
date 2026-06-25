@@ -8,9 +8,12 @@ import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
-  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet, Receipt
+  Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet, Receipt,
+  Gift, StickyNote, RotateCcw, Bell
 } from 'lucide-react';
 import { resolveDueDate } from '@/lib/payment-due';
+import { moneyOf } from '@/lib/booking-money';
+import { bookingStatusLabel, paymentStatusLabel, bookingStatusChip, paymentStatusChip, BOOKING_STATUSES } from '@/lib/booking-status-labels';
 
 export default function AdminBookingDetailsPage() {
   const params = useParams();
@@ -27,12 +30,32 @@ export default function AdminBookingDetailsPage() {
   const [rejectionReason, setRejectionReason] = useState('fake_payment');
   const [managing, setManaging] = useState(false);
   const [cashAmount, setCashAmount] = useState('');
-  const [cashMode, setCashMode] = useState<'cash' | 'upi'>('cash');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelReasonPreset, setCancelReasonPreset] = useState('');
   const [showActionsDrawer, setShowActionsDrawer] = useState(false);
   const [dueDaysBefore, setDueDaysBefore] = useState<number>(5);
+  // Record-payment form
+  const [payMethod, setPayMethod] = useState<'cash' | 'upi' | 'card' | 'bank' | 'online'>('cash');
+  const [payReference, setPayReference] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  // Change-status form
+  const [statusChoice, setStatusChoice] = useState<string>('');
+  const [statusNotify, setStatusNotify] = useState(true);
+  // Referral form
+  const [refPartner, setRefPartner] = useState('');
+  const [refCommission, setRefCommission] = useState('');
+  const [refNotes, setRefNotes] = useState('');
+  // Internal notes
+  const [internalNotes, setInternalNotes] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+  // Refund modal
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMethod, setRefundMethod] = useState<'cash' | 'razorpay'>('cash');
+  const [refundNotes, setRefundNotes] = useState('');
+  // Cancel modal extras
+  const [cancelNotify, setCancelNotify] = useState(true);
 
   const cancelReasonPresets = [
     'Customer requested cancellation',
@@ -63,6 +86,58 @@ export default function AdminBookingDetailsPage() {
     }
   };
 
+  const saveInternalNotes = async () => {
+    setSavingNotes(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${(params as any).id}/manage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_internal_notes', notes: internalNotes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save notes');
+      await fetchBooking();
+    } catch (e: any) {
+      alert(e.message || 'Failed to save notes');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  // Refund — cash is recorded manually; Razorpay is issued online via the gateway.
+  // Both require an explicit second confirmation (double confirm) before money moves.
+  const handleRefund = async () => {
+    const amt = parseFloat(refundAmount);
+    if (!amt || amt <= 0) { alert('Enter a valid refund amount'); return; }
+    if (!window.confirm(`Refund ₹${amt.toLocaleString('en-IN')} via ${refundMethod === 'razorpay' ? 'Razorpay (online, irreversible)' : 'cash (manual record)'}? This cannot be undone.`)) return;
+    setManaging(true);
+    try {
+      if (refundMethod === 'razorpay') {
+        const rzp = (booking.payment_transactions || []).find((t: any) => t.payment_mode === 'razorpay' && ['verified', 'partially_refunded'].includes(t.payment_status));
+        if (!rzp) throw new Error('No Razorpay payment found to refund online. Use a cash refund instead.');
+        const res = await fetch(`/api/admin/payments/${rzp.id}/refund`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amt, reason: refundNotes }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Razorpay refund failed');
+      } else {
+        const res = await fetch(`/api/admin/bookings/${(params as any).id}/manage`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'record_refund', amount: amt, method: 'cash', notes: refundNotes, confirm: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Refund failed');
+      }
+      await fetchBooking();
+      setShowRefundModal(false);
+      alert('Refund recorded.');
+    } catch (e: any) {
+      alert(e.message || 'Refund failed');
+    } finally {
+      setManaging(false);
+    }
+  };
+
   const rejectionReasons = [
     { value: 'fake_payment', label: 'Fake Payment / Invalid Transaction ID' },
     { value: 'fake_details', label: 'Fake Details / Invalid Information' },
@@ -78,6 +153,16 @@ export default function AdminBookingDetailsPage() {
       .then((d) => { if (d?.dueDaysBefore != null) setDueDaysBefore(Number(d.dueDaysBefore)); })
       .catch(() => {});
   }, [params.id]);
+
+  // Seed the editable admin-only fields whenever the booking (re)loads.
+  useEffect(() => {
+    if (!booking) return;
+    setInternalNotes(booking.internal_notes || '');
+    setRefPartner(booking.referral_partner || '');
+    setRefCommission(booking.referral_commission != null && Number(booking.referral_commission) > 0 ? String(booking.referral_commission) : '');
+    setRefNotes(booking.referral_notes || '');
+    setStatusChoice(booking.booking_status || 'pending');
+  }, [booking?.id]);
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -248,23 +333,15 @@ export default function AdminBookingDetailsPage() {
   const pax = Number(booking.number_of_participants) || 1;
   const couponDiscountRaw = parseFloat(String(booking.coupon_discount || 0)) || 0;
   const walletUsed = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
-  const originalPrice = parseFloat(String(booking.total_price || 0));
   const isSeatLock = booking.payment_method === 'seat_lock' || status === 'seat_locked';
-  // Full amount the customer owes after coupon + wallet. Seat-lock bookings only
-  // store the deposit in total_price/final_amount, so the full cost comes from
-  // list price × pax.
   const listGross = (parseFloat(String(booking.trips?.discounted_price || 0)) || 0) * pax;
-  const finalAmount = isSeatLock
-    ? Math.max(0, listGross - couponDiscountRaw - walletUsed)
-    : (parseFloat(String(booking.final_amount || booking.total_price || 0)));
-  // Money actually received: verified transactions (online) or amount_paid (offline).
-  const txnPaid = (booking.payment_transactions || [])
-    .filter((p: any) => p.payment_status === 'verified')
-    .reduce((s: number, p: any) => s + parseFloat(String(p.amount || 0)), 0);
-  const paidAmount = txnPaid || parseFloat(String(booking.payment_amount || booking.amount_paid || 0));
-  const couponDiscount = couponDiscountRaw || Math.max(0, originalPrice - parseFloat(String(booking.final_amount || 0)));
-  const totalAmount = finalAmount; // what the customer actually owes
-  const remainingAmount = Math.max(0, finalAmount - paidAmount);
+  // Single source of truth for money (independent of booking status).
+  const money = moneyOf(booking, booking.trips);
+  const finalAmount = money.owed;
+  const paidAmount = money.paid;
+  const remainingAmount = money.remaining;
+  const paymentStatus = money.status; // 'pending' | 'partial' | 'paid' | 'refunded'
+  const isReferred = status === 'referred';
   const shortId = booking.id.substring(0, 8).toUpperCase();
   const fmtDate = (d?: string) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
@@ -307,22 +384,13 @@ export default function AdminBookingDetailsPage() {
             #{shortId}
             <Copy className="h-3.5 w-3.5 text-gray-400 group-hover:text-purple-600" />
           </button>
-          {(() => {
-            const m: Record<string, { l: string; c: string; d: string }> = {
-              confirmed: { l: 'Confirmed', c: 'bg-green-50 text-green-700 border-green-200', d: 'bg-green-500' },
-              seat_locked: { l: 'Seat Locked', c: 'bg-amber-50 text-amber-700 border-amber-200', d: 'bg-amber-500' },
-              remaining_submitted: { l: 'Verifying payment', c: 'bg-blue-50 text-blue-700 border-blue-200', d: 'bg-blue-500' },
-              pending: { l: 'Pending', c: 'bg-yellow-50 text-yellow-700 border-yellow-200', d: 'bg-yellow-500' },
-              cancelled: { l: 'Cancelled', c: 'bg-red-50 text-red-700 border-red-200', d: 'bg-red-500' },
-              rejected: { l: 'Rejected', c: 'bg-red-50 text-red-700 border-red-200', d: 'bg-red-500' },
-            };
-            const s = m[status] || { l: status, c: 'bg-gray-100 text-gray-700 border-gray-200', d: 'bg-gray-400' };
-            return (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${s.c}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${s.d}`} />{s.l}
-              </span>
-            );
-          })()}
+          {/* Booking Status and Payment Status are independent — show both. */}
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${bookingStatusChip(status)}`} title="Booking status">
+            <Shield className="h-3 w-3" />{bookingStatusLabel(status)}
+          </span>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${paymentStatusChip(paymentStatus)}`} title="Payment status">
+            <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
+          </span>
           <button
             onClick={() => typeof window !== 'undefined' && window.print()}
             className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
@@ -382,7 +450,10 @@ export default function AdminBookingDetailsPage() {
                 </>
               ) : (
                 <>
-                  <button disabled={managing} onClick={() => manageBooking({ action: 'set_status', status: 'pending' }, 'Reopen this booking (back to pending)? No email is sent.')} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-400" />Reopen (pending)</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                  <button disabled={managing} onClick={() => { setStatusChoice('seat_locked'); setStatusNotify(false); manageBooking({ action: 'set_status', status: 'seat_locked', notify: false }, 'Reopen this booking (back to Seat Locked)? No notification is sent.'); }} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-400" />Reopen booking</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
+                  {paidAmount > 0 && (
+                    <button onClick={() => { setRefundAmount(String(paidAmount)); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-rose-600 hover:bg-rose-50 border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"><span className="flex items-center gap-2"><RotateCcw className="h-4 w-4" />Record / issue refund</span><ChevronRight className="h-4 w-4 text-rose-300" /></button>
+                  )}
                   <button onClick={() => typeof window !== 'undefined' && window.print()} className="w-full px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-800 hover:bg-[#FAFAFA] border-t border-[#ECECEE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><span className="flex items-center gap-2"><Printer className="h-4 w-4 text-gray-400" />Print / Download PDF</span><ChevronRight className="h-4 w-4 text-gray-400" /></button>
                 </>
               )}
@@ -501,14 +572,25 @@ export default function AdminBookingDetailsPage() {
                   <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Wallet Used</dt><dd className="text-base font-medium text-green-600">-₹{walletUsed.toLocaleString('en-IN')}</dd></div>
                 )}
                 <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Net Trip Price</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Amount Paid {isSeatLock ? '(Seat Locked)' : ''}</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'Cleared'}</dd></div>
+                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Paid</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
+                {money.refunded > 0 && (
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-rose-600">Refunded</dt><dd className="text-base font-medium text-rose-600">-₹{money.refunded.toLocaleString('en-IN')}</dd></div>
+                )}
+                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Offline Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : 'None'}</dd></div>
               </dl>
-              {status === 'seat_locked' && remainingAmount > 0 && (() => {
-                const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);
-                const pb = due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
-                return pb ? <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800"><Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />Pay before <strong>{pb}</strong> to confirm the seat.</div> : null;
-              })()}
+              {/* Payment Status is independent of Booking Status — a confirmed booking can still owe a balance. */}
+              {remainingAmount > 0 && !['cancelled', 'rejected'].includes(status) && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs text-orange-800">
+                  <IndianRupee className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                  <span><strong>₹{remainingAmount.toLocaleString('en-IN')}</strong> to be collected offline during the trip.
+                  {(() => {
+                    const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);
+                    const pb = status === 'seat_locked' && due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+                    return pb ? <> Due by <strong>{pb}</strong>.</> : null;
+                  })()}
+                  </span>
+                </div>
+              )}
             </div>
 
         {/* Payment history — what happened, no totals */}
@@ -544,7 +626,7 @@ export default function AdminBookingDetailsPage() {
                             : isRejected ? 'border-red-200 text-red-700'
                             : 'border-yellow-200 text-yellow-700'
                           }`}>
-                            #{i + 1} · {t.payment_type === 'seat_lock' ? 'Seat Lock' : t.payment_type === 'remaining' ? 'Remaining' : 'Full Payment'}
+                            #{i + 1} · {(t.payment_mode || t.payment_type || 'payment').toString().replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                           </span>
                           <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                             isVerified ? 'bg-green-600 text-white'
@@ -604,6 +686,42 @@ export default function AdminBookingDetailsPage() {
           </div>
         )}
 
+        {/* Referral details — ADMIN ONLY (never sent to the customer) */}
+        {isReferred && (
+          <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden print:hidden">
+            <div className="px-4 sm:px-5 py-3 border-b border-indigo-100 bg-indigo-50/60 flex items-center gap-2">
+              <Gift className="h-4 w-4 text-indigo-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Referral <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">admin-only</span></h2>
+            </div>
+            <dl className="px-4 sm:px-5 py-3 space-y-2.5 text-sm">
+              <div className="flex justify-between gap-3"><dt className="text-gray-500">Referred to</dt><dd className="font-semibold text-gray-900">{booking.referral_partner || '—'}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-gray-500">Commission / profit</dt><dd className="font-semibold text-green-700">₹{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</dd></div>
+              {booking.referral_notes && <div className="pt-2 border-t border-gray-100"><dt className="text-gray-500 mb-1">Notes</dt><dd className="text-gray-800 whitespace-pre-wrap">{booking.referral_notes}</dd></div>}
+            </dl>
+          </div>
+        )}
+
+        {/* Internal notes — ADMIN ONLY */}
+        <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:hidden">
+          <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center gap-2">
+            <StickyNote className="h-4 w-4 text-amber-500" />
+            <h2 className="text-sm font-semibold text-gray-900">Internal notes <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">admin-only</span></h2>
+          </div>
+          <div className="p-4 sm:p-5">
+            <textarea
+              value={internalNotes}
+              onChange={(e) => setInternalNotes(e.target.value)}
+              rows={3}
+              placeholder="e.g. Customer will pay cash while boarding. Requested front seats. Called and confirmed."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-[11px] text-gray-400">Never shown to the customer.</p>
+              <button onClick={saveInternalNotes} disabled={savingNotes || internalNotes === (booking.internal_notes || '')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-700 disabled:opacity-40"><Check className="h-3.5 w-3.5" />{savingNotes ? 'Saving…' : 'Save notes'}</button>
+            </div>
+          </div>
+        </div>
+
           </div>
         </div>
 
@@ -643,33 +761,82 @@ export default function AdminBookingDetailsPage() {
               <h2 className="text-base font-semibold text-gray-900">Booking actions</h2>
               <button onClick={() => setShowActionsDrawer(false)} className="p-1.5 rounded-lg hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><X className="h-5 w-5 text-gray-600" /></button>
             </div>
-            <div className="p-5 space-y-6">
-              {/* Record payment */}
+            <div className="p-5 space-y-7">
+              {/* ── Record Payment ── */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Record a payment taken in person</p>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><IndianRupee className="h-3.5 w-3.5" />Record a payment</p>
+                <div className="space-y-2">
+                  <div className="relative">
                     <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input type="number" min="1" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} placeholder="Amount" className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
                   </div>
-                  <select value={cashMode} onChange={(e) => setCashMode(e.target.value as 'cash' | 'upi')} className="px-2.5 py-2 text-sm font-semibold border border-gray-300 rounded-lg bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                  <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as any)} className="w-full px-2.5 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
+                    <option value="card">Card</option>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="online">Online</option>
                   </select>
+                  <input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="Reference ID (optional)" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                  <textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} rows={2} placeholder="Notes (optional) — e.g. Collected while boarding" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
                 </div>
-                <button disabled={managing || !cashAmount} onClick={async () => { await manageBooking({ action: 'record_payment', amount: cashAmount, mode: cashMode }); setShowActionsDrawer(false); }} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record &amp; update</button>
-                <p className="text-[11px] text-gray-400 mt-1.5">If it covers the balance ({remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')} due` : 'fully paid'}), the booking is confirmed and the traveller is emailed. Otherwise it stays seat-locked.</p>
+                <button disabled={managing || !cashAmount} onClick={async () => { await manageBooking({ action: 'record_payment', amount: cashAmount, method: payMethod, reference: payReference, notes: payNotes }); setPayReference(''); setPayNotes(''); setShowActionsDrawer(false); }} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record payment</button>
+                <p className="text-[11px] text-gray-400 mt-1.5">Updates Paid, Remaining and Payment Status automatically. Booking status is never changed.</p>
               </div>
 
-              {/* Change status */}
+              {/* ── Change Status ── */}
               <div className="pt-5 border-t border-[#ECECEE]">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Change status</p>
-                <div className="flex flex-col gap-2">
-                  {status !== 'confirmed' && <button disabled={managing} onClick={async () => { await manageBooking({ action: 'set_status', status: 'confirmed' }, 'Mark this booking as CONFIRMED and email the traveller?'); setShowActionsDrawer(false); }} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><CheckCircle className="h-4 w-4" />Mark confirmed</button>}
-                  {status !== 'seat_locked' && <button disabled={managing} onClick={async () => { await manageBooking({ action: 'set_status', status: 'seat_locked' }, 'Move this booking to SEAT LOCKED and email the traveller?'); setShowActionsDrawer(false); }} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><Lock className="h-4 w-4" />Move to seat locked</button>}
-                  <button disabled={managing} onClick={() => { setShowActionsDrawer(false); setCancelReason(''); setCancelReasonPreset(''); setShowCancelModal(true); }} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><XCircle className="h-4 w-4" />Cancel booking</button>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Change booking status</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {BOOKING_STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusChoice(s)}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${statusChoice === s ? 'border-purple-500 bg-purple-50 text-purple-700 ring-1 ring-purple-300' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}
+                    >
+                      {bookingStatusLabel(s)}
+                    </button>
+                  ))}
                 </div>
-                <p className="text-[11px] text-gray-400 mt-2">Refunds are manual in Razorpay — cancelling only frees the seat and notifies the traveller.</p>
+                <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input type="checkbox" checked={statusNotify} onChange={(e) => setStatusNotify(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                  <Bell className="h-3.5 w-3.5 text-gray-400" /> Send customer notification
+                </label>
+                <button
+                  disabled={managing || statusChoice === status || statusChoice === 'referred'}
+                  onClick={async () => {
+                    if (statusChoice === 'cancelled') { setShowActionsDrawer(false); setCancelReason(''); setCancelReasonPreset(''); setCancelNotify(statusNotify); setShowCancelModal(true); return; }
+                    await manageBooking({ action: 'set_status', status: statusChoice, notify: statusNotify }, `Set booking status to "${bookingStatusLabel(statusChoice)}"?${statusNotify ? ' The customer will be notified.' : ' No notification will be sent.'}`);
+                    setShowActionsDrawer(false);
+                  }}
+                  className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                >
+                  <Check className="h-4 w-4" />Update status
+                </button>
+                <p className="text-[11px] text-gray-400 mt-1.5">Payment amounts are never affected. To refer this booking, use the Referral section below.</p>
+              </div>
+
+              {/* ── Refund ── */}
+              {paidAmount > 0 && (
+                <div className="pt-5 border-t border-[#ECECEE]">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><RotateCcw className="h-3.5 w-3.5" />Refund</p>
+                  <button onClick={() => { setShowActionsDrawer(false); setRefundAmount(String(paidAmount)); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white text-rose-600 border border-rose-200 rounded-lg text-sm font-semibold hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"><RotateCcw className="h-4 w-4" />Record / issue refund</button>
+                  <p className="text-[11px] text-gray-400 mt-1.5">Cash refunds are recorded manually. Razorpay refunds are issued online via the gateway.</p>
+                </div>
+              )}
+
+              {/* ── Referral ── */}
+              <div className="pt-5 border-t border-[#ECECEE]">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Gift className="h-3.5 w-3.5" />Refer to a partner <span className="ml-1 normal-case text-[10px] font-medium text-indigo-500">admin-only</span></p>
+                <div className="space-y-2">
+                  <input value={refPartner} onChange={(e) => setRefPartner(e.target.value)} placeholder="Partner / company name" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                  <div className="relative">
+                    <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input type="number" min="0" value={refCommission} onChange={(e) => setRefCommission(e.target.value)} placeholder="Commission / profit" className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                  </div>
+                  <textarea value={refNotes} onChange={(e) => setRefNotes(e.target.value)} rows={2} placeholder="Internal referral notes (never shown to the customer)" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                </div>
+                <button disabled={managing} onClick={async () => { await manageBooking({ action: 'set_referral', partner: refPartner, commission: refCommission, notes: refNotes }, `Mark this booking as REFERRED to "${refPartner || 'partner'}"? The customer keeps a normal status and never sees referral details.`); setShowActionsDrawer(false); }} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Gift className="h-4 w-4" />{isReferred ? 'Update referral' : 'Mark as referred'}</button>
               </div>
             </div>
           </div>
@@ -802,8 +969,13 @@ export default function AdminBookingDetailsPage() {
                 />
               </div>
 
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input type="checkbox" checked={cancelNotify} onChange={(e) => setCancelNotify(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                <Bell className="h-3.5 w-3.5 text-gray-400" /> Send cancellation notification to customer
+              </label>
+
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
-                This frees the seat, removes the booking from revenue, and emails the traveller. <strong>Any refund must be issued separately in Razorpay</strong> — this does not move money.
+                This frees the seat and removes the booking from revenue. It does <strong>not</strong> change the payment status or move money — if a refund is due, record it separately from Actions → Refund.
               </div>
 
               <div className="flex gap-2 pt-1">
@@ -816,7 +988,7 @@ export default function AdminBookingDetailsPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await manageBooking({ action: 'set_status', status: 'cancelled', reason: cancelReason.trim() });
+                    await manageBooking({ action: 'set_status', status: 'cancelled', reason: cancelReason.trim(), notify: cancelNotify, confirm: true }, 'This will cancel the booking and free the seat. Continue?');
                     setShowCancelModal(false);
                   }}
                   disabled={managing || !cancelReason.trim()}
@@ -824,6 +996,47 @@ export default function AdminBookingDetailsPage() {
                 >
                   <XCircle className="h-4 w-4" /> {managing ? 'Cancelling…' : 'Cancel booking'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden" onClick={() => !managing && setShowRefundModal(false)}>
+          <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center"><RotateCcw className="h-5 w-5 text-rose-600" /></div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Refund payment</h2>
+                <p className="text-xs text-gray-500">Collected so far: ₹{paidAmount.toLocaleString('en-IN')}</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Method</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setRefundMethod('cash')} className={`px-3 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${refundMethod === 'cash' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}>Cash (manual)</button>
+                  <button onClick={() => setRefundMethod('razorpay')} className={`px-3 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${refundMethod === 'razorpay' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}>Razorpay (online)</button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Amount</p>
+                <div className="relative">
+                  <IndianRupee className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input type="number" min="1" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} className="w-full pl-8 pr-2 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400" />
+                </div>
+              </div>
+              <textarea value={refundNotes} onChange={(e) => setRefundNotes(e.target.value)} rows={2} placeholder="Reason / notes (optional)" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400" />
+              <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5 text-xs text-rose-800 leading-relaxed">
+                {refundMethod === 'razorpay'
+                  ? 'This issues a real refund through Razorpay to the customer — it cannot be undone.'
+                  : 'This records a cash refund you have handed back. It does not move money through any gateway.'}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowRefundModal(false)} disabled={managing} className="flex-1 px-4 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                <button onClick={handleRefund} disabled={managing || !refundAmount} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-600 text-white rounded-lg text-sm font-bold hover:bg-rose-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />{managing ? 'Processing…' : 'Confirm refund'}</button>
               </div>
             </div>
           </div>

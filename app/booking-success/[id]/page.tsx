@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { resolveDueDate } from '@/lib/payment-due';
+import { customerBookingStatus } from '@/lib/booking-status-labels';
 import BookingStatusView from '@/components/booking-status/BookingStatusView';
 import type { PaymentData } from '@/components/booking-status/BookingSummaryCard';
 
@@ -82,7 +83,8 @@ export default function BookingSuccessPage() {
   }
 
   // ---- Business logic (unchanged from the original confirmation page) ----
-  const status = booking.booking_status || 'pending';
+  // Map to the customer-facing status (a referred booking reads as confirmed).
+  const status = customerBookingStatus(booking.booking_status || 'pending');
   const trip = booking.trips;
   const shortId = booking.id.slice(0, 8).toUpperCase();
   const pax = Number(booking.number_of_participants) || 1;

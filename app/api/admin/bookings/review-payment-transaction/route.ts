@@ -74,73 +74,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if all payments for this booking are verified
+    // Recompute the booking's DERIVED payment status from the full ledger.
+    // Booking Status and Payment Status are independent: verifying a payment updates
+    // the money picture and (only for a brand-new booking) activates the seat — it
+    // NEVER auto-confirms based on how much was paid.
     const { data: allPayments, error: paymentsError } = await adminClient
       .from('payment_transactions')
-      .select('payment_status, payment_type, amount')
+      .select('payment_status, payment_type, amount, amount_refunded')
       .eq('booking_id', bookingId);
 
-    let finalBookingStatus = 'pending';
+    let finalBookingStatus = booking?.booking_status || 'pending';
+    let statusChanged = false;
     if (!paymentsError && allPayments) {
-      const allVerified = allPayments.every(p => p.payment_status === 'verified');
-      const hasRejected = allPayments.some(p => p.payment_status === 'rejected');
+      const { derivePaymentStatus, fullOwed } = await import('@/lib/booking-money');
 
-      // Fetch booking to get the true amount owed (final_amount already includes
-      // coupon/wallet discounts; fall back to discounted_price × pax).
       const { data: bookingData } = await adminClient
         .from('bookings')
-        .select('payment_method, final_amount, total_price, coupon_discount, wallet_amount_used, number_of_participants, trips(discounted_price)')
+        .select('booking_status, payment_method, final_amount, total_price, coupon_discount, wallet_amount_used, number_of_participants, trips(discounted_price)')
         .eq('id', bookingId)
         .single();
 
-      let bookingStatus = 'pending';
-      // expose to the outer scope for the response payload
-      // (assigned again just before returning)
+      const currentStatus = (bookingData as any)?.booking_status || 'pending';
+      const verifiedPaid = allPayments
+        .filter(p => ['verified', 'partially_refunded', 'refunded'].includes(String(p.payment_status)))
+        .reduce((sum, p) => sum + parseFloat(String(p.amount || 0)), 0);
+      const refunded = allPayments.reduce((s, p) => s + parseFloat(String((p as any).amount_refunded || 0)), 0);
+      const netPaid = Math.max(0, verifiedPaid - refunded);
+      const owed = fullOwed(bookingData as any, (bookingData as any)?.trips);
+      const paymentStatus = derivePaymentStatus(netPaid, owed, refunded > 0);
 
-      if (hasRejected) {
+      const hasRejected = allPayments.some(p => p.payment_status === 'rejected');
+      const hasVerified = allPayments.some(p => p.payment_status === 'verified');
+
+      // Decide the operational booking status WITHOUT coupling it to amount paid:
+      //  - a rejected-only booking that never had a verified payment → rejected
+      //  - a brand-new (pending) booking with its first verified payment → seat_locked
+      //  - otherwise leave the admin-controlled status exactly as it is
+      let bookingStatus = currentStatus;
+      if (hasRejected && !hasVerified) {
         bookingStatus = 'rejected';
-      } else if (allVerified) {
-        // Sum the ACTUAL verified transaction amounts (not the booking field).
-        const totalPaid = allPayments
-          .filter(p => p.payment_status === 'verified')
-          .reduce((sum, p) => sum + parseFloat(String(p.amount || 0)), 0);
-
-        // Supabase returns a to-one relation as an object (sometimes an array).
-        const tripsRel: any = (bookingData as any)?.trips;
-        const trip = Array.isArray(tripsRel) ? tripsRel[0] : tripsRel;
-        const pax = Number((bookingData as any)?.number_of_participants || booking?.number_of_participants || 1);
-        // Seat-lock bookings store only the DEPOSIT in total_price/final_amount,
-        // so the real full trip cost must come from list price × pax. We then
-        // subtract the customer's coupon + wallet. This matches the admin-side
-        // remaining-amount calculation.
-        const coupon = Number((bookingData as any)?.coupon_discount || 0);
-        const wallet = Number((bookingData as any)?.wallet_amount_used || 0);
-        const gross = Number(trip?.discounted_price || 0) * pax;
-        const fullPrice = Math.max(0, gross - coupon - wallet);
-
-        // A seat-lock booking stays "seat_locked" until the full trip cost is
-        // paid; only then does it become "confirmed".
-        const method = (bookingData as any)?.payment_method || booking?.payment_method;
-        if (method === 'seat_lock' && fullPrice > 0 && totalPaid < fullPrice - 1) {
-          bookingStatus = 'seat_locked';
-        } else {
-          bookingStatus = 'confirmed';
-        }
+      } else if (hasVerified && currentStatus === 'pending') {
+        bookingStatus = 'seat_locked';
       }
-
       finalBookingStatus = bookingStatus;
+      statusChanged = bookingStatus !== currentStatus;
 
-      // Update booking status
       await adminClient
         .from('bookings')
-        .update({
-          booking_status: bookingStatus,
-          payment_status: allVerified ? 'verified' : hasRejected ? 'rejected' : 'pending',
-        })
+        .update({ booking_status: bookingStatus, payment_status: paymentStatus, amount_paid: netPaid })
         .eq('id', bookingId);
 
-      // If all payments verified and booking is confirmed, increment trip participants
-      if (allVerified && (bookingStatus === 'confirmed' || bookingStatus === 'seat_locked') && booking.trip_id) {
+      // When the booking first activates (pending → seat_locked), hold the seat.
+      const activated = currentStatus === 'pending' && bookingStatus === 'seat_locked';
+      if (activated && booking.trip_id) {
         try {
           const { data: trip } = await adminClient
             .from('trips')
@@ -182,7 +168,7 @@ export async function POST(request: NextRequest) {
     // Notify the customer (email + WhatsApp) now that the status is decided.
     // This route previously updated the booking silently — that's why seat-lock
     // / confirmed messages weren't going out on payment approval.
-    if (['seat_locked', 'confirmed', 'rejected'].includes(finalBookingStatus)) {
+    if (statusChanged && ['seat_locked', 'confirmed', 'rejected'].includes(finalBookingStatus)) {
       try {
         await fetch(`${request.nextUrl.origin}/api/bookings/send-notification`, {
           method: 'POST',

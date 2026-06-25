@@ -1,27 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
+import { fullOwed, derivePaymentStatus } from '@/lib/booking-money';
 
 export const runtime = 'nodejs';
 
-const COUNTED = ['confirmed', 'seat_locked'];
+// Booking statuses that occupy a seat on the trip.
+const COUNTED = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
+// Statuses an admin may set from the Change-Status modal (+ hidden `pending`).
+const ALLOWED_STATUS = ['pending', 'seat_locked', 'confirmed', 'on_trip', 'completed', 'cancelled', 'referred'];
+const PAYMENT_MODES = ['cash', 'upi', 'card', 'bank', 'online', 'razorpay'];
 
 /**
- * Admin booking controls used from the booking detail page.
+ * Admin booking controls. Booking Status and Payment Status are INDEPENDENT here:
  *
- *   { action: 'record_payment', amount, mode?, notes? }
- *     Records cash/UPI money taken in person. Adds a verified payment, then
- *     auto-sets the booking to confirmed (fully paid) or seat_locked (partial).
- *
- *   { action: 'set_status', status, reason? }
- *     Manually move a booking between pending / seat_locked / confirmed /
- *     cancelled / rejected. Keeps the trip seat count in sync and emails the
- *     traveller for confirmed / seat_locked / cancelled / rejected.
+ *   record_payment      — adds money to the ledger, recomputes Payment Status.
+ *                         NEVER changes Booking Status.
+ *   record_refund       — records a manual (cash) refund and recomputes Payment Status.
+ *                         (Razorpay refunds go through /api/admin/payments/[id]/refund.)
+ *   set_status          — changes Booking Status only. NEVER changes payment.
+ *                         `notify` gates the customer email/WhatsApp.
+ *   set_referral        — saves partner/commission/notes and marks status referred.
+ *   save_internal_notes — admin-only operational notes.
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
@@ -31,48 +33,45 @@ export async function POST(
     const action = body.action;
     const adminClient = createAdminClient();
 
-    // Load the booking with everything we need to do the money math.
     const { data: b, error: fetchErr } = await adminClient
       .from('bookings')
       .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, amount_paid, departure_date')
       .eq('id', id)
       .single();
-
-    if (fetchErr || !b) {
-      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
-    }
+    if (fetchErr || !b) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
 
     const pax = Number(b.number_of_participants) || 1;
 
-    // Full amount actually owed, after the customer's coupon + wallet discounts.
     const { data: tripRow } = await adminClient
       .from('trips')
       .select('discounted_price, current_participants')
       .eq('id', b.trip_id)
       .single();
-    const coupon = Number(b.coupon_discount || 0);
-    const wallet = Number(b.wallet_amount_used || 0);
-    // Seat-lock bookings store only the DEPOSIT in total_price/final_amount, so
-    // the full trip cost must come from list price × pax. Full-payment bookings
-    // already have the net total in final_amount.
-    const isSeatLock = b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked';
-    const gross = isSeatLock
-      ? Number(tripRow?.discounted_price || 0) * pax
-      : (Number(b.total_price || 0) || Number(tripRow?.discounted_price || 0) * pax);
-    const fullOwed = isSeatLock
-      ? Math.max(0, gross - coupon - wallet)
-      : (Number(b.final_amount || 0) > 0 ? Number(b.final_amount) : Math.max(0, gross - coupon - wallet));
 
-    // Current money actually received.
-    const currentPaid = async (): Promise<number> => {
-      if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
-      const { data: txns } = await adminClient
-        .from('payment_transactions')
-        .select('amount, payment_status')
-        .eq('booking_id', id);
-      return (txns || [])
-        .filter((t: any) => t.payment_status === 'verified')
-        .reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
+    const owed = fullOwed(b as any, tripRow as any);
+
+    // Pull the full ledger once; reused for money math + recompute.
+    const loadLedger = async () =>
+      (await adminClient.from('payment_transactions').select('amount, payment_status, amount_refunded').eq('booking_id', id)).data || [];
+
+    const moneyFromLedger = (txns: any[]) => {
+      const paid = txns
+        .filter((t) => ['verified', 'partially_refunded', 'refunded'].includes(String(t.payment_status)))
+        .reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
+      const refunded = txns.reduce((s, t) => s + parseFloat(String(t.amount_refunded || 0)), 0);
+      const net = Math.max(0, paid - refunded);
+      // Legacy offline rows with no ledger track money on amount_paid.
+      const effective = txns.length === 0 && (b.is_offline_booking || !b.user_id) ? parseFloat(String(b.amount_paid || 0)) : net;
+      return { effective, refunded };
+    };
+
+    /** Recompute + persist the denormalized payment mirrors after any money change. */
+    const syncPaymentMirrors = async () => {
+      const txns = await loadLedger();
+      const { effective, refunded } = moneyFromLedger(txns);
+      const status = derivePaymentStatus(effective, owed, refunded > 0);
+      await adminClient.from('bookings').update({ payment_status: status, amount_paid: effective }).eq('id', id);
+      return { paid: effective, remaining: Math.max(0, owed - effective), status };
     };
 
     const adjustSeats = async (delta: number) => {
@@ -99,65 +98,101 @@ export async function POST(
       if (Number.isNaN(amount) || amount <= 0) {
         return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 });
       }
-      const mode = body.mode === 'upi' ? 'upi' : 'cash';
+      const mode = PAYMENT_MODES.includes(body.method) ? body.method : 'cash';
+      const reference = body.reference ? String(body.reference).slice(0, 120) : '';
+      const notes = body.notes ? String(body.notes).slice(0, 500) : '';
 
-      const paidBefore = await currentPaid();
-      const paidAfter = paidBefore + amount;
+      await adminClient.from('payment_transactions').insert([{
+        booking_id: id,
+        user_id: b.user_id,
+        transaction_id: reference || `MANUAL_${mode.toUpperCase()}_${Date.now()}`,
+        amount,
+        payment_type: 'offline',
+        payment_status: 'verified',
+        payment_mode: mode,
+        payment_reviewed_at: new Date().toISOString(),
+        payment_reviewed_by: auth.user.id,
+        payment_review_notes: notes || 'Recorded in person by admin',
+      }]);
 
-      // Record the money. Online bookings track money as verified transactions;
-      // offline bookings track it on amount_paid.
-      if (b.is_offline_booking || !b.user_id) {
-        await adminClient.from('bookings').update({ amount_paid: paidAfter }).eq('id', id);
+      const money = await syncPaymentMirrors();
+      return NextResponse.json({
+        success: true,
+        ...money,
+        message: `Payment of ₹${amount.toLocaleString('en-IN')} recorded. Payment status: ${money.status}.`,
+      });
+    }
+
+    // ───────────────────────── record_refund ─────────────────────────
+    // Manual / cash refund. Records the refunded money against the most recent
+    // verified non-Razorpay payment (Razorpay refunds use the dedicated endpoint).
+    if (action === 'record_refund') {
+      if (!body.confirm) return NextResponse.json({ error: 'Refund requires confirmation' }, { status: 400 });
+      const amount = parseFloat(String(body.amount));
+      if (Number.isNaN(amount) || amount <= 0) {
+        return NextResponse.json({ error: 'Enter a valid refund amount' }, { status: 400 });
+      }
+      const notes = body.notes ? String(body.notes).slice(0, 500) : '';
+
+      const txns = await loadLedger();
+      const { effective } = moneyFromLedger(txns);
+      if (amount > effective + 0.5) {
+        return NextResponse.json({ error: `Cannot refund ₹${amount.toLocaleString('en-IN')} — only ₹${effective.toLocaleString('en-IN')} was collected.` }, { status: 400 });
+      }
+
+      // Find a verified manual/cash payment row to attach the refund to; else create
+      // a standalone refund ledger entry so the math still balances.
+      const { data: target } = await adminClient
+        .from('payment_transactions')
+        .select('id, amount, amount_refunded, payment_mode')
+        .eq('booking_id', id)
+        .eq('payment_status', 'verified')
+        .neq('payment_mode', 'razorpay')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (target) {
+        const already = parseFloat(String(target.amount_refunded || 0));
+        const newRefunded = already + amount;
+        const fully = newRefunded >= parseFloat(String(target.amount)) - 0.5;
+        await adminClient.from('payment_transactions').update({
+          amount_refunded: newRefunded,
+          payment_status: fully ? 'refunded' : 'partially_refunded',
+          payment_review_notes: notes || 'Manual refund by admin',
+        }).eq('id', target.id);
       } else {
         await adminClient.from('payment_transactions').insert([{
           booking_id: id,
-          transaction_id: `MANUAL_${mode.toUpperCase()}_${Date.now()}`,
-          amount,
-          payment_type: paidAfter >= fullOwed - 1 ? 'full' : 'partial',
-          payment_status: 'verified',
-          payment_mode: mode,
+          user_id: b.user_id,
+          transaction_id: `REFUND_${Date.now()}`,
+          amount: 0,
+          amount_refunded: amount,
+          payment_type: 'refund',
+          payment_status: 'refunded',
+          payment_mode: body.method && PAYMENT_MODES.includes(body.method) ? body.method : 'cash',
           payment_reviewed_at: new Date().toISOString(),
           payment_reviewed_by: auth.user.id,
-          payment_review_notes: body.notes || 'Recorded in person by admin',
+          payment_review_notes: notes || 'Manual refund by admin',
         }]);
       }
 
-      const fullyPaid = paidAfter >= fullOwed - 1;
-      const newStatus = fullyPaid ? 'confirmed' : 'seat_locked';
-      const wasCounted = COUNTED.includes(b.booking_status);
-      if (!wasCounted) await adjustSeats(pax);
-
-      // Keep payment_amount / amount_paid in sync so every screen that reads
-      // them (user booking page, admin list) shows the new running total.
-      await adminClient.from('bookings').update({
-        booking_status: newStatus,
-        payment_status: fullyPaid ? 'paid' : 'partial',
-        payment_amount: paidAfter,
-        amount_paid: paidAfter,
-      }).eq('id', id);
-
-      // Email the customer only when it actually changes their state
-      // (fully paid -> confirmed). A partial top-up doesn't re-notify.
-      if (fullyPaid) await notify('confirmed');
-
-      return NextResponse.json({
-        success: true,
-        bookingStatus: newStatus,
-        paid: paidAfter,
-        remaining: Math.max(0, fullOwed - paidAfter),
-        message: newStatus === 'confirmed' ? 'Payment recorded. Booking confirmed and email sent.' : 'Payment recorded. Seat still locked (balance pending).',
-      });
+      const money = await syncPaymentMirrors();
+      return NextResponse.json({ success: true, ...money, message: `Refund of ₹${amount.toLocaleString('en-IN')} recorded.` });
     }
 
     // ───────────────────────── set_status ─────────────────────────
     if (action === 'set_status') {
       const status = String(body.status || '');
-      const allowed = ['pending', 'seat_locked', 'confirmed', 'cancelled', 'rejected'];
-      if (!allowed.includes(status)) {
+      if (!ALLOWED_STATUS.includes(status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       }
       if (status === b.booking_status) {
         return NextResponse.json({ error: 'Booking is already in that status' }, { status: 400 });
+      }
+      // Cancelling is destructive — require explicit confirmation.
+      if (status === 'cancelled' && !body.confirm) {
+        return NextResponse.json({ error: 'Cancellation requires confirmation' }, { status: 400 });
       }
 
       const wasCounted = COUNTED.includes(b.booking_status);
@@ -165,24 +200,53 @@ export async function POST(
       if (willCount && !wasCounted) await adjustSeats(pax);
       if (!willCount && wasCounted) await adjustSeats(-pax);
 
+      // Booking status ONLY — payment is never touched here.
       const updates: Record<string, unknown> = { booking_status: status };
-      if (status === 'cancelled' || status === 'rejected') {
-        updates.payment_status = 'refunded';
+      if (status === 'cancelled') {
         updates.rejection_reason = body.reason ? String(body.reason).slice(0, 500) : 'Cancelled by admin';
       }
-      if (status === 'confirmed') updates.payment_status = 'paid';
       await adminClient.from('bookings').update(updates).eq('id', id);
 
-      // Email the traveller for the meaningful transitions (skip plain "pending").
-      if (['confirmed', 'seat_locked', 'cancelled', 'rejected'].includes(status)) {
-        await notify(status, body.reason);
-      }
+      // Notify only if requested (checkbox) and the status has customer copy.
+      const notifiable = ['seat_locked', 'confirmed', 'on_trip', 'completed', 'cancelled'];
+      const shouldNotify = body.notify !== false && notifiable.includes(status);
+      if (shouldNotify) await notify(status, body.reason);
 
       return NextResponse.json({
         success: true,
         bookingStatus: status,
-        message: `Booking set to ${status.replace('_', ' ')}${['confirmed', 'seat_locked', 'cancelled', 'rejected'].includes(status) ? ' and email sent.' : '.'}`,
+        notified: shouldNotify,
+        message: `Booking set to ${status.replace('_', ' ')}${shouldNotify ? ' and customer notified.' : '.'}`,
       });
+    }
+
+    // ───────────────────────── set_referral ─────────────────────────
+    if (action === 'set_referral') {
+      const partner = body.partner ? String(body.partner).slice(0, 200) : null;
+      const commission = body.commission != null && body.commission !== '' ? parseFloat(String(body.commission)) : 0;
+      if (Number.isNaN(commission) || commission < 0) {
+        return NextResponse.json({ error: 'Enter a valid commission amount' }, { status: 400 });
+      }
+      const refNotes = body.notes ? String(body.notes).slice(0, 1000) : null;
+
+      const wasCounted = COUNTED.includes(b.booking_status);
+      if (!wasCounted) await adjustSeats(pax);
+
+      await adminClient.from('bookings').update({
+        booking_status: 'referred',
+        referral_partner: partner,
+        referral_commission: commission,
+        referral_notes: refNotes,
+      }).eq('id', id);
+
+      return NextResponse.json({ success: true, bookingStatus: 'referred', message: 'Booking marked as referred.' });
+    }
+
+    // ───────────────────────── save_internal_notes ─────────────────────────
+    if (action === 'save_internal_notes') {
+      const notes = body.notes != null ? String(body.notes).slice(0, 4000) : '';
+      await adminClient.from('bookings').update({ internal_notes: notes }).eq('id', id);
+      return NextResponse.json({ success: true, message: 'Internal notes saved.' });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

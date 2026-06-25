@@ -32,12 +32,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This booking is not a cash payment' }, { status: 400 });
     }
 
-    // Update booking with cash payment approval
+    // Record the cash money in the ledger (authoritative).
+    const referenceId = `CASH_${Date.now()}`;
+    await adminClient
+      .from('payment_transactions')
+      .insert([
+        {
+          booking_id: bookingId,
+          transaction_id: referenceId,
+          amount: parseFloat(amountPaid),
+          payment_type: 'offline',
+          payment_status: 'verified',
+          payment_mode: 'cash',
+          payment_reviewed_at: new Date().toISOString(),
+          payment_reviewed_by: auth.user.id,
+          payment_review_notes: notes || null,
+        },
+      ]);
+
+    // Payment Status is DERIVED from money; Booking Status is independent. We only
+    // activate a brand-new (pending) booking to seat_locked — never auto-confirm.
+    const { derivePaymentStatus } = await import('@/lib/booking-money');
+    const owed = parseFloat(String(booking.final_amount || 0));
+    const paid = parseFloat(amountPaid);
+    const newPaymentStatus = derivePaymentStatus(paid, owed, false);
+    const activated = booking.booking_status === 'pending';
+    const newBookingStatus = activated ? 'seat_locked' : booking.booking_status;
+
     const updateData: any = {
-      payment_status: 'paid',
-      amount_paid: parseFloat(amountPaid),
-      booking_status: parseFloat(amountPaid) >= parseFloat(String(booking.final_amount || 0)) ? 'confirmed' : 'seat_locked',
-      reference_id: `CASH_${Date.now()}`,
+      payment_status: newPaymentStatus,
+      amount_paid: paid,
+      booking_status: newBookingStatus,
+      reference_id: referenceId,
       payment_reviewed_at: new Date().toISOString(),
       payment_reviewed_by: auth.user.id,
       payment_review_notes: notes || null,
@@ -52,20 +78,6 @@ export async function POST(request: NextRequest) {
       console.error('Error updating booking:', updateError);
       return NextResponse.json({ error: updateError.message || 'Failed to approve cash payment' }, { status: 500 });
     }
-
-    // Create payment transaction
-    await adminClient
-      .from('payment_transactions')
-      .insert([
-        {
-          booking_id: bookingId,
-          transaction_id: updateData.reference_id,
-          amount: parseFloat(amountPaid),
-          payment_type: 'full',
-          payment_status: 'verified',
-          payment_mode: 'cash', // Track payment mode
-        },
-      ]);
 
     // Process referral reward if this is user's first confirmed booking
     try {
@@ -104,18 +116,17 @@ export async function POST(request: NextRequest) {
       // Don't fail the whole request if referral processing fails
     }
 
-    // Send notification
-    try {
-      await fetch(`${request.nextUrl.origin}/api/bookings/send-notification`, {
-        method: 'POST',
-        headers: internalFetchHeaders(),
-        body: JSON.stringify({
-          bookingId: bookingId,
-          status: updateData.booking_status,
-        }),
-      });
-    } catch (emailError) {
-      console.error('Error sending notification:', emailError);
+    // Notify only when the booking actually activated (pending → seat_locked).
+    if (activated) {
+      try {
+        await fetch(`${request.nextUrl.origin}/api/bookings/send-notification`, {
+          method: 'POST',
+          headers: internalFetchHeaders(),
+          body: JSON.stringify({ bookingId, status: newBookingStatus }),
+        });
+      } catch (emailError) {
+        console.error('Error sending notification:', emailError);
+      }
     }
 
     return NextResponse.json({

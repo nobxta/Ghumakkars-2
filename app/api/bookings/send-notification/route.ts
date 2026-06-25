@@ -243,6 +243,11 @@ export async function POST(request: NextRequest) {
         );
         break;
 
+      case 'on_trip':
+      case 'completed':
+        // No dedicated email template — these go out over WhatsApp only (below).
+        break;
+
       default:
         return NextResponse.json(
           { error: 'Invalid status' },
@@ -308,6 +313,16 @@ export async function POST(request: NextRequest) {
             `Your booking for *${t}*${shortId ? ` (${shortId})` : ''} has been *cancelled*.\n` +
             (rejectionReason ? `Reason: ${rejectionReason}\n` : '') +
             `\nReply here if you have any questions — we're happy to help.`,
+          on_trip:
+            `Hi ${name}! 🚌\n\n` +
+            `Your trip *${t}* is now *underway*.\n` +
+            idLine + dates +
+            `\nHave an amazing journey — reply here anytime if you need anything. 🏔️` + group,
+          completed:
+            `Hi ${name}! ✨\n\n` +
+            `That's a wrap on *${t}*! We hope you had a wonderful time. 💜\n` +
+            idLine +
+            `\nWe'd love your feedback — just reply here. Until the next adventure! 🌄`,
         };
         if (msg[status]) {
           // Attach the trip ticket PDF on seat-lock / confirmed — the SAME PDF

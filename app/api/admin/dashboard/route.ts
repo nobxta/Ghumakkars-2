@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { paidOf, fullOwed as fullOf } from '@/lib/booking-money';
 
 export const runtime = 'nodejs';
 
-// Discount-aware money (same rules as every other screen).
-function paidOf(b: any): number {
-  if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
-  return (b.payment_transactions || [])
-    .filter((t: any) => t.payment_status === 'verified')
-    .reduce((s: number, t: any) => s + parseFloat(String(t.amount || 0)), 0);
-}
-function fullOf(b: any): number {
-  const pax = Number(b.number_of_participants) || 1;
-  const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
-  const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
-  const tripsRel = Array.isArray(b.trips) ? b.trips[0] : b.trips;
-  const disc = Number(tripsRel?.discounted_price) || 0;
-  if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked' || b.booking_status === 'remaining_submitted') {
-    return Math.max(0, disc * pax - coupon - wallet);
-  }
-  const fa = parseFloat(String(b.final_amount || 0));
-  if (fa > 0) return fa;
-  return Math.max(0, (parseFloat(String(b.total_price || 0)) || disc * pax) - coupon - wallet);
-}
 const isActive = (b: any) => !['cancelled', 'rejected'].includes(b.booking_status);
+// Revenue rule: a referred booking earns our commission/profit, NOT the trip
+// collection (we settle the trip amount with the partner). Everyone else earns the
+// cash actually collected.
+const revenueOf = (b: any): number =>
+  b.booking_status === 'referred' ? parseFloat(String(b.referral_commission || 0)) || 0 : paidOf(b);
 
 export async function GET(req: Request) {
   const auth = await requireAdmin();
@@ -56,7 +42,7 @@ export async function GET(req: Request) {
       .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, duration_days, is_active, status, cover_image_url, image_url')
       .order('start_date', { ascending: true }),
     admin.from('bookings')
-      .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, amount_paid, is_offline_booking, user_id, created_at, trips(discounted_price), payment_transactions(amount, payment_status, created_at)')
+      .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, amount_paid, referral_commission, is_offline_booking, user_id, created_at, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded, created_at)')
       .limit(10000),
   ]);
 
@@ -64,22 +50,25 @@ export async function GET(req: Request) {
   const bookings = bookingsRes.data || [];
   const active = bookings.filter(isActive);
 
-  const collected = active.reduce((s, b) => s + paidOf(b), 0);
-  const outstanding = active.reduce((s, b) => s + Math.max(0, fullOf(b) - paidOf(b)), 0);
+  const collected = active.reduce((s, b) => s + revenueOf(b), 0);
+  // Referred bookings have no outstanding balance owed to us (the customer settles
+  // the trip cost; we only book the commission).
+  const outstanding = active.reduce((s, b) => s + (b.booking_status === 'referred' ? 0 : Math.max(0, fullOf(b) - paidOf(b))), 0);
   const confirmed = bookings.filter((b: any) => b.booking_status === 'confirmed').length;
   const seatLocked = bookings.filter((b: any) => b.booking_status === 'seat_locked').length;
   const pending = bookings.filter((b: any) => b.booking_status === 'pending').length;
+  const SEATED = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
   const travellers = active
-    .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
+    .filter((b: any) => SEATED.includes(b.booking_status))
     .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0);
 
   const perTrip = new Map<string, { pax: number; collected: number; pending: number }>();
   active.forEach((b: any) => {
     if (!b.trip_id) return;
     const g = perTrip.get(b.trip_id) || { pax: 0, collected: 0, pending: 0 };
-    if (['confirmed', 'seat_locked'].includes(b.booking_status)) g.pax += Number(b.number_of_participants) || 1;
-    g.collected += paidOf(b);
-    g.pending += Math.max(0, fullOf(b) - paidOf(b));
+    if (SEATED.includes(b.booking_status)) g.pax += Number(b.number_of_participants) || 1;
+    g.collected += revenueOf(b);
+    g.pending += b.booking_status === 'referred' ? 0 : Math.max(0, fullOf(b) - paidOf(b));
     perTrip.set(b.trip_id, g);
   });
 
