@@ -25,6 +25,8 @@ export default function AdminBookingsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'status'>('date');
   const [selectedTripId, setSelectedTripId] = useState<string>('all');
+  // Departure batch within the selected trip (recurring trips have many).
+  const [selectedBatch, setSelectedBatch] = useState<string>('all');
   const [trips, setTrips] = useState<any[]>([]);
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
   // The row menu renders in a portal with fixed coords so it escapes the table's
@@ -151,35 +153,44 @@ export default function AdminBookingsPage() {
     return Math.max(0, net - waived);
   };
 
-  // Revenue = money actually collected on active (non-cancelled) bookings,
-  // including the deposit on seat-locked bookings.
-  const confirmedRevenue = bookings
-    .filter(b => b.booking_status === 'confirmed')
-    .reduce((sum, b) => sum + paidOf(b), 0);
+  // ── Scope: by trip, then by departure batch ──
+  const batchKey = (b: any): string => b.departure_date || b.trips?.start_date || '';
+  const tripScoped = selectedTripId !== 'all' ? bookings.filter(b => b.trip_id === selectedTripId) : bookings;
+  // Distinct departure dates for the selected trip (its batches), each with a count.
+  const batches: { date: string; count: number }[] = selectedTripId !== 'all'
+    ? Array.from(tripScoped.reduce((m: Map<string, number>, b) => {
+        const k = batchKey(b);
+        if (k) m.set(k, (m.get(k) || 0) + 1);
+        return m;
+      }, new Map<string, number>()))
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    : [];
+  // Bookings in the current scope (trip + batch) — drives the stat cards below.
+  const scopedBookings = (selectedTripId !== 'all' && selectedBatch !== 'all')
+    ? tripScoped.filter(b => batchKey(b) === selectedBatch)
+    : tripScoped;
 
-  const seatLockRevenue = bookings
-    .filter(b => b.booking_status === 'seat_locked')
-    .reduce((sum, b) => sum + paidOf(b), 0);
+  // Revenue = money actually collected on active (non-cancelled) bookings in scope,
+  // including the deposit on seat-locked bookings, and commission on referred ones.
+  const totalRevenue = scopedBookings
+    .filter(b => !['cancelled', 'rejected', 'pending'].includes(b.booking_status))
+    .reduce((sum, b) => sum + (b.booking_status === 'referred' ? (parseFloat(b.referral_commission || 0) || 0) : paidOf(b)), 0);
 
-  const totalRevenue = confirmedRevenue + seatLockRevenue;
-
-  // Pending = balance still left to pay across all active bookings (e.g. the
-  // remaining amount on a seat-locked booking).
-  const pendingRevenue = bookings
-    .filter(b => !['cancelled', 'rejected'].includes(b.booking_status))
+  // Pending = balance still left to pay across active bookings in scope.
+  const pendingRevenue = scopedBookings
+    .filter(b => !['cancelled', 'rejected', 'referred'].includes(b.booking_status))
     .reduce((sum, b) => sum + Math.max(0, fullOf(b) - paidOf(b)), 0);
 
-  const needsAttention = bookings.filter(b =>
+  const needsAttention = scopedBookings.filter(b =>
     b.payment_transactions?.some((p: any) => p.payment_status === 'pending') ||
     (b.booking_status === 'pending' && b.payment_mode !== 'razorpay')
   ).length;
 
   const conversionRate = stats.total > 0 ? Math.round((stats.confirmed / stats.total) * 100) : 0;
 
-  // Get filtered bookings by trip first (for count calculations)
-  const tripFilteredBookings = selectedTripId !== 'all' 
-    ? bookings.filter(b => b.trip_id === selectedTripId)
-    : bookings;
+  // Bookings scoped to the selected trip + batch (base for status filters/counts).
+  const tripFilteredBookings = scopedBookings;
 
   // Calculate counts for selected trip
   const tripStats = {
@@ -513,8 +524,8 @@ export default function AdminBookingsPage() {
         </div>
         <div className="px-4 py-2.5">
           <div className="flex items-center gap-1.5 text-gray-500"><Calendar className="h-3.5 w-3.5 text-purple-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Bookings</span></div>
-          <p className="text-lg font-bold text-gray-900 leading-tight">{stats.total}</p>
-          <p className="text-[11px] text-gray-400">{stats.confirmed} confirmed · {conversionRate}%</p>
+          <p className="text-lg font-bold text-gray-900 leading-tight">{scopedBookings.length}</p>
+          <p className="text-[11px] text-gray-400">{selectedTripId !== 'all' ? (selectedBatch !== 'all' ? 'this batch' : 'this trip') : `${stats.confirmed} confirmed · ${conversionRate}%`}</p>
         </div>
       </div>
 
@@ -546,7 +557,7 @@ export default function AdminBookingsPage() {
           </div>
           <select
             value={selectedTripId}
-            onChange={(e) => { setSelectedTripId(e.target.value); setFilter('all'); }}
+            onChange={(e) => { setSelectedTripId(e.target.value); setSelectedBatch('all'); setFilter('all'); }}
             className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white max-w-[220px]"
           >
             <option value="all">All trips</option>
@@ -554,6 +565,25 @@ export default function AdminBookingsPage() {
               <option key={trip.id} value={trip.id}>{trip.title} - {trip.destination}</option>
             ))}
           </select>
+          {/* Batch (departure) picker — appears once a trip with multiple departures is selected */}
+          {selectedTripId !== 'all' && batches.length > 0 && (
+            <select
+              value={selectedBatch}
+              onChange={(e) => { setSelectedBatch(e.target.value); setFilter('all'); }}
+              className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white max-w-[220px]"
+              title="Departure batch"
+            >
+              <option value="all">All batches ({tripScoped.length})</option>
+              {batches.map((bt) => {
+                const d = new Date(bt.date + (bt.date.length === 10 ? 'T00:00:00' : ''));
+                const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+                const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
+                const tag = d0.getTime() === today0.getTime() ? 'Today' : d0 < today0 ? 'Past' : 'Upcoming';
+                const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                return <option key={bt.date} value={bt.date}>{label} · {tag} · {bt.count}</option>;
+              })}
+            </select>
+          )}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
