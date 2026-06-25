@@ -404,9 +404,15 @@ export default function AdminBookingDetailsPage() {
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${bookingStatusChip(displayStatus)}`} title="Booking status">
             <Shield className="h-3 w-3" />{bookingStatusLabel(displayStatus)}
           </span>
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${paymentStatusChip(paymentStatus)}`} title="Payment status">
-            <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
-          </span>
+          {isReferred ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700" title="Payment status">
+              <Gift className="h-3 w-3" />Settled
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${paymentStatusChip(paymentStatus)}`} title="Payment status">
+              <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
+            </span>
+          )}
           <button
             onClick={() => typeof window !== 'undefined' && window.print()}
             className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
@@ -582,6 +588,15 @@ export default function AdminBookingDetailsPage() {
             {/* Booking Summary — the ONLY place totals appear */}
             <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
               <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
+              {isReferred ? (
+                // Referred to a partner: the trip money is settled with them — we only
+                // book our commission. No customer dues are shown.
+                <dl className="space-y-2">
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Handed to partner</dt><dd className="text-base font-medium text-gray-900">{booking.referral_partner || '—'}</dd></div>
+                  <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Our commission / profit</dt><dd className="text-2xl font-bold text-indigo-700">₹{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</dd></div>
+                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Dues</dt><dd className="text-base font-bold text-green-700">None</dd></div>
+                </dl>
+              ) : (
               <dl className="space-y-2">
                 <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Base Trip Amount</dt><dd className="text-base font-medium text-gray-900">₹{listGross.toLocaleString('en-IN')}</dd></div>
                 {couponDiscountRaw > 0 && (
@@ -600,8 +615,9 @@ export default function AdminBookingDetailsPage() {
                 )}
                 <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Offline Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : waivedAmount > 0 ? 'Settled' : 'None'}</dd></div>
               </dl>
+              )}
               {/* Payment Status is independent of Booking Status — a confirmed booking can still owe a balance. */}
-              {remainingAmount > 0 && !['cancelled', 'rejected'].includes(status) && (
+              {!isReferred && remainingAmount > 0 && !['cancelled', 'rejected'].includes(status) && (
                 <div className="mt-3 flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs text-orange-800">
                   <IndianRupee className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                   <span><strong>₹{remainingAmount.toLocaleString('en-IN')}</strong> to be collected offline during the trip.
