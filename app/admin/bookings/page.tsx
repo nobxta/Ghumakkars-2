@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet, MoreVertical, Gift } from 'lucide-react';
@@ -26,6 +27,29 @@ export default function AdminBookingsPage() {
   const [selectedTripId, setSelectedTripId] = useState<string>('all');
   const [trips, setTrips] = useState<any[]>([]);
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
+  // The row menu renders in a portal with fixed coords so it escapes the table's
+  // overflow clipping. Position is measured from the trigger button on open.
+  const [rowMenuPos, setRowMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // The fixed menu would drift if the page/table scrolled — close it instead.
+  useEffect(() => {
+    if (!openRowMenu) return;
+    const close = () => { setOpenRowMenu(null); setRowMenuPos(null); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [openRowMenu]);
+
+  const openRowMenuAt = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (openRowMenu === id) { setOpenRowMenu(null); setRowMenuPos(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const menuW = 176; // w-44
+    const estH = 188;
+    const top = (r.bottom + 4 + estH > window.innerHeight) ? Math.max(8, r.top - estH) : r.bottom + 4;
+    setRowMenuPos({ top, left: Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8)) });
+    setOpenRowMenu(id);
+  };
   const [quickFilter, setQuickFilter] = useState<'none' | 'today' | 'week' | 'pending_payment' | 'upcoming'>('none');
   const supabase = createClient();
 
@@ -814,37 +838,38 @@ export default function AdminBookingsPage() {
                               </Link>
                             )}
 
-                            {/* Overflow menu */}
+                            {/* Overflow menu — rendered in a portal so it never gets clipped by the table */}
                             <div className="relative">
                               <button
-                                onClick={(e) => { e.stopPropagation(); setOpenRowMenu(openRowMenu === booking.id ? null : booking.id); }}
+                                onClick={(e) => openRowMenuAt(e, booking.id)}
                                 className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                                 title="More actions"
                               >
                                 <MoreVertical className="h-4 w-4" />
                               </button>
-                              {openRowMenu === booking.id && (
+                              {openRowMenu === booking.id && rowMenuPos && typeof document !== 'undefined' && createPortal(
                                 <>
-                                  <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); }} />
-                                  <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-xl z-20 overflow-hidden py-1">
+                                  <div className="fixed inset-0 z-[80]" onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); }} />
+                                  <div className="fixed z-[81] w-44 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden py-1" style={{ top: rowMenuPos.top, left: rowMenuPos.left }}>
                                     <Link href={`/admin/bookings/${booking.id}`} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                       <Eye className="h-3.5 w-3.5 text-gray-500" /> View booking
                                     </Link>
                                     {(needsManualReview || hasTxns) && (
-                                      <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); openPaymentModal(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                                      <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); openPaymentModal(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
                                         <CreditCard className="h-3.5 w-3.5 text-gray-500" /> Payments{pendingTxns > 0 ? ` (${pendingTxns})` : ''}
                                       </button>
                                     )}
                                     {phone && (
-                                      <a href={`tel:${phone}`} onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                      <a href={`tel:${phone}`} onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                         <Phone className="h-3.5 w-3.5 text-gray-500" /> Call customer
                                       </a>
                                     )}
-                                    <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); handleDeleteBooking(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left border-t border-gray-100">
+                                    <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); handleDeleteBooking(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left border-t border-gray-100">
                                       <XCircle className="h-3.5 w-3.5" /> Delete
                                     </button>
                                   </div>
-                                </>
+                                </>,
+                                document.body
                               )}
                             </div>
                           </div>
