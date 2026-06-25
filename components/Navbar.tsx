@@ -72,6 +72,8 @@ export default function Navbar() {
 
   // Auth pages have their own full-screen split layout — no site navbar.
   if (pathname?.startsWith('/auth')) return null;
+  // The booking status page is a focused full-bleed confirmation with its own header.
+  if (pathname?.startsWith('/booking-success')) return null;
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
