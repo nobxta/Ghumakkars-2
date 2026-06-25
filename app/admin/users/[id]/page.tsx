@@ -37,6 +37,7 @@ export default function AdminUserDetailsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
+  const [impersonateLink, setImpersonateLink] = useState<string | null>(null);
 
   // Form states
   const [editForm, setEditForm] = useState<any>(null);
@@ -268,7 +269,9 @@ export default function AdminUserDetailsPage() {
     }
   };
 
-  // Open a one-time magic link to sign in AS this user (debug their account).
+  // Generate a one-time magic link to sign in AS this user. We DON'T auto-open it
+  // in this window — cookie sessions are shared per-browser, so that would replace
+  // the admin's session. Instead we surface the link to open in a private window.
   const handleImpersonate = async () => {
     setImpersonating(true);
     setActionMessage(null);
@@ -276,9 +279,7 @@ export default function AdminUserDetailsPage() {
       const res = await fetch(`/api/admin/users/${params.id}/impersonate`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not create a login link');
-      window.open(data.link, '_blank', 'noopener,noreferrer');
-      setActionMessage({ type: 'success', text: 'Opened a login link in a new tab. Tip: use a private/incognito window so it doesn’t replace your admin session.' });
-      setTimeout(() => setActionMessage(null), 6000);
+      setImpersonateLink(data.link);
     } catch (e: any) {
       setActionMessage({ type: 'error', text: e.message });
     } finally {
@@ -897,6 +898,30 @@ export default function AdminUserDetailsPage() {
       </div>
 
       {/* Action Message */}
+      {/* Log in as user — link to open in a private window */}
+      {impersonateLink && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl border border-purple-200 max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-2xl bg-purple-100 flex items-center justify-center flex-shrink-0"><LogIn className="h-5 w-5 text-purple-600" /></div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Log in as this user</h3>
+                <p className="text-xs text-gray-500">Opens their account exactly as they see it.</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 mb-4">
+              Open this link in a <strong>private / incognito window</strong>. Opening it here would log you out of admin (browser sessions are shared) — a private window keeps your admin session intact.
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <input readOnly value={impersonateLink} onFocus={(e) => e.target.select()} className="flex-1 h-10 px-3 text-xs rounded-lg bg-gray-50 border border-gray-200 text-gray-700 font-mono truncate" />
+              <button onClick={() => { navigator.clipboard?.writeText(impersonateLink); setActionMessage({ type: 'success', text: 'Link copied — paste it into an incognito window.' }); setTimeout(() => setActionMessage(null), 4000); }} className="px-4 h-10 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 flex items-center gap-1.5 flex-shrink-0"><Copy className="h-4 w-4" />Copy</button>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-4">One-time link · expires shortly.</p>
+            <button onClick={() => setImpersonateLink(null)} className="w-full py-2.5 rounded-xl font-semibold border-2 border-gray-200 text-gray-700 hover:bg-gray-50">Done</button>
+          </div>
+        </div>
+      )}
+
       {/* Delete user confirmation */}
       {showDeleteModal && user && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
