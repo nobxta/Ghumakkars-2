@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet, MoreVertical } from 'lucide-react';
+import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet, MoreVertical, Gift } from 'lucide-react';
+import { effectiveBookingStatus, bookingStatusLabel } from '@/lib/booking-status-labels';
 
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -665,9 +666,22 @@ export default function AdminBookingsPage() {
                       </Link>
                     </td>
 
-                    {/* Amount & Details - paid vs due */}
+                    {/* Amount & Details — paid vs due, or commission for referred */}
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      {(() => {
+                      {booking.booking_status === 'referred' ? (
+                        // Once referred, the trip money is settled with the partner — we only
+                        // book our commission. Don't show paid/due at all.
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1">
+                            <Gift className="h-3.5 w-3.5 text-indigo-600" />
+                            <span className="text-base font-bold text-indigo-700">{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</span>
+                            <span className="text-[10px] text-gray-400 font-medium">commission</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-xs">
+                            <span className="flex items-center text-gray-500"><Users className="h-3 w-3 mr-1" />{booking.number_of_participants || 1}</span>
+                          </div>
+                        </div>
+                      ) : (() => {
                         const paid = paidOf(booking);
                         const due = Math.max(0, fullOf(booking) - paid);
                         return (
@@ -695,11 +709,18 @@ export default function AdminBookingsPage() {
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <div className="space-y-1.5">
                         <div>
+                          {booking.booking_status === 'referred' ? (
+                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border bg-indigo-100 text-indigo-700 border-indigo-300">
+                              <Gift className="h-3 w-3 mr-1" />Settled
+                            </span>
+                          ) : (
                           <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${
                             booking.payment_status === 'paid' || booking.payment_status === 'verified'
                               ? 'bg-green-100 text-green-700 border-green-300'
                               : booking.payment_status === 'rejected'
                               ? 'bg-red-100 text-red-700 border-red-300'
+                              : booking.payment_status === 'refunded'
+                              ? 'bg-rose-100 text-rose-700 border-rose-300'
                               : booking.payment_status === 'cash_pending'
                               ? 'bg-orange-100 text-orange-700 border-orange-300'
                               : 'bg-yellow-100 text-yellow-700 border-yellow-300'
@@ -713,6 +734,7 @@ export default function AdminBookingsPage() {
                             )}
                             <span className="capitalize">{(booking.payment_status || 'pending').replace(/_/g, ' ')}</span>
                           </span>
+                          )}
                         </div>
                         <div className="flex items-center space-x-1.5 text-xs">
                           {booking.payment_mode === 'cash' ? (
@@ -741,17 +763,20 @@ export default function AdminBookingsPage() {
                       </div>
                     </td>
 
-                    {/* Booking Status - Compact */}
+                    {/* Booking Status — On Trip / Completed auto-derived from trip dates */}
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${getStatusColor(booking.booking_status || 'pending')}`}>
-                        {getStatusIcon(booking.booking_status || 'pending')}
-                        <span className="ml-1">
-                          {(booking.booking_status || 'pending') === 'seat_locked' 
-                            ? 'Seat Locked' 
-                            : (booking.booking_status || 'pending').charAt(0).toUpperCase() + (booking.booking_status || 'pending').slice(1).replace(/_/g, ' ')
-                          }
-                        </span>
-                      </span>
+                      {(() => {
+                        const trip = booking.trips;
+                        const start = (trip?.is_recurring && booking.departure_date) ? booking.departure_date : trip?.start_date;
+                        const end = trip?.end_date || start;
+                        const eff = effectiveBookingStatus(booking.booking_status || 'pending', start, end);
+                        return (
+                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${getStatusColor(eff)}`}>
+                            {getStatusIcon(eff)}
+                            <span className="ml-1">{bookingStatusLabel(eff)}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Actions - primary + overflow */}

@@ -5,7 +5,13 @@
  */
 import type { PaymentStatus } from './booking-money';
 
-/** The six admin-selectable operational statuses (plus the hidden `pending`). */
+/**
+ * Statuses an admin sets MANUALLY. On Trip and Completed are derived automatically
+ * from the trip dates (see effectiveBookingStatus); Cancelled and Referred have their
+ * own dedicated actions, so the Change-Status control only offers these two.
+ */
+export const MANUAL_STATUSES = ['seat_locked', 'confirmed'] as const;
+/** All operational statuses a booking can hold. */
 export const BOOKING_STATUSES = [
   'seat_locked',
   'confirmed',
@@ -15,6 +21,33 @@ export const BOOKING_STATUSES = [
   'referred',
 ] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number] | 'pending';
+
+const midnight = (v: string | Date): Date => {
+  const d = new Date(v);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * The operational status to DISPLAY. A Seat-Locked / Confirmed booking automatically
+ * reads as "On Trip" while the trip is running and "Completed" once it's over — the
+ * admin never has to flip those by hand. Cancelled / Referred / Pending are shown as-is.
+ */
+export function effectiveBookingStatus(
+  status?: string | null,
+  startDate?: string | null,
+  endDate?: string | null,
+  now: Date = new Date(),
+): string {
+  if (status !== 'seat_locked' && status !== 'confirmed') return status || 'pending';
+  if (!startDate) return status;
+  const today = midnight(now).getTime();
+  const start = midnight(startDate).getTime();
+  const end = midnight(endDate || startDate).getTime();
+  if (today > end) return 'completed';
+  if (today >= start && today <= end) return 'on_trip';
+  return status;
+}
 
 export function bookingStatusLabel(status?: string | null): string {
   switch (status) {

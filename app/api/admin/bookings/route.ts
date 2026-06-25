@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
           duration_days,
           start_date,
           end_date,
+          is_recurring,
           discounted_price,
           cover_image_url,
           image_url,
