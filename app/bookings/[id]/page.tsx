@@ -14,6 +14,8 @@ import { IMG } from '@/lib/image';
 import { resolveDueDate } from '@/lib/payment-due';
 import { derivePaymentStatus } from '@/lib/booking-money';
 import { customerBookingStatus, paymentStatusLabel, paymentStatusChip } from '@/lib/booking-status-labels';
+import UpiPayButton from '@/components/UpiPayButton';
+import { upiNote } from '@/lib/upi';
 
 interface Trip {
   id: string;
@@ -1107,9 +1109,13 @@ export default function BookingDetailsPage() {
               <div className="space-y-4">
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
                   <p className="text-sm font-bold text-gray-900 mb-3">Payment instructions</p>
+                  {/* Pay directly via UPI app (mobile) */}
+                  <div className="mb-4">
+                    <UpiPayButton amount={remainingAmount} note={upiNote('remaining', `Booking #${shortId}`)} upiId={paymentSettings.upiId} />
+                  </div>
                   {paymentSettings.qrUrl && (
                     <div className="mb-4">
-                      <p className="text-xs text-gray-600 mb-2">Scan QR Code:</p>
+                      <p className="text-xs text-gray-600 mb-2">Scan QR:</p>
                       <div className="bg-white p-3 rounded-lg border border-gray-200 inline-block">
                         <img src={paymentSettings.qrUrl} alt="Payment QR" className="w-48 h-48 sm:w-56 sm:h-56 object-contain" />
                       </div>
@@ -1117,7 +1123,7 @@ export default function BookingDetailsPage() {
                   )}
                   {paymentSettings.upiId && (
                     <div className="mb-4">
-                      <p className="text-xs text-gray-600 mb-2">UPI ID:</p>
+                      <p className="text-xs text-gray-600 mb-2">Pay on UPI ID:</p>
                       <div className="bg-white border border-gray-200 rounded-lg p-3">
                         <p className="font-mono font-semibold text-purple-900 text-sm break-all">{paymentSettings.upiId}</p>
                       </div>

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info } from 'lucide-react';
 import { nextOccurrences, formatDeparture } from '@/lib/recurrence';
+import UpiPayButton from '@/components/UpiPayButton';
+import { upiNote } from '@/lib/upi';
 
 interface Passenger {
   name: string;
@@ -1980,11 +1982,20 @@ export default function BookTripPage() {
               <span className="text-xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
             </div>
 
+            {/* Pay directly via UPI app (mobile) */}
+            <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
+              <UpiPayButton
+                amount={calculateTotalPrice()}
+                note={upiNote(paymentMethod === 'seat_lock' ? 'seat_lock' : 'full', trip?.title || 'Ghumakkars')}
+                upiId={paymentSettings.upiId}
+              />
+            </div>
+
             {/* QR + UPI */}
             <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
               {paymentSettings.qrUrl ? (
                 <div className="flex flex-col items-center">
-                  <p className="text-xs font-semibold text-[#64748B] mb-3">Scan to pay</p>
+                  <p className="text-xs font-semibold text-[#64748B] mb-3">Scan QR</p>
                   <div className="w-44 h-44 rounded-[14px] bg-white flex items-center justify-center overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
                     <img src={paymentSettings.qrUrl} alt="Payment QR" className="w-full h-full object-contain p-1.5" />
                   </div>
@@ -1999,7 +2010,7 @@ export default function BookTripPage() {
               {paymentSettings.upiId && (
                 <>
                   <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 h-px bg-[#E2E8F0]" /><span className="text-xs text-[#94a3b8]">or pay to UPI ID</span><div className="flex-1 h-px bg-[#E2E8F0]" />
+                    <div className="flex-1 h-px bg-[#E2E8F0]" /><span className="text-xs text-[#94a3b8]">Pay on UPI ID</span><div className="flex-1 h-px bg-[#E2E8F0]" />
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 rounded-[12px] px-3.5 py-2.5 bg-[#FAFAFC] min-w-0" style={{ border: '1px solid #E2E8F0' }}>
