@@ -407,13 +407,13 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 print:py-3">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 print:py-3">
         {/* Conditional action banner — only when an admin action is required */}
         {(() => {
           const pendingTxn = (booking.payment_transactions || []).find((t: any) => t.payment_status === 'pending');
           if (pendingTxn) {
             return (
-              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-3.5 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
                   <p className="text-sm text-amber-900">
@@ -429,7 +429,7 @@ export default function AdminBookingDetailsPage() {
           }
           if (status === 'seat_locked' && remainingAmount > 0) {
             return (
-              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-4 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-3.5 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
                 <div className="flex items-start gap-2.5 min-w-0 flex-1">
                   <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
                   <p className="text-sm text-amber-900"><span className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</span> balance due to confirm this seat. Record it when collected.</p>
@@ -441,9 +441,9 @@ export default function AdminBookingDetailsPage() {
           return null;
         })()}
 
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4 lg:items-start">
           {/* Right rail — Actions + Contact */}
-          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-4 lg:mb-0">
+          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-3 lg:mb-0">
             {/* Actions — each opens its own focused panel */}
             <div className="bg-white border border-[#ECECEE] rounded-2xl overflow-hidden print:hidden shadow-sm">
               <p className="px-5 pt-4 pb-2 text-[11px] uppercase tracking-wider font-semibold text-gray-400 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Actions</p>
@@ -486,10 +486,10 @@ export default function AdminBookingDetailsPage() {
           </aside>
 
           {/* Main column */}
-          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-4 min-w-0">
+          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-3 min-w-0">
 
             {/* Booking Overview — the hero / first thing admins read */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
                 {(() => {
                   const cover = booking.trips?.cover_image_url || booking.trips?.image_url;
@@ -502,11 +502,11 @@ export default function AdminBookingDetailsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 leading-tight">{booking.trips?.title || 'Trip'}</h1>
-                      <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-purple-600" />{booking.trips?.destination || 'N/A'}</p>
+                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{booking.trips?.title || 'Trip'}</h1>
+                      <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-purple-600" />{booking.trips?.destination || 'N/A'}</p>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3">
+                  <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2.5">
                     <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Calendar className="h-3 w-3" />Departure</p><p className="text-sm font-medium text-gray-900 mt-0.5">{fmtDate(booking.departure_date || booking.trips?.start_date)}</p></div>
                     <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><MapPin className="h-3 w-3" />Pickup</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.pickup_point || '—'}</p></div>
                     <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Users className="h-3 w-3" />Passengers</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.number_of_participants || 1}</p></div>
@@ -516,8 +516,8 @@ export default function AdminBookingDetailsPage() {
             </div>
 
             {/* Traveller Details — primary content */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Traveller Details</h2>
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Traveller Details</h2>
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg flex-shrink-0">{(passengerName[0] || '?').toUpperCase()}</div>
@@ -534,19 +534,19 @@ export default function AdminBookingDetailsPage() {
                 )}
               </div>
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
                 <div className="flex items-center gap-2 min-w-0"><Phone className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Phone</span><span className="text-gray-900 truncate">{passengerPhone}</span></div>
                 <div className="flex items-center gap-2 min-w-0"><Mail className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Email</span><span className="text-gray-900 truncate">{passengerEmail}</span></div>
               </div>
 
               {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
-                <div className="mt-4 pt-4 border-t border-[#ECECEE]">
+                <div className="mt-3 pt-3 border-t border-[#ECECEE]">
                   <p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5 mb-1"><Heart className="h-3 w-3 text-pink-500" />Emergency contact</p>
                   <p className="text-sm text-gray-900">{booking.emergency_contact_name || '—'}{booking.emergency_contact_phone ? <span className="text-gray-500"> · {booking.emergency_contact_phone}</span> : ''}</p>
                 </div>
               )}
 
-              <details className="mt-4 pt-4 border-t border-[#ECECEE] group" {...(booking.passengers && booking.passengers.length > 0 ? { open: true } : {})}>
+              <details className="mt-3 pt-3 border-t border-[#ECECEE] group" {...(booking.passengers && booking.passengers.length > 0 ? { open: true } : {})}>
                 <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
                   <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
                   Co-passengers ({booking.passengers?.length || 0})
@@ -570,9 +570,9 @@ export default function AdminBookingDetailsPage() {
             </div>
 
             {/* Booking Summary — the ONLY place totals appear */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-5 sm:p-6">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
-              <dl className="space-y-3">
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
+              <dl className="space-y-2">
                 <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Base Trip Amount</dt><dd className="text-base font-medium text-gray-900">₹{listGross.toLocaleString('en-IN')}</dd></div>
                 {couponDiscountRaw > 0 && (
                   <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Coupon Discount {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="text-base font-medium text-green-600">-₹{couponDiscountRaw.toLocaleString('en-IN')}</dd></div>
