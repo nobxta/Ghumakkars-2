@@ -464,6 +464,17 @@ export default function CreateTripPage() {
 
       if (insertError) throw insertError;
 
+      // Immediately refresh the cached public trips list so the new trip is
+      // visible right away instead of after the 10-minute revalidate window.
+      // Best-effort: never block trip creation on this.
+      try {
+        await fetch('/api/admin/revalidate-trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tripId: data?.id }),
+        });
+      } catch {}
+
       setSuccess(true);
       setTimeout(() => {
         router.push('/admin/trips');

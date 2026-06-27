@@ -1,6 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import DestinationsSwiper from './DestinationsSwiper';
+import DestinationsSwiper from './DestinationsSwiperLazy';
 import ScrollAnimation from './ScrollAnimation';
 
 export default function Trips() {

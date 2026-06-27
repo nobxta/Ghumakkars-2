@@ -1,7 +1,5 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin, Camera, Utensils, Mountain, Waves, Sunrise, Calendar, Users, Star, ArrowRight, Heart, Share2, Plane, TrendingUp, Clock, Check, Snowflake, Sun, CloudRain, ChevronDown } from 'lucide-react';
 import ScrollAnimation from '@/components/ScrollAnimation';
@@ -501,34 +499,35 @@ const destinationsData: Record<string, {
   }
 };
 
-export default function DestinationDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [destination, setDestination] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+// Pre-render every destination page at build time (SSG). The content is 100%
+// static hardcoded data, so there is no reason to render it on the client —
+// the HTML now ships fully built, which is instant and ideal for SEO.
+export function generateStaticParams() {
+  return Object.keys(destinationsData).map((slug) => ({ slug }));
+}
 
-  useEffect(() => {
-    const slug = (params.slug as string)?.toLowerCase();
-    const dest = destinationsData[slug];
-    
-    if (dest) {
-      setDestination(dest);
-    } else {
-      router.push('/');
-    }
-    setLoading(false);
-  }, [params.slug, router]);
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const dest = destinationsData[params.slug?.toLowerCase()];
+  if (!dest) return {};
+  return {
+    title: `${dest.name} Travel Guide — Best Things to Do, Culture & Tips`,
+    description: dest.description,
+    alternates: { canonical: `/destinations/${dest.slug}` },
+    openGraph: {
+      title: `${dest.name} Travel Guide`,
+      description: dest.description,
+      images: dest.image ? [{ url: dest.image }] : undefined,
+    },
+  };
+}
 
-  if (loading || !destination) {
-    return (
-      <div className="min-h-screen pt-16 md:pt-20 flex items-center justify-center bg-gradient-to-b from-purple-50/30 to-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 md:h-16 md:w-16 border-3 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-sm md:text-base text-purple-600 tracking-wide uppercase font-medium">Loading destination...</p>
-        </div>
-      </div>
-    );
-  }
+export default function DestinationDetailPage({ params }: { params: { slug: string } }) {
+  // `any` mirrors the previous `useState<any>` typing exactly, so the JSX below
+  // is unchanged and no new type constraints are introduced.
+  const destination: any = destinationsData[params.slug?.toLowerCase()];
+
+  // Unknown slug → home, preserving the previous router.push('/') behaviour.
+  if (!destination) redirect('/');
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">

@@ -504,6 +504,17 @@ export default function EditTripPage() {
 
       if (updateError) throw updateError;
 
+      // Immediately refresh THIS trip's cached public pages so edits (price,
+      // seats, details) show right away instead of after the 10-minute window.
+      // Best-effort: never block the save on this.
+      try {
+        await fetch('/api/admin/revalidate-trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tripId: params.id }),
+        });
+      } catch {}
+
       setSuccess(true);
       setTimeout(() => {
         router.push('/admin/trips');

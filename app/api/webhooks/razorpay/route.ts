@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 import { getRazorpayWebhookSecret } from '@/lib/razorpay';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -187,6 +188,8 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
           })
           .eq('id', booking.trip_id);
       }
+      // Seats changed via webhook payment confirmation — refresh public pages.
+      await revalidateTripById(booking.trip_id);
     }
 
     // Send confirmation email

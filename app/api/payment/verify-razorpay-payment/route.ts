@@ -4,6 +4,7 @@ import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 import { getRazorpayConfig } from '@/lib/razorpay';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -150,6 +151,9 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', booking.trip_id);
         }
+        // Payment confirmed → seats changed. Refresh this trip's public pages
+        // now (best-effort; never blocks the payment response).
+        await revalidateTripById(booking.trip_id);
       }
 
       // Process referral reward if this is user's first confirmed booking

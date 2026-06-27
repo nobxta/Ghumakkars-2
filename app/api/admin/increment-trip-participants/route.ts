@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Seat count changed — refresh this trip's public pages immediately.
+    await revalidateTripById(tripId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in increment trip participants API:', error);

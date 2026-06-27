@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = 'nodejs';
 
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', booking.trip_id);
       }
+      // Zero-payment confirmation took a seat — refresh public pages now.
+      await revalidateTripById(booking.trip_id);
     }
 
     // Process referral reward if this is user's first confirmed booking

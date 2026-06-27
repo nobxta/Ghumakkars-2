@@ -23,23 +23,24 @@ export default function WalletPage() {
       }
       setUser(currentUser);
 
-      // Fetch profile with wallet balance
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('wallet_balance')
-        .eq('id', currentUser.id)
-        .single();
-      
+      // Profile (wallet balance) and transactions are independent — fetch them
+      // in parallel instead of sequentially so the page resolves in one round
+      // trip instead of two.
+      const [{ data: profileData }, { data: transactionsData }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('wallet_balance')
+          .eq('id', currentUser.id)
+          .single(),
+        supabase
+          .from('wallet_transactions')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(50),
+      ]);
+
       setProfile(profileData);
-
-      // Fetch wallet transactions
-      const { data: transactionsData } = await supabase
-        .from('wallet_transactions')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
       setTransactions(transactionsData || []);
       setLoading(false);
     };

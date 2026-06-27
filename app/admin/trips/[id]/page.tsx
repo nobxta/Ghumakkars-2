@@ -4,8 +4,22 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type { jsPDF as JsPdfType } from 'jspdf';
+
+// jsPDF + autotable are ~100kB. They are only needed when an admin clicks a
+// "download PDF" button, so load them on demand (cached after first use)
+// instead of shipping them in the page's initial bundle.
+let _pdfLibs: { jsPDF: typeof JsPdfType; autoTable: any } | null = null;
+async function loadPdfLibs() {
+  if (!_pdfLibs) {
+    const [jspdfMod, autoTableMod] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+    _pdfLibs = { jsPDF: jspdfMod.jsPDF, autoTable: autoTableMod.default };
+  }
+  return _pdfLibs;
+}
 import { 
   ArrowLeft, MapPin, Calendar, Users, IndianRupee, Edit, 
   CheckCircle, XCircle, Clock, Package, CreditCard, TrendingUp,
@@ -647,9 +661,10 @@ export default function AdminTripDetailsPage() {
 
   // FULL booking report — every active booking with the real money (full cost
   // after discount, paid, and balance still due) plus status and passengers.
-  const downloadFullPDF = () => {
+  const downloadFullPDF = async () => {
     const list = bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status));
     if (list.length === 0) { alert('No active bookings to export.'); return; }
+    const { jsPDF, autoTable } = await loadPdfLibs();
     const pageW = 297, pageH = 210, margin = 14;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
@@ -701,9 +716,10 @@ export default function AdminTripDetailsPage() {
   // TRAVEL list — everyone actually going (confirmed + seat-locked). No money
   // at all, so it is safe to print and hand to a trip captain. Names, age,
   // gender, phone, pickup and every co-passenger.
-  const downloadCarryPDF = () => {
+  const downloadCarryPDF = async () => {
     const list = bookings.filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status));
     if (list.length === 0) { alert('No travelling guests yet (need confirmed or seat-locked bookings).'); return; }
+    const { jsPDF, autoTable } = await loadPdfLibs();
     const pageW = 297, pageH = 210, margin = 16;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
@@ -742,11 +758,12 @@ export default function AdminTripDetailsPage() {
 
   // COLLECTION list — only bookings with money still to collect (seat-locked
   // and any partly-paid). Sorted by largest balance first, for follow-up calls.
-  const downloadCollectionPDF = () => {
+  const downloadCollectionPDF = async () => {
     const list = bookings
       .filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status) && bookingRemaining(b) > 0)
       .sort((a: any, b: any) => bookingRemaining(b) - bookingRemaining(a));
     if (list.length === 0) { alert('Nothing to collect — every active booking is fully paid.'); return; }
+    const { jsPDF, autoTable } = await loadPdfLibs();
     const pageW = 297, pageH = 210, margin = 16;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 

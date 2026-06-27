@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -92,6 +93,8 @@ export async function POST(
       );
     }
 
+    // Price / cancellation / postpone / completion all change the public pages.
+    await revalidateTripById(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in trip status update:', error);

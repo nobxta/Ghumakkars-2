@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = 'nodejs';
 
@@ -149,6 +150,8 @@ export async function DELETE(
           })
           .eq('id', booking.trip_id);
       }
+      // Freed seats — refresh this trip's public pages immediately.
+      await revalidateTripById(booking.trip_id);
     }
 
     return NextResponse.json({ success: true });

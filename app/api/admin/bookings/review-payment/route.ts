@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -103,6 +104,9 @@ export async function POST(request: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', booking.trip_id);
+
+          // Verified payment took a seat — refresh this trip's public pages.
+          await revalidateTripById(booking.trip_id);
 
           if (tripUpdateError) {
             console.error('Error updating trip participants:', tripUpdateError);

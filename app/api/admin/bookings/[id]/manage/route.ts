@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
 import { fullOwed, owedOf, derivePaymentStatus } from '@/lib/booking-money';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = 'nodejs';
 
@@ -79,6 +80,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!b.trip_id || delta === 0) return;
       const next = Math.max(0, (Number(tripRow?.current_participants) || 0) + delta);
       await adminClient.from('trips').update({ current_participants: next, updated_at: new Date().toISOString() }).eq('id', b.trip_id);
+      // Seats changed (status change / cancellation / referral) — refresh the
+      // affected trip's public pages immediately.
+      await revalidateTripById(b.trip_id);
     };
 
     const notify = async (status: string, reason?: string) => {

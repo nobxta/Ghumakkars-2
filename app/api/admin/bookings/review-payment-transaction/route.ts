@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, isInternalRequest, internalFetchHeaders } from '@/lib/auth-helpers';
+import { revalidateTripById } from '@/lib/revalidate-trips';
 
 export const runtime = "nodejs";
 
@@ -143,6 +144,8 @@ export async function POST(request: NextRequest) {
               })
               .eq('id', booking.trip_id);
           }
+          // Seat held on activation — refresh this trip's public pages.
+          await revalidateTripById(booking.trip_id);
         } catch (tripError) {
           console.error('Error incrementing trip participants:', tripError);
         }
