@@ -1,180 +1,262 @@
 import 'dotenv/config';
 import http from 'node:http';
+import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import QRCode from 'qrcode';
 import pino from 'pino';
 import { startTunnel } from './tunnel.mjs';
 
-// ── config ──
-// Pterodactyl exposes only its allocated port via SERVER_PORT — bind that.
 const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 8080);
-// Shared VPS internal secret (reusable across services). Falls back to the old
-// WHATSAPP_API_SECRET name.
 const API_SECRET = process.env.VPS_API_SECRET || process.env.WHATSAPP_API_SECRET;
-// Headless login: set WA_PAIRING_NUMBER (digits, with country code) to log in
-// with an 8-char pairing code instead of scanning a QR — ideal for a console.
 const PAIR_NUMBER = (process.env.WA_PAIRING_NUMBER || '').replace(/\D/g, '');
+const WORKER_ROOT = path.dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = path.resolve(WORKER_ROOT, process.env.WA_DATA_DIR || './data');
+const AUTH_DIR = path.resolve(WORKER_ROOT, process.env.WA_AUTH_DIR || './data/whatsapp-session');
+const LOCK_FILE = path.resolve(DATA_DIR, 'whatsapp-client.lock');
+const MAX_RECONNECT_DELAY_MS = Number(process.env.WA_MAX_RECONNECT_DELAY_MS || 60_000);
+const MAX_QUEUE_SIZE = Number(process.env.WA_MAX_QUEUE_SIZE || 100);
+const QUEUE_RETRY_MS = Number(process.env.WA_QUEUE_RETRY_MS || 15_000);
+const QUEUE_MAX_ATTEMPTS = Number(process.env.WA_QUEUE_MAX_ATTEMPTS || 12);
 
 if (!API_SECRET) {
   console.error('Missing VPS_API_SECRET in .env (the shared secret the website sends as x-api-key).');
   process.exit(1);
 }
 
-// Silence Baileys' internal logger. It spams harmless level-50 noise on every
-// connect ("init queries Timed Out" 408) and on transient stream errors (503/515)
-// that the worker already recovers from. Our own console logs below cover every
-// connect/disconnect with a clear reason, so nothing useful is lost.
-const logger = pino({ level: 'silent' });
+const logger = pino({ level: process.env.WA_BAILEYS_LOG_LEVEL || 'silent' });
 let sock = null;
 let ready = false;
-let currentNumber = null;   // the linked WhatsApp number (digits), once connected
-let manualLogout = false;   // set during /logout so the close handler doesn't auto-reconnect
-let lastQR = null;          // latest QR string from Baileys (for panel QR login)
-let starting = false;       // guard so we never run two socket starts at once
-let reconnectTimer = null;  // single pending reconnect
-let reconnectAttempts = 0;  // backoff counter, reset on a successful connect
+let currentNumber = null;
+let manualLogout = false;
+let genuinelyLoggedOut = false;
+let lastQR = null;
+let starting = false;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let lockFd = null;
+let shuttingDown = false;
+let queueTimer = null;
+const pendingSends = [];
 
 const numberFromJid = (id) => (id ? String(id).split(':')[0].split('@')[0] : null);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ── WhatsApp connection (session persisted to ./auth) ──
-// One socket at a time. Overlapping sockets share the same creds and WhatsApp
-// answers with a 401 "logged out", which kills the saved session — that's what
-// forced a re-link on every restart. The `starting` guard prevents that.
+function log(event, data = {}) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), service: 'whatsapp-worker', event, ...data }));
+}
+
+function warn(event, data = {}) {
+  console.warn(JSON.stringify({ ts: new Date().toISOString(), service: 'whatsapp-worker', level: 'warn', event, ...data }));
+}
+
+function errorLog(event, data = {}) {
+  console.error(JSON.stringify({ ts: new Date().toISOString(), service: 'whatsapp-worker', level: 'error', event, ...data }));
+}
+
+function maskedPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length <= 4) return digits ? '****' : '';
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function hasAuthFiles() {
+  return existsSync(path.join(AUTH_DIR, 'creds.json'));
+}
+
+function prepareDirs() {
+  mkdirSync(DATA_DIR, { recursive: true });
+  mkdirSync(AUTH_DIR, { recursive: true });
+}
+
+function acquireProcessLock() {
+  prepareDirs();
+  try {
+    lockFd = openSync(LOCK_FILE, 'wx');
+    writeFileSync(lockFd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+    log('process_lock_acquired', { lockFile: LOCK_FILE, pid: process.pid });
+    return;
+  } catch (e) {
+    let existingPid = null;
+    try {
+      existingPid = JSON.parse(readFileSync(LOCK_FILE, 'utf8') || '{}')?.pid;
+    } catch {}
+
+    if (existingPid) {
+      try {
+        process.kill(existingPid, 0);
+        errorLog('duplicate_process_rejected', { lockFile: LOCK_FILE, existingPid, pid: process.pid });
+        process.exit(1);
+      } catch {
+        warn('stale_process_lock_removed', { lockFile: LOCK_FILE, existingPid });
+        try { unlinkSync(LOCK_FILE); } catch {}
+        return acquireProcessLock();
+      }
+    }
+
+    errorLog('process_lock_failed', { lockFile: LOCK_FILE, error: e?.message || String(e) });
+    process.exit(1);
+  }
+}
+
+function releaseProcessLock() {
+  try { if (lockFd !== null) closeSync(lockFd); } catch {}
+  try { unlinkSync(LOCK_FILE); } catch {}
+  lockFd = null;
+}
+
+function destroySocket() {
+  try { sock?.ev?.removeAllListeners?.(); } catch {}
+  try { sock?.end?.(undefined); } catch {}
+  sock = null;
+}
+
 async function startSock() {
-  if (starting) return;
+  if (starting || shuttingDown) return;
   starting = true;
-  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 
-  // Tear down any previous socket so we don't stack listeners / sockets.
-  try { sock?.ev?.removeAllListeners?.(); sock?.end?.(undefined); } catch {}
+  destroySocket();
+  prepareDirs();
+  log('whatsapp_starting', { authDir: AUTH_DIR, authExists: hasAuthFiles() });
 
-  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
   sock = makeWASocket({
-    version, auth: state, logger,
+    version,
+    auth: state,
+    logger,
     printQRInTerminal: false,
     browser: ['Ghumakkars', 'Chrome', '1.0'],
-    markOnlineOnConnect: false,  // less presence churn after connect
-    syncFullHistory: false,      // we never read chat history
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
     retryRequestDelayMs: 2000,
-    // Cap resends so a media message WhatsApp keeps rejecting can't loop forever
-    // (this was crashing the stream over and over with the same message id).
     maxMsgRetryCount: 2,
   });
   starting = false;
 
-  // Optional console fallback: set WA_PAIRING_NUMBER to auto-print a pairing code
-  // on boot. Normally you link from the admin panel via POST /login instead.
   if (PAIR_NUMBER && !sock.authState.creds.registered) {
     setTimeout(async () => {
       try {
         const code = await sock.requestPairingCode(PAIR_NUMBER);
-        console.log(`\n🔗 PAIRING CODE: ${code}\n   WhatsApp → Settings → Linked devices → Link a device → "Link with phone number instead" → enter this code.\n`);
+        log('pairing_code_generated', { phone: maskedPhone(PAIR_NUMBER) });
+        console.log(`\nPAIRING CODE: ${code}\nWhatsApp -> Settings -> Linked devices -> Link a device -> Link with phone number instead.\n`);
       } catch (e) {
-        console.error('Could not get a pairing code:', e?.message || e);
+        errorLog('pairing_code_failed', { error: e?.message || String(e) });
       }
     }, 3000);
   }
 
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', async (u) => {
-    const { connection, lastDisconnect, qr } = u;
-    // Linking is done from the admin panel (pairing code). Only print a console
-    // QR if you explicitly opt in with WA_PRINT_QR=1 — keeps the console clean.
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    log('credentials_saved');
+  });
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      lastQR = qr;   // exposed to the admin panel for QR login
+      lastQR = qr;
+      log('qr_generated');
       if (process.env.WA_PRINT_QR === '1') {
-        console.log('\n📱 Scan this QR in WhatsApp → Linked devices → Link a device:\n');
+        console.log('\nScan this QR in WhatsApp -> Linked devices -> Link a device:\n');
         qrcode.generate(qr, { small: true });
       }
     }
+
     if (connection === 'open') {
       ready = true;
+      genuinelyLoggedOut = false;
       lastQR = null;
       reconnectAttempts = 0;
       currentNumber = numberFromJid(sock.user?.id);
-      console.log(`✅ WhatsApp connected (${currentNumber}). API is live.`);
+      log('whatsapp_ready', { number: maskedPhone(currentNumber), queued: pendingSends.length });
+      flushQueue();
+      return;
     }
-    if (connection === 'close') {
-      ready = false;
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const reasonName = Object.keys(DisconnectReason).find((k) => DisconnectReason[k] === code) || 'unknown';
-      const detail = lastDisconnect?.error?.message || '';
-      console.log(`⚠️ Connection closed — code ${code} (${reasonName})${detail ? ` — ${detail}` : ''}`);
 
-      // Logged out, or a corrupt/bad session: the saved creds are dead. Wipe them
-      // so the panel can re-link, and stay idle (reconnecting would 401/500 forever).
-      if (code === DisconnectReason.loggedOut || code === DisconnectReason.badSession) {
-        currentNumber = null; lastQR = null;
-        try { await rm('auth', { recursive: true, force: true }); } catch {}
-        console.log('   → Session ended by WhatsApp. Re-link ONCE from Admin → Settings → WhatsApp.');
-        return;
-      }
+    if (connection !== 'close') return;
 
-      // Another session is using this number (WhatsApp Web open in a browser, or a
-      // second worker copy). Reconnecting starts a tug-of-war that ends in a logout,
-      // so STOP and let the user close the other session.
-      if (code === DisconnectReason.connectionReplaced) {
-        console.log('   → This number is connected somewhere ELSE (WhatsApp Web in a browser, or another worker/server still running). NOT reconnecting — close that other session, then restart here. This is the usual cause of "keeps disconnecting".');
-        return;
-      }
+    ready = false;
+    const code = lastDisconnect?.error?.output?.statusCode;
+    const reason = Object.keys(DisconnectReason).find((key) => DisconnectReason[key] === code) || 'unknown';
+    const message = lastDisconnect?.error?.message || '';
+    warn('whatsapp_disconnected', { code, reason, message });
 
-      if (manualLogout) return;
-
-      // Transient close (network / 408 timeout / 515 restart-required): reconnect
-      // with a capped backoff so we never hammer in a tight loop.
-      reconnectAttempts = Math.min(reconnectAttempts + 1, 6);
-      const delay = code === DisconnectReason.restartRequired ? 1000 : Math.min(3000 * reconnectAttempts, 20000);
-      console.log(`   → Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})…`);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(() => startSock(), delay);
+    if (code === DisconnectReason.loggedOut || code === DisconnectReason.badSession) {
+      currentNumber = null;
+      lastQR = null;
+      genuinelyLoggedOut = true;
+      warn('session_genuinely_logged_out', { code, reason, authDir: AUTH_DIR });
+      return;
     }
+
+    if (code === DisconnectReason.connectionReplaced) {
+      warn('connection_replaced_duplicate_client', { code, reason });
+      return;
+    }
+
+    if (manualLogout || shuttingDown) return;
+
+    reconnectAttempts = Math.min(reconnectAttempts + 1, 8);
+    const baseDelay = code === DisconnectReason.restartRequired ? 1000 : 3000 * (2 ** (reconnectAttempts - 1));
+    const delay = Math.min(baseDelay, MAX_RECONNECT_DELAY_MS);
+    log('reconnect_scheduled', { attempt: reconnectAttempts, delayMs: delay, code, reason });
+    reconnectTimer = setTimeout(() => startSock(), delay);
   });
 }
 
-// Wipe any saved session and bring up a clean, UNregistered socket. Used when
-// starting a new link so stale/invalid creds can't cause a 401 (and so a fresh
-// QR / pairing code is actually emitted).
 async function freshAuth() {
   manualLogout = true;
-  try { sock?.ev?.removeAllListeners?.(); sock?.end?.(undefined); } catch {}
-  try { await rm('auth', { recursive: true, force: true }); } catch {}
-  ready = false; currentNumber = null; lastQR = null;
+  destroySocket();
+  try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch {}
+  prepareDirs();
+  ready = false;
+  currentNumber = null;
+  lastQR = null;
+  genuinelyLoggedOut = false;
   manualLogout = false;
+  log('fresh_auth_started', { authDir: AUTH_DIR });
   await startSock();
 }
 
-// Request a fresh pairing code on demand (admin panel → POST /login).
 async function requestPairing(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) throw new Error('phone required');
   if (ready) return { alreadyConnected: true, number: currentNumber };
   await freshAuth();
-  await new Promise((r) => setTimeout(r, 2500));   // let the WebSocket open
+  await sleep(2500);
   const code = await sock.requestPairingCode(digits);
-  console.log(`🔗 pairing code issued for ${digits}: ${code}`);
+  log('pairing_code_issued', { phone: maskedPhone(digits) });
   return { pairingCode: code };
 }
 
-// Start a socket for QR login and return the QR as a PNG data URL.
 async function startForQR() {
   if (ready) return { alreadyConnected: true, number: currentNumber };
   await freshAuth();
-  // Wait for Baileys to emit the first QR (usually a few seconds).
-  for (let i = 0; i < 40 && !lastQR; i++) await new Promise((r) => setTimeout(r, 400));
-  if (!lastQR) throw new Error('no QR yet — try again in a moment');
+  for (let i = 0; i < 40 && !lastQR; i++) await sleep(400);
+  if (!lastQR) throw new Error('no QR yet - try again in a moment');
   return { qr: await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }) };
 }
 
-// Unlink the current number and wipe the saved session.
 async function logoutAndReset() {
   manualLogout = true;
   try { await sock?.logout(); } catch {}
-  ready = false; currentNumber = null; lastQR = null;
-  try { await rm('auth', { recursive: true, force: true }); } catch {}
-  await startSock();   // fresh unregistered socket, ready to re-link
+  destroySocket();
+  ready = false;
+  currentNumber = null;
+  lastQR = null;
+  genuinelyLoggedOut = true;
+  try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch {}
+  prepareDirs();
+  log('manual_logout_session_deleted', { authDir: AUTH_DIR });
+  manualLogout = false;
+  await startSock();
   return { ok: true };
 }
 
@@ -187,7 +269,6 @@ async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
   const phone = digits.length === 10 ? `91${digits}` : digits;
   const jid = jidOf(phone);
 
-  // Skip numbers that aren't on WhatsApp.
   try {
     const [res] = await sock.onWhatsApp(jid);
     if (!res?.exists) throw new Error('Number is not on WhatsApp');
@@ -195,7 +276,6 @@ async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
     if (String(e.message).includes('not on WhatsApp')) throw e;
   }
 
-  // Media can arrive inline (base64 — keeps tickets private) or as a URL.
   let buf = null;
   let isPdf = (mediaFilename || '').toLowerCase().endsWith('.pdf');
   if (mediaBase64) {
@@ -212,13 +292,9 @@ async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
       ? { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: body }
       : { image: buf, caption: body };
     try {
-      // Bound the media send so a hung upload can't block, and so a stream error
-      // on the attachment never takes the whole send down with it.
       await withTimeout(sock.sendMessage(jid, content), 30000, 'media send');
     } catch (e) {
-      // Attachment failed (WhatsApp media can be flaky over an unofficial client).
-      // Still deliver the text so the customer gets the booking update.
-      console.error('media send failed — falling back to text:', e?.message || e);
+      warn('media_send_failed_fallback_text', { error: e?.message || String(e) });
       await sock.sendMessage(jid, { text: body });
     }
   } else {
@@ -226,7 +302,6 @@ async function sendMessage({ to, body, mediaUrl, mediaBase64, mediaFilename }) {
   }
 }
 
-// Reject if a promise doesn't settle in time (keeps a stuck media send from hanging).
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -234,35 +309,98 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-// ── HTTP API (called directly by the website) ──
+function enqueueSend(payload, reason) {
+  if (pendingSends.length >= MAX_QUEUE_SIZE) throw new Error('WhatsApp queue is full');
+  const id = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  pendingSends.push({ id, payload, attempts: 0, nextAt: Date.now(), reason });
+  warn('notification_queued', { id, reason, queued: pendingSends.length });
+  scheduleQueueFlush();
+  return id;
+}
+
+function scheduleQueueFlush(delay = QUEUE_RETRY_MS) {
+  if (queueTimer || shuttingDown) return;
+  queueTimer = setTimeout(() => {
+    queueTimer = null;
+    flushQueue();
+  }, delay);
+}
+
+async function flushQueue() {
+  if (!ready || pendingSends.length === 0 || shuttingDown) {
+    if (!ready && pendingSends.length > 0 && !genuinelyLoggedOut) scheduleQueueFlush();
+    return;
+  }
+
+  const now = Date.now();
+  for (let i = 0; i < pendingSends.length; i++) {
+    const item = pendingSends[i];
+    if (item.nextAt > now) continue;
+    item.attempts += 1;
+    try {
+      await sendMessage(item.payload);
+      pendingSends.splice(i, 1);
+      i -= 1;
+      log('queued_notification_sent', { id: item.id, attempts: item.attempts, queued: pendingSends.length });
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (item.attempts >= QUEUE_MAX_ATTEMPTS || /not on WhatsApp|to and body are required/i.test(msg)) {
+        pendingSends.splice(i, 1);
+        i -= 1;
+        errorLog('queued_notification_failed_permanently', { id: item.id, attempts: item.attempts, error: msg, queued: pendingSends.length });
+      } else {
+        item.nextAt = Date.now() + Math.min(QUEUE_RETRY_MS * item.attempts, 120_000);
+        warn('queued_notification_retry', { id: item.id, attempts: item.attempts, error: msg, nextDelayMs: item.nextAt - Date.now() });
+      }
+    }
+  }
+  if (pendingSends.length > 0) scheduleQueueFlush();
+}
+
 function readJson(req) {
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 15_000_000) req.destroy(); });
-    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve(null); } });
+    req.on('data', (chunk) => {
+      data += chunk;
+      if (data.length > 15_000_000) req.destroy();
+    });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data || '{}')); } catch { resolve(null); }
+    });
   });
 }
-const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+
+const json = (res, code, obj) => {
+  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(obj));
+};
 
 const server = http.createServer(async (req, res) => {
   const url = req.url?.split('?')[0];
 
-  if (req.method === 'GET' && url === '/health') return json(res, 200, { ok: true, ready });
+  if (req.method === 'GET' && url === '/health') {
+    return json(res, 200, { ok: true, ready, queued: pendingSends.length, loggedOut: genuinelyLoggedOut });
+  }
 
-  // Everything below is admin/control — requires the shared secret.
   const authed = req.headers['x-api-key'] === API_SECRET;
 
-  // Connection status (admin panel polls this). Includes a live QR while a QR
-  // login is in progress, so the panel can refresh rotated codes automatically.
   if (req.method === 'GET' && url === '/status') {
     if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
     let qr = null;
-    if (!ready && lastQR) { try { qr = await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }); } catch {} }
-    return json(res, 200, { ok: true, connected: ready, number: currentNumber, qr });
+    if (!ready && lastQR) {
+      try { qr = await QRCode.toDataURL(lastQR, { margin: 1, width: 320 }); } catch {}
+    }
+    return json(res, 200, {
+      ok: true,
+      connected: ready,
+      number: currentNumber,
+      qr,
+      loggedOut: genuinelyLoggedOut,
+      queued: pendingSends.length,
+      authDir: AUTH_DIR,
+    });
   }
 
-  // Start linking. mode:'qr' → returns a QR PNG; otherwise (with phone) → an
-  // 8-char pairing code to type into WhatsApp.
   if (req.method === 'POST' && url === '/login') {
     if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
     const payload = await readJson(req);
@@ -271,47 +409,85 @@ const server = http.createServer(async (req, res) => {
       const result = payload.mode === 'qr' ? await startForQR() : await requestPairing(payload.phone);
       return json(res, 200, { ok: true, ...result });
     } catch (e) {
-      console.error('login failed:', e?.message || e);
+      errorLog('login_failed', { error: e?.message || String(e) });
       return json(res, 400, { ok: false, error: String(e?.message || e) });
     }
   }
 
-  // Unlink the current number.
   if (req.method === 'POST' && url === '/logout') {
     if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
-    try { await logoutAndReset(); return json(res, 200, { ok: true }); }
-    catch (e) { return json(res, 400, { ok: false, error: String(e?.message || e) }); }
-  }
-
-  if (req.method === 'POST' && url === '/send') {
-    if (req.headers['x-api-key'] !== API_SECRET) return json(res, 401, { ok: false, error: 'unauthorized' });
-    const payload = await readJson(req);
-    if (!payload) return json(res, 400, { ok: false, error: 'invalid json' });
     try {
-      await sendMessage(payload);
-      console.log(`→ sent to ${payload.to}`);
+      await logoutAndReset();
       return json(res, 200, { ok: true });
     } catch (e) {
-      console.error('send failed:', e?.message || e);
-      return json(res, ready ? 400 : 503, { ok: false, error: String(e?.message || e) });
+      return json(res, 400, { ok: false, error: String(e?.message || e) });
     }
   }
 
-  json(res, 404, { ok: false, error: 'not found' });
+  if (req.method === 'POST' && url === '/send') {
+    if (!authed) return json(res, 401, { ok: false, error: 'unauthorized' });
+    const payload = await readJson(req);
+    if (!payload) return json(res, 400, { ok: false, error: 'invalid json' });
+    try {
+      if (!ready) {
+        if (genuinelyLoggedOut) return json(res, 503, { ok: false, error: 'WhatsApp session logged out; relink required' });
+        const id = enqueueSend(payload, 'not_ready');
+        return json(res, 202, { ok: true, queued: true, id });
+      }
+      await sendMessage(payload);
+      log('notification_sent', { to: maskedPhone(payload.to) });
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      const msg = e?.message || String(e);
+      errorLog('send_failed', { error: msg });
+      return json(res, ready ? 400 : 503, { ok: false, error: msg });
+    }
+  }
+
+  return json(res, 404, { ok: false, error: 'not found' });
 });
 
-// Only auto-connect if WhatsApp was linked before (session already on disk), or
-// if a console pairing number is explicitly set. Otherwise stay idle and wait
-// for the admin panel to start linking — nothing to do in this console.
-const { state: bootState } = await useMultiFileAuthState('auth');
+acquireProcessLock();
+log('service_startup', {
+  port: PORT,
+  cwd: WORKER_ROOT,
+  dataDir: DATA_DIR,
+  authDir: AUTH_DIR,
+  authExists: hasAuthFiles(),
+  node: process.version,
+});
+
+const { state: bootState } = await useMultiFileAuthState(AUTH_DIR);
 if (bootState.creds.registered || PAIR_NUMBER) {
   await startSock();
 } else {
-  console.log('ℹ️  WhatsApp not linked yet — link it from Admin → Settings → WhatsApp. Nothing to do in this console.');
+  log('whatsapp_not_linked', { authDir: AUTH_DIR });
 }
 
-server.listen(PORT, '0.0.0.0', () => console.log(`WhatsApp API listening on :${PORT}  (POST /send · GET /health)`));
+server.listen(PORT, '0.0.0.0', () => log('http_listening', { port: PORT, health: '/health' }));
 
-// Expose it on a domain via Cloudflare Tunnel (no shell needed). Non-blocking:
-// the first-run authorize step waits in the background, the API stays up.
-startTunnel(PORT).catch((e) => console.error('[tunnel] setup error:', e?.message || e));
+startTunnel(PORT).catch((e) => errorLog('tunnel_setup_error', { error: e?.message || String(e) }));
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log('shutdown_started', { signal, queued: pendingSends.length });
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (queueTimer) clearTimeout(queueTimer);
+  await new Promise((resolve) => server.close(resolve));
+  destroySocket();
+  await sleep(500);
+  releaseProcessLock();
+  log('shutdown_complete', { signal });
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('uncaughtException', (e) => {
+  errorLog('uncaught_exception', { error: e?.message || String(e) });
+  shutdown('uncaughtException');
+});
+process.on('unhandledRejection', (e) => {
+  errorLog('unhandled_rejection', { error: e?.message || String(e) });
+});

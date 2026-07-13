@@ -1,6 +1,8 @@
 # WhatsApp Notification Setup
 
-This project uses `@whiskeysockets/baileys` to send WhatsApp notifications to users when their bookings are confirmed. Baileys is a modern, lightweight WhatsApp library that doesn't require puppeteer and works with Node.js v22.
+This project uses `@whiskeysockets/baileys` to send WhatsApp notifications to users when their bookings are confirmed. Baileys is a modern, lightweight WhatsApp library that doesn't require puppeteer, Chromium, or whatsapp-web.js browser sessions.
+
+Production notifications are sent by the self-hosted worker in `whatsapp-worker/`. The website calls that worker over HTTP using `lib/whatsapp.ts`.
 
 ## Installation
 
@@ -25,7 +27,7 @@ That's it! No special flags or workarounds needed.
    - Tap "Link a Device"
    - Scan the QR code displayed on the page
 
-4. **Session Saved**: After the first scan, the session is saved in `.wwebjs_auth/` directory. You won't need to scan again unless you delete this directory or log out.
+4. **Session Saved**: After the first scan, the Baileys session is saved in `whatsapp-worker/data/whatsapp-session/` on the Pterodactyl server volume. You won't need to scan again unless you delete this directory or explicitly log out.
 
 ## How It Works
 
@@ -111,13 +113,15 @@ WhatsApp notifications are automatically sent when bookings are confirmed in:
 - Check server logs for WhatsApp client errors
 
 ### Session Issues
-- Delete `.wwebjs_auth/` directory to force re-authentication
-- Restart the server after deleting session
+- Production auth lives in `whatsapp-worker/data/whatsapp-session/`
+- Do not store the session in `/tmp` or a container home directory that Pterodactyl recreates
+- Delete `whatsapp-worker/data/whatsapp-session/` only when you intentionally want to force re-authentication
+- Restart the worker after intentionally deleting the session
 
 ## Security Notes
 
-- WhatsApp session is stored locally in `.wwebjs_auth/` directory
-- Add `.wwebjs_auth/` to `.gitignore` (already included)
+- WhatsApp session is stored in `whatsapp-worker/data/whatsapp-session/`
+- `whatsapp-worker/data/` is ignored by Git and must never be committed
 - Session is tied to the phone number used for authentication
 - Only one WhatsApp session can be active at a time
 - Baileys uses a more secure authentication system than whatsapp-web.js

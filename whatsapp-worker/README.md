@@ -90,7 +90,7 @@ allocation first: `curl http://SERVER_IP:PORT/health`.
 Settings → WhatsApp**, type the sending number, hit **Get pairing code**, then on
 that phone: **WhatsApp → Settings → Linked devices → Link a device → "Link with
 phone number instead" → enter the code.** The panel flips to **Connected**
-automatically (session saved in `auth/` — keep it; it survives restarts).
+automatically (session saved in `data/whatsapp-session/` - keep it; it survives restarts).
 
 ---
 
@@ -131,3 +131,69 @@ Baileys automates a **normal** WhatsApp account (not the official Cloud API) and
 is against WhatsApp's Terms. High volume or spammy content can get the number
 **banned**. The API skips non-WhatsApp numbers; keep volume reasonable and use a
 **dedicated number you can afford to lose**.
+
+---
+
+## Current production stability settings
+
+This worker uses **Baileys** (`@whiskeysockets/baileys`). It does not use
+`whatsapp-web.js`, Venom, WPPConnect, Chromium, Puppeteer, or a browser profile.
+
+Persistent Baileys auth is stored in:
+
+```text
+/home/container/whatsapp-worker/data/whatsapp-session
+```
+
+The path is inside the Pterodactyl server volume, survives normal process and
+container restarts, is not under `/tmp`, and is ignored by Git. Do not delete it
+unless you intentionally want to relink WhatsApp.
+
+Optional environment overrides:
+
+```bash
+WA_DATA_DIR=/home/container/whatsapp-worker/data
+WA_AUTH_DIR=/home/container/whatsapp-worker/data/whatsapp-session
+WA_MAX_RECONNECT_DELAY_MS=60000
+WA_MAX_QUEUE_SIZE=100
+WA_QUEUE_RETRY_MS=15000
+```
+
+The worker creates a single-process lock at:
+
+```text
+/home/container/whatsapp-worker/data/whatsapp-client.lock
+```
+
+If a second copy starts with the same volume/session, it exits and logs
+`duplicate_process_rejected`. Run only one Pterodactyl server/allocation/process
+for this WhatsApp number.
+
+Recommended startup command:
+
+```bash
+if [[ -d .git ]] && [[ "{{AUTO_UPDATE}}" == "1" ]]; then git pull; fi; cd /home/container/whatsapp-worker && /usr/local/bin/npm install --omit=dev --no-audit --no-fund && exec /usr/local/bin/node index.mjs
+```
+
+Operational notes:
+
+- Required env: `VPS_API_SECRET` on the worker and website.
+- Website env: `WHATSAPP_API_URL=https://api.ghumakkars.in` and the same `VPS_API_SECRET`.
+- Do not set `PORT`; Pterodactyl provides `SERVER_PORT`.
+- No Chromium dependencies are required because this is Baileys.
+- Start with at least 512 MB RAM; use 1 GB if sending PDFs/media frequently.
+- Do not keep WhatsApp Web open in a browser for the same number while this worker is active.
+- Ordinary disconnects do not delete auth files and do not call logout.
+- Temporary disconnects reconnect with capped exponential backoff.
+- `/send` queues notifications in memory while temporarily disconnected and retries when connected.
+- If WhatsApp reports a genuine logged-out/bad-session state, the worker stops reconnecting and the admin panel must relink once.
+
+Restart verification checklist:
+
+1. Link once from Admin -> Settings -> WhatsApp.
+2. Send a test message with `POST /send`.
+3. Restart only the Node process; `GET /status` should reconnect without QR.
+4. Restart the Pterodactyl server/container; `GET /status` should reconnect without QR.
+5. Send another test message.
+6. Confirm only one worker is running; duplicate starts log `duplicate_process_rejected`.
+7. Confirm `git status --short` does not show files under `whatsapp-worker/data`.
