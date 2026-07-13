@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
       const { data: bookingData } = await adminClient
         .from('bookings')
-        .select('booking_status, payment_method, final_amount, total_price, coupon_discount, wallet_amount_used, number_of_participants, trips(discounted_price)')
+        .select('booking_status, payment_method, final_amount, total_price, coupon_discount, wallet_amount_used, addons_total, number_of_participants, trips(discounted_price)')
         .eq('id', bookingId)
         .single();
 
@@ -124,6 +124,12 @@ export async function POST(request: NextRequest) {
         .from('bookings')
         .update({ booking_status: bookingStatus, payment_status: paymentStatus, amount_paid: netPaid })
         .eq('id', bookingId);
+
+      // Settle add-ons for the status display once the booking is fully paid.
+      if (paymentStatus === 'paid' && (bookingData as any)?.payment_method !== 'seat_lock') {
+        const { markBookingAddonsPaid } = await import('@/lib/addons-server');
+        await markBookingAddonsPaid(adminClient, bookingId).catch(() => {});
+      }
 
       // When the booking first activates (pending → seat_locked), hold the seat.
       const activated = currentStatus === 'pending' && bookingStatus === 'seat_locked';

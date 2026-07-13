@@ -18,6 +18,13 @@ export interface TicketPassenger {
   isPrimary?: boolean;
 }
 
+export interface TicketAddon {
+  name: string;
+  travellers: string;
+  calc: string;
+  total: number;
+}
+
 export interface TicketData {
   ref: string;
   status: string;
@@ -32,9 +39,12 @@ export interface TicketData {
   emergencyName?: string;
   emergencyPhone?: string;
   tripPrice: number;
+  addons: TicketAddon[];
+  addonsTotal: number;
   couponCode?: string;
   couponDiscount: number;
   walletUsed: number;
+  grandTotal: number;
   amountPaid: number;
   remaining: number;
   txnId?: string;
@@ -45,6 +55,22 @@ const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 const rupee = (n: number) => 'Rs ' + Number(n || 0).toLocaleString('en-IN');
 
+/** Add-on calculation string for the PDF (uses "Rs " — jsPDF fonts lack ₹). */
+function ticketAddonCalc(a: any): string {
+  const n = Array.isArray(a.selected_passenger_ids)
+    ? a.selected_passenger_ids.length
+    : (Array.isArray(a.selected_passenger_names) ? a.selected_passenger_names.length : 0);
+  const price = rupee(Number(a.unit_price) || 0);
+  switch (a.pricing_method) {
+    case 'per_booking': return `${price} / booking`;
+    case 'per_traveller': return `${price} x ${n}`;
+    case 'per_room': return `${price} x ${a.room_count ?? 0} room(s)`;
+    case 'per_unit': return `${price} x ${a.quantity ?? 0}`;
+    case 'per_traveller_night': return `${price} x ${n} x ${a.chargeable_units ?? 0} nights`;
+    default: return price;
+  }
+}
+
 /** Fetch a booking and compute the exact same values the booking page shows. */
 export async function loadTicketData(bookingId: string): Promise<TicketData | null> {
   const admin = createAdminClient();
@@ -53,7 +79,8 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
     .select(`
       *,
       trips ( title, destination, start_date, end_date, is_recurring, duration_days, duration_text, discounted_price ),
-      payment_transactions ( payment_status, amount )
+      payment_transactions ( payment_status, amount ),
+      booking_addons ( name, pricing_method, unit_price, selected_passenger_ids, selected_passenger_names, quantity, room_count, chargeable_units, addon_total, status )
     `)
     .eq('id', bookingId)
     .single();
@@ -101,7 +128,22 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
   const isSeatLockBooking = (booking as any).payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(status);
   const grossFull = (trip.discounted_price || 0) * pax;
   const tripPrice = isSeatLockBooking ? grossFull : (parseFloat(String((booking as any).total_price || 0)) || grossFull);
-  const finalAmount = Math.max(0, tripPrice - couponDiscount - walletUsed);
+
+  // Add-ons (exclude cancelled). They add to the grand total; for seat-lock they
+  // sit in the remaining balance.
+  const addonRows: any[] = Array.isArray((booking as any).booking_addons)
+    ? (booking as any).booking_addons.filter((a: any) => a.status !== 'cancelled')
+    : [];
+  const addons: TicketAddon[] = addonRows.map((a) => ({
+    name: a.name,
+    travellers: (Array.isArray(a.selected_passenger_names) && a.selected_passenger_names.length)
+      ? a.selected_passenger_names.join(', ') : '—',
+    calc: ticketAddonCalc(a),
+    total: Number(a.addon_total) || 0,
+  }));
+  const addonsTotal = addons.reduce((s, a) => s + a.total, 0);
+
+  const grandTotal = Math.max(0, tripPrice - couponDiscount - walletUsed) + addonsTotal;
 
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
   const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
@@ -109,8 +151,10 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
 
   let remaining = 0;
   if ((booking as any).payment_method === 'seat_lock') {
-    const fullPrice = Math.max(0, (trip.discounted_price || 0) * pax - couponDiscount - walletUsed);
+    const fullPrice = Math.max(0, (trip.discounted_price || 0) * pax - couponDiscount - walletUsed) + addonsTotal;
     remaining = Math.max(0, Math.round(fullPrice - paidAmount));
+  } else {
+    remaining = Math.max(0, Math.round(grandTotal - paidAmount));
   }
 
   return {
@@ -127,10 +171,13 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
     emergencyName: (booking as any).emergency_contact_name || undefined,
     emergencyPhone: (booking as any).emergency_contact_phone || undefined,
     tripPrice,
+    addons,
+    addonsTotal,
     couponCode: (booking as any).coupon_code || undefined,
     couponDiscount,
     walletUsed,
-    amountPaid: Math.max(paidAmount, finalAmount - remaining),
+    grandTotal,
+    amountPaid: Math.max(paidAmount, grandTotal - remaining),
     remaining,
     txnId: (booking as any).reference_id || (booking as any).transaction_id || undefined,
     bookedOn: fmtDate((booking as any).created_at),
@@ -230,6 +277,27 @@ export function buildTicketDoc(t: TicketData): jsPDF {
   });
   y = (doc as any).lastAutoTable.finalY + 12;
 
+  // ── Add-ons & upgrades table (only when present) ──
+  if (t.addons.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...GRAY);
+    doc.text('ADD-ONS & UPGRADES', M, y);
+    autoTable(doc, {
+      startY: y + 3,
+      margin: { left: M, right: M },
+      head: [['Add-on', 'Travellers', 'Calculation', 'Amount']],
+      body: t.addons.map((a) => [a.name, a.travellers, a.calc, rupee(a.total)]),
+      styles: { fontSize: 9, cellPadding: 2.5, textColor: DARK },
+      headStyles: { fillColor: [249, 250, 251], textColor: GRAY, fontStyle: 'bold', fontSize: 8 },
+      columnStyles: { 3: { halign: 'right', cellWidth: 26 } },
+      theme: 'grid',
+      tableLineColor: [243, 244, 246],
+      tableLineWidth: 0.1,
+    });
+    y = (doc as any).lastAutoTable.finalY + 12;
+  }
+
   // ── Emergency contact ──
   if (t.emergencyName || t.emergencyPhone) {
     doc.setFont('helvetica', 'bold');
@@ -256,14 +324,16 @@ export function buildTicketDoc(t: TicketData): jsPDF {
     doc.text(value, W - M, y, { align: 'right' });
     y += opts?.size ? opts.size * 0.6 : 6;
   };
-  payRow('Trip price', rupee(t.tripPrice));
+  payRow('Base package', rupee(t.tripPrice));
+  if (t.addonsTotal > 0) payRow('Add-ons & upgrades', rupee(t.addonsTotal));
   if (t.couponDiscount > 0) payRow(`Coupon${t.couponCode ? ' (' + t.couponCode + ')' : ''}`, '- ' + rupee(t.couponDiscount), { color: [21, 128, 5] });
   if (t.walletUsed > 0) payRow('Wallet used', '- ' + rupee(t.walletUsed), { color: [109, 40, 217] });
   y += 2;
   doc.setDrawColor(229, 231, 235);
   doc.line(M, y, W - M, y);
   y += 6;
-  payRow('Amount paid', rupee(t.amountPaid), { bold: true, size: 13 });
+  payRow('Grand total', rupee(t.grandTotal), { bold: true, size: 12 });
+  payRow('Amount paid', rupee(t.amountPaid), { bold: true, color: [21, 128, 5] });
   if (t.remaining > 0) payRow('Pending balance', rupee(t.remaining), { bold: true, color: [194, 65, 12] });
   if (t.txnId) {
     y += 2;

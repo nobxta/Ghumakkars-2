@@ -4,6 +4,7 @@ import { internalFetchHeaders } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 import { getRazorpayWebhookSecret } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
+import { markBookingAddonsPaid } from '@/lib/addons-server';
 
 export const runtime = "nodejs";
 
@@ -101,7 +102,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     // Find booking by razorpay_payment_id or razorpay_order_id
     const { data: bookings, error: bookingError } = await adminClient
       .from('bookings')
-      .select('id, final_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status')
+      .select('id, final_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status, addons_total')
       .or(`razorpay_payment_id.eq.${razorpayPaymentId},razorpay_order_id.eq.${razorpayOrderId}`)
       .limit(1);
 
@@ -137,6 +138,11 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     if (updateError) {
       console.error('Error updating booking:', updateError);
       return;
+    }
+
+    // Full payment settles any add-ons too.
+    if (booking.payment_method !== 'seat_lock') {
+      await markBookingAddonsPaid(adminClient, booking.id).catch(() => {});
     }
 
     // Create or update payment transaction

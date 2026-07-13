@@ -40,6 +40,12 @@ export async function GET(request: NextRequest) {
           payment_review_notes,
           rejection_reason,
           created_at
+        ),
+        booking_addons (
+          id, trip_addon_id, name, description, icon_key, category, pricing_method, unit_price,
+          selected_passenger_ids, selected_passenger_names, quantity, room_occupancy, room_count,
+          chargeable_units, addon_total, is_refundable, status, payment_status,
+          cancellation_reason, cancelled_at, created_at
         )
       `)
       .order('created_at', { ascending: false });

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft, Clock, Send, Upload, Loader2 } from 'lucide-react';
+import TripAddonsEditor, { type AddonDraft, draftToPayload } from '@/components/admin/TripAddonsEditor';
 
 interface DayItinerary {
   day: number;
@@ -96,6 +97,10 @@ export default function CreateTripPage() {
   const [cancellationPolicy, setCancellationPolicy] = useState('');
   
   // Publish options
+  // Trip Add-ons (optional)
+  const [addonsEnabled, setAddonsEnabled] = useState(false);
+  const [addonDrafts, setAddonDrafts] = useState<AddonDraft[]>([]);
+
   const [publishOption, setPublishOption] = useState<'draft' | 'now' | 'schedule'>('draft');
   const [scheduledPublishDate, setScheduledPublishDate] = useState('');
   const [scheduledPublishTime, setScheduledPublishTime] = useState('');
@@ -454,6 +459,7 @@ export default function CreateTripPage() {
           ? new Date(`${scheduledPublishDate}T${scheduledPublishTime}`).toISOString()
           : null,
         published_at: publishOption === 'now' ? new Date().toISOString() : null,
+        addons_enabled: addonsEnabled,
       };
 
       const { data, error: insertError } = await supabase
@@ -463,6 +469,26 @@ export default function CreateTripPage() {
         .single();
 
       if (insertError) throw insertError;
+
+      // Persist Trip Add-ons (best-effort; a failure here shouldn't lose the trip).
+      if (data?.id && (addonsEnabled || addonDrafts.length > 0)) {
+        try {
+          const res = await fetch(`/api/admin/trips/${data.id}/addons`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              enabled: addonsEnabled,
+              addons: addonDrafts.map((d, i) => draftToPayload(d, i)),
+            }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || 'Failed to save add-ons');
+          }
+        } catch (addonErr: any) {
+          setError(`Trip created, but add-ons failed to save: ${addonErr.message}. Edit the trip to retry.`);
+        }
+      }
 
       // Immediately refresh the cached public trips list so the new trip is
       // visible right away instead of after the 10-minute revalidate window.
@@ -1294,6 +1320,18 @@ export default function CreateTripPage() {
                   </p>
                 </div>
               </div>
+
+              <TripAddonsEditor
+                enabled={addonsEnabled}
+                drafts={addonDrafts}
+                onEnabledChange={setAddonsEnabled}
+                onDraftsChange={setAddonDrafts}
+                tripDurationDays={isRecurring
+                  ? (parseInt(recurringDurationDays) || 3)
+                  : (startDate && endDate
+                      ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
+                      : 3)}
+              />
 
               <div className="p-4 sm:p-5 bg-gradient-to-br from-purple-50 to-purple-100/40 border border-purple-200 rounded-xl">
                 <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center">

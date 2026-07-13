@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft } from 'lucide-react';
+import TripAddonsEditor, { type AddonDraft, draftFromRow, draftToPayload } from '@/components/admin/TripAddonsEditor';
 
 interface DayItinerary {
   day: number;
@@ -71,6 +72,8 @@ export default function EditTripPage() {
 
   // Step 6: Additional
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
+  const [addonsEnabled, setAddonsEnabled] = useState(false);
+  const [addonDrafts, setAddonDrafts] = useState<AddonDraft[]>([]);
   const [includedItems, setIncludedItems] = useState<string[]>(['']);
   const [excludedItems, setExcludedItems] = useState<string[]>(['']);
   const [pickupLocation, setPickupLocation] = useState('');
@@ -196,6 +199,16 @@ export default function EditTripPage() {
 
       // WhatsApp link
       setWhatsappGroupLink(data.whatsapp_group_link || '');
+
+      // Trip Add-ons (admin GET returns inactive ones too, via service role)
+      setAddonsEnabled(!!data.addons_enabled);
+      try {
+        const res = await fetch(`/api/admin/trips/${params.id}/addons`);
+        if (res.ok) {
+          const j = await res.json();
+          setAddonDrafts((j.addons || []).map((r: any) => draftFromRow(r)));
+        }
+      } catch { /* non-fatal — editor just starts empty */ }
     } catch (error: any) {
       console.error('Error fetching trip:', error);
       setError('Failed to load trip data: ' + error.message);
@@ -495,6 +508,7 @@ export default function EditTripPage() {
         whatsapp_group_link: whatsappGroupLink || null,
         included_features: includedItems.filter(item => item.trim()),
         excluded_features: excludedItems.filter(item => item.trim()).length > 0 ? excludedItems.filter(item => item.trim()) : null,
+        addons_enabled: addonsEnabled,
       };
 
       const { error: updateError } = await supabase
@@ -503,6 +517,22 @@ export default function EditTripPage() {
         .eq('id', params.id);
 
       if (updateError) throw updateError;
+
+      // Persist Trip Add-ons (create / update / delete + toggle) via admin API.
+      {
+        const res = await fetch(`/api/admin/trips/${params.id}/addons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: addonsEnabled,
+            addons: addonDrafts.map((d, i) => draftToPayload(d, i)),
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || 'Failed to save add-ons');
+        }
+      }
 
       // Immediately refresh THIS trip's cached public pages so edits (price,
       // seats, details) show right away instead of after the 10-minute window.
@@ -1283,6 +1313,18 @@ export default function EditTripPage() {
                   </p>
                 </div>
               </div>
+
+              <TripAddonsEditor
+                enabled={addonsEnabled}
+                drafts={addonDrafts}
+                onEnabledChange={setAddonsEnabled}
+                onDraftsChange={setAddonDrafts}
+                tripDurationDays={isRecurring
+                  ? (parseInt(recurringDurationDays) || 3)
+                  : (startDate && endDate
+                      ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
+                      : 3)}
+              />
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">

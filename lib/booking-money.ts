@@ -18,6 +18,7 @@ interface BookingLike {
   coupon_discount?: number | string | null;
   wallet_amount_used?: number | string | null;
   waived_amount?: number | string | null;
+  addons_total?: number | string | null;
   total_price?: number | string | null;
   final_amount?: number | string | null;
   payment_method?: string | null;
@@ -42,25 +43,29 @@ const tripOf = (b: BookingLike, trip?: TripLike | null): TripLike | undefined =>
 };
 
 /**
- * The full amount the customer owes, after their coupon + wallet discounts.
- * Seat-lock bookings store only the deposit in total_price/final_amount, so the
- * real cost comes from list price × travellers.
+ * The full amount the customer owes, after their coupon + wallet discounts,
+ * INCLUDING any Trip Add-ons. Seat-lock bookings store only the deposit in
+ * total_price/final_amount, so the real base cost comes from list price ×
+ * travellers. Add-ons are tracked separately in `addons_total` (never folded
+ * into final_amount), so editing add-ons after payment correctly moves the
+ * outstanding balance.
  */
 export function fullOwed(b: BookingLike, trip?: TripLike | null): number {
   const pax = Number(b.number_of_participants) || 1;
   const coupon = num(b.coupon_discount);
   const wallet = num(b.wallet_amount_used);
+  const addons = Math.max(0, num(b.addons_total));
   const disc = num(tripOf(b, trip)?.discounted_price);
   const isSeatLock =
     b.payment_method === 'seat_lock' ||
     b.booking_status === 'seat_locked' ||
     b.booking_status === 'remaining_submitted';
 
-  if (isSeatLock) return Math.max(0, disc * pax - coupon - wallet);
+  if (isSeatLock) return Math.max(0, disc * pax - coupon - wallet) + addons;
 
   const fa = num(b.final_amount);
-  if (fa > 0) return fa;
-  return Math.max(0, (num(b.total_price) || disc * pax) - coupon - wallet);
+  if (fa > 0) return fa + addons;
+  return Math.max(0, (num(b.total_price) || disc * pax) - coupon - wallet) + addons;
 }
 
 /** Total money actually refunded across the booking's ledger. */
@@ -121,8 +126,10 @@ export function moneyOf(b: BookingLike, trip?: TripLike | null) {
   const paid = paidOf(b);
   const refunded = refundedOf(b);
   const remaining = Math.max(0, owed - paid);
+  const addonsTotal = Math.max(0, num(b.addons_total));
   const status = derivePaymentStatus(paid, owed, refunded > 0);
   // `owed` kept as the headline number (post-waiver) for back-compat; `fullPrice`
-  // exposes the original trip price for displays that want to show the write-off.
-  return { owed, fullPrice, waived, paid, refunded, remaining, status };
+  // exposes the original trip price for displays that want to show the write-off;
+  // `addonsTotal` lets summaries show add-ons as a separate line item.
+  return { owed, fullPrice, waived, paid, refunded, remaining, addonsTotal, status };
 }

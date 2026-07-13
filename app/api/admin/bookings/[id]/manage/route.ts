@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
 import { fullOwed, owedOf, derivePaymentStatus } from '@/lib/booking-money';
 import { revalidateTripById } from '@/lib/revalidate-trips';
+import { markBookingAddonsPaid } from '@/lib/addons-server';
 
 export const runtime = 'nodejs';
 
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const { data: b, error: fetchErr } = await adminClient
       .from('bookings')
-      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, departure_date')
+      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, addons_total, departure_date')
       .eq('id', id)
       .single();
     if (fetchErr || !b) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
@@ -121,6 +122,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }]);
 
       const money = await syncPaymentMirrors();
+      // A fully-settled booking settles its add-ons too (for the status display).
+      if (money.status === 'paid' && b.payment_method !== 'seat_lock') {
+        await markBookingAddonsPaid(adminClient, id).catch(() => {});
+      }
       return NextResponse.json({
         success: true,
         ...money,

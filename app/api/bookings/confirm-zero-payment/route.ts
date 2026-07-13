@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidateTripById } from '@/lib/revalidate-trips';
+import { markBookingAddonsPaid } from '@/lib/addons-server';
 
 export const runtime = 'nodejs';
 
@@ -80,6 +81,10 @@ export async function POST(request: NextRequest) {
         captured: true,
         paid_at: new Date().toISOString(),
       }]);
+
+    if (booking.payment_method !== 'seat_lock') {
+      await markBookingAddonsPaid(admin, bookingId).catch(() => {});
+    }
 
     // Increment trip participants count
     if (booking.trip_id) {

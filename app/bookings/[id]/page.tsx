@@ -15,6 +15,8 @@ import { resolveDueDate } from '@/lib/payment-due';
 import { derivePaymentStatus } from '@/lib/booking-money';
 import { customerBookingStatus, paymentStatusLabel, paymentStatusChip } from '@/lib/booking-status-labels';
 import UpiPayButton from '@/components/UpiPayButton';
+import AddonsSummary from '@/components/booking/AddonsSummary';
+import { calcLabelFromRow } from '@/lib/addons';
 import { upiNote } from '@/lib/upi';
 
 interface Trip {
@@ -118,7 +120,7 @@ export default function BookingDetailsPage() {
           primary_passenger_name, primary_passenger_email, primary_passenger_phone,
           primary_passenger_gender, primary_passenger_age, emergency_contact_name,
           emergency_contact_phone, aadhaar_id, passengers, created_at, rejection_reason,
-          departure_date, pickup_point, is_offline_booking,
+          departure_date, pickup_point, is_offline_booking, addons_total,
           trips (
             id,
             title,
@@ -139,7 +141,8 @@ export default function BookingDetailsPage() {
             whatsapp_group_link,
             highlights
           ),
-          payment_transactions ( id, amount, amount_refunded, payment_status, payment_mode, payment_type, created_at )
+          payment_transactions ( id, amount, amount_refunded, payment_status, payment_mode, payment_type, created_at ),
+          booking_addons ( id, name, description, icon_key, category, pricing_method, unit_price, selected_passenger_ids, selected_passenger_names, quantity, room_count, chargeable_units, addon_total, is_refundable, status, payment_status )
         `)
         .eq('id', params.id)
         .single();
@@ -182,7 +185,9 @@ export default function BookingDetailsPage() {
     const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
     const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
     const waived = parseFloat(String((booking as any).waived_amount || 0)) || 0;
-    const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet - waived);
+    const addons = parseFloat(String((booking as any).addons_total || 0)) || 0;
+    // Add-ons roll into the seat-lock balance, so they're part of what's still owed.
+    const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet - waived) + addons;
     // Paid = verified transactions (source of truth, includes admin-recorded
     // cash), falling back to payment_amount / final_amount.
     const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
@@ -423,9 +428,11 @@ export default function BookingDetailsPage() {
   const totalAmount = isSeatLockBooking
     ? grossFull
     : (parseFloat(String(booking.total_price || 0)) || grossFull);
-  // Net amount actually owed after coupon + wallet, minus any written-off (waived) balance.
+  // Net amount actually owed after coupon + wallet, minus any written-off (waived)
+  // balance, PLUS any Trip Add-ons (which roll into the balance for seat-lock).
   const waivedAmount = parseFloat(String((booking as any).waived_amount || 0)) || 0;
-  const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed - waivedAmount);
+  const addonsTotal = parseFloat(String((booking as any).addons_total || 0)) || 0;
+  const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed - waivedAmount) + addonsTotal;
   // Money actually received = verified transactions (source of truth), else payment_amount.
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
   const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
@@ -516,6 +523,13 @@ export default function BookingDetailsPage() {
         <td style="text-transform:capitalize;">${p.gender || '—'}</td>
         <td>${p.phone || '—'}</td>
       </tr>`).join('');
+    const addonsList: any[] = Array.isArray((booking as any).booking_addons)
+      ? (booking as any).booking_addons.filter((a: any) => a.status !== 'cancelled') : [];
+    const addonRowsHtml = addonsList.map((a: any) => {
+      const names = (Array.isArray(a.selected_passenger_names) && a.selected_passenger_names.length)
+        ? a.selected_passenger_names.join(', ') : '—';
+      return `<tr><td>${a.name}</td><td>${names}</td><td>${calcLabelFromRow(a)}</td><td style="text-align:right;">₹${(Number(a.addon_total) || 0).toLocaleString('en-IN')}</td></tr>`;
+    }).join('');
     w.document.write(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Trip Ticket · ${trip?.title || ''} · ${shortId}</title>
 <style>
@@ -583,12 +597,23 @@ export default function BookingDetailsPage() {
       </div>
     </div>` : ''}
 
+    ${addonsList.length > 0 ? `
+    <div class="section">
+      <h2>Add-ons &amp; Upgrades</h2>
+      <table>
+        <thead><tr><th>Add-on</th><th>Travellers</th><th>Calculation</th><th style="text-align:right;">Amount</th></tr></thead>
+        <tbody>${addonRowsHtml}</tbody>
+      </table>
+    </div>` : ''}
+
     <div class="section">
       <h2>Payment</h2>
-      <div class="pay-row"><span>Trip price</span><span>₹${totalAmount.toLocaleString('en-IN')}</span></div>
+      <div class="pay-row"><span>Base package</span><span>₹${totalAmount.toLocaleString('en-IN')}</span></div>
+      ${addonsTotal > 0 ? `<div class="pay-row"><span>Add-ons &amp; upgrades</span><span>₹${addonsTotal.toLocaleString('en-IN')}</span></div>` : ''}
       ${couponDiscount > 0 ? `<div class="pay-row" style="color:#15803d;"><span>Coupon (${booking.coupon_code || ''})</span><span>−₹${couponDiscount.toLocaleString('en-IN')}</span></div>` : ''}
       ${walletUsed > 0 ? `<div class="pay-row" style="color:#6d28d9;"><span>Wallet used</span><span>−₹${walletUsed.toLocaleString('en-IN')}</span></div>` : ''}
-      <div class="pay-row total"><span>Amount paid</span><span>₹${Math.max(paidAmount, finalAmount - remainingAmount).toLocaleString('en-IN')}</span></div>
+      <div class="pay-row total"><span>Grand total</span><span>₹${finalAmount.toLocaleString('en-IN')}</span></div>
+      <div class="pay-row"><span>Amount paid</span><span>₹${Math.max(paidAmount, finalAmount - remainingAmount).toLocaleString('en-IN')}</span></div>
       ${remainingAmount > 0 ? `<div class="pay-row" style="color:#c2410c;font-weight:700;"><span>Pending balance</span><span>₹${remainingAmount.toLocaleString('en-IN')}</span></div>` : ''}
       ${(booking.reference_id || booking.transaction_id) ? `<p style="margin-top:10px;font-size:11px;color:#6b7280;">Txn ID: <span style="font-family:'Courier New',monospace;color:#0f172a;">${booking.reference_id || booking.transaction_id}</span></p>` : ''}
     </div>
@@ -887,6 +912,9 @@ export default function BookingDetailsPage() {
                 <p className="text-sm text-red-800">{booking.rejection_reason}</p>
               </div>
             )}
+
+            {/* Add-ons & Upgrades (only shown when the booking has add-ons) */}
+            <AddonsSummary addons={(booking as any).booking_addons} />
           </div>
 
           {/* RIGHT 30% — sticky */}
@@ -921,6 +949,9 @@ export default function BookingDetailsPage() {
                     )}
                     {walletUsed > 0 && (
                       <div className="flex justify-between text-purple-700"><dt>Wallet used</dt><dd className="font-semibold">−₹{walletUsed.toLocaleString('en-IN')}</dd></div>
+                    )}
+                    {addonsTotal > 0 && (
+                      <div className="flex justify-between"><dt className="text-gray-600 flex items-center gap-1"><Sparkles className="h-3 w-3 text-purple-600" />Add-ons &amp; Upgrades</dt><dd className="font-semibold text-gray-900">₹{addonsTotal.toLocaleString('en-IN')}</dd></div>
                     )}
                   </>
                 );

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
+import { markBookingAddonsPaid } from '@/lib/addons-server';
 
 export const runtime = "nodejs";
 
@@ -133,6 +134,11 @@ export async function POST(request: NextRequest) {
             razorpay_raw: p,
           },
         ]);
+
+      // Full payment settles the add-ons too; seat-lock leaves them in the balance.
+      if (booking.payment_method !== 'seat_lock') {
+        await markBookingAddonsPaid(adminClient, bookingId).catch(() => {});
+      }
 
       // 3. Increment trip participants (same logic as webhook)
       if (booking.trip_id) {

@@ -4,10 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info, Sparkles } from 'lucide-react';
 import { nextOccurrences, formatDeparture } from '@/lib/recurrence';
 import UpiPayButton from '@/components/UpiPayButton';
 import { upiNote } from '@/lib/upi';
+import CustomizeTripStep from '@/components/booking/CustomizeTripStep';
+import {
+  computeSelections,
+  withRequiredSelections,
+  validateSelection,
+  validateRoomUpgradeConflicts,
+  type AddonSelection,
+  type TripAddon,
+} from '@/lib/addons';
 
 interface Passenger {
   name: string;
@@ -15,7 +24,30 @@ interface Passenger {
   age: string;
   gender: string;
   aadhaar_id: string;
+  pid?: string;
 }
+
+type StepKey = 'passenger' | 'customize' | 'id' | 'payment';
+const STEP_TITLE: Record<StepKey, string> = {
+  passenger: 'Passenger Details',
+  customize: 'Customize Your Trip',
+  id: 'ID Verification',
+  payment: 'Complete Payment',
+};
+const STEP_SUB: Record<StepKey, string> = {
+  passenger: 'Fill in traveller information for your trip',
+  customize: 'Add optional upgrades and activities to your booking.',
+  id: 'Verify your identity to proceed to payment',
+  payment: 'Choose your option and confirm your booking',
+};
+const STEP_SHORT: Record<StepKey, string> = {
+  passenger: 'Passenger Details',
+  customize: 'Customize Trip',
+  id: 'ID Verification',
+  payment: 'Payment',
+};
+const makePid = () =>
+  `pax_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
 
 interface Trip {
   id: string;
@@ -30,6 +62,7 @@ interface Trip {
   recurrence_weeks_ahead?: number;
   duration_days?: number;
   pickup_points?: string[];
+  addons_enabled?: boolean;
 }
 
 // Removed college list — no longer needed
@@ -89,7 +122,8 @@ export default function BookTripPage() {
   const supabase = createClient();
   
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 3;
+  const [addons, setAddons] = useState<TripAddon[]>([]);
+  const [addonSelections, setAddonSelections] = useState<AddonSelection[]>([]);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false); // For showing QR/Txn ID after clicking Pay
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -283,7 +317,8 @@ export default function BookTripPage() {
       if (d.aadhaarId) setAadhaarId(d.aadhaarId);
       if (d.departureDate) setDepartureDate(d.departureDate);
       if (d.pickupPoint) setPickupPoint(d.pickupPoint);
-      if (Array.isArray(d.passengers)) setPassengers(d.passengers);
+      if (Array.isArray(d.passengers)) setPassengers(d.passengers.map((p: any) => ({ ...p, pid: p.pid || makePid() })));
+      if (Array.isArray(d.addonSelections)) setAddonSelections(d.addonSelections);
       if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
       // Stop the profile pre-fill from overriding what we just restored.
       prefilledRef.current = true;
@@ -305,7 +340,7 @@ export default function BookTripPage() {
           data: {
             primaryName, primaryEmail, primaryPhone, primaryGender, primaryAge,
             emergencyContactName, emergencyContactPhone, aadhaarId,
-            departureDate, pickupPoint, passengers, paymentMethod,
+            departureDate, pickupPoint, passengers, paymentMethod, addonSelections,
           },
         }));
       } catch { /* storage disabled / full — ignore */ }
@@ -313,7 +348,69 @@ export default function BookTripPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryName, primaryEmail, primaryPhone, primaryGender, primaryAge,
       emergencyContactName, emergencyContactPhone, aadhaarId, departureDate,
-      pickupPoint, passengers, paymentMethod, user]);
+      pickupPoint, passengers, paymentMethod, addonSelections, user]);
+
+  // ── Dynamic booking steps: the "Customize Trip" step only exists when the trip
+  //    has active add-ons; otherwise the classic 3-step flow is used. ──
+  const hasAddons = !!trip?.addons_enabled && addons.length > 0;
+  const stepKeys: StepKey[] = hasAddons
+    ? ['passenger', 'customize', 'id', 'payment']
+    : ['passenger', 'id', 'payment'];
+  const totalSteps = stepKeys.length;
+  const stepKey: StepKey = stepKeys[Math.min(Math.max(currentStep, 1), totalSteps) - 1];
+  const stepIndexOf = (k: StepKey) => {
+    const i = stepKeys.indexOf(k);
+    return i < 0 ? 1 : i + 1;
+  };
+
+  // Stable traveller list (pids) for add-on selection. Primary is always 'primary'.
+  const paxList = [
+    { pid: 'primary', name: primaryName, age: primaryAge, isPrimary: true },
+    ...passengers.map((p, i) => ({ pid: p.pid || `pax_idx_${i}`, name: p.name, age: p.age })),
+  ];
+
+  // Keep add-on selections coherent: auto-select required add-ons, drop removed
+  // travellers, and drop selections whose add-on is gone/inactive.
+  useEffect(() => {
+    if (!hasAddons) return;
+    const pids = ['primary', ...passengers.map((p, i) => p.pid || `pax_idx_${i}`)];
+    const pidSet = new Set(pids);
+    const addonIds = new Set(addons.map((a) => a.id));
+    const next = withRequiredSelections(addons, addonSelections, pids)
+      .filter((s) => addonIds.has(s.addon_id))
+      .map((s) => (s.passenger_ids ? { ...s, passenger_ids: s.passenger_ids.filter((pid) => pidSet.has(pid)) } : s));
+    if (JSON.stringify(next) !== JSON.stringify(addonSelections)) setAddonSelections(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAddons, addons, addonSelections, passengers, primaryName]);
+
+  // Authoritative-on-client add-on total (server re-validates before charging).
+  const addonsTotalClient = hasAddons
+    ? computeSelections(addons, addonSelections, {
+        paxCount: 1 + passengers.length,
+        tripDurationDays: trip?.duration_days || 1,
+      }).total
+    : 0;
+
+  // Passenger array (with stable pids) sent to the server + stored on the booking.
+  const buildPassengerList = () => [
+    {
+      pid: 'primary',
+      name: primaryName,
+      email: primaryEmail,
+      phone: primaryPhone.replace(/\D/g, ''),
+      age: parseInt(primaryAge),
+      gender: primaryGender,
+      is_primary: true,
+    },
+    ...passengers.map((p, i) => ({
+      pid: p.pid || `pax_idx_${i}`,
+      name: p.name,
+      phone: p.phone.replace(/\D/g, ''),
+      age: parseInt(p.age),
+      gender: p.gender,
+      is_primary: false,
+    })),
+  ];
 
   const abandonRazorpayBooking = async (bookingId: string) => {
     try {
@@ -351,13 +448,25 @@ export default function BookTripPage() {
     try {
       const idOrSlug = String(params.id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, pickup_points');
+      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, pickup_points, addons_enabled');
       const { data, error } = isUuid
         ? await query.eq('id', idOrSlug).single()
         : await query.eq('slug', idOrSlug).single();
 
       if (error) throw error;
       setTrip(data);
+
+      // Load active add-ons for this trip (only when the feature is on).
+      if (data?.addons_enabled && data?.id) {
+        const { data: addonRows } = await supabase
+          .from('trip_addons')
+          .select('*')
+          .eq('trip_id', data.id)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: true });
+        setAddons((addonRows || []) as TripAddon[]);
+      }
     } catch (error) {
       console.error('Error fetching trip:', error);
       router.push('/trips');
@@ -493,23 +602,13 @@ export default function BookTripPage() {
         }
       }
 
-      const allPassengers = [
-        {
-          name: primaryName,
-          email: primaryEmail,
-          phone: primaryPhone.replace(/\D/g, ''),
-          age: parseInt(primaryAge),
-          gender: primaryGender,
-          is_primary: true,
-        },
-        ...passengers.map(p => ({
-          name: p.name,
-          phone: p.phone.replace(/\D/g, ''),
-          age: parseInt(p.age),
-          gender: p.gender,
-          is_primary: false,
-        }))
-      ];
+      const allPassengers = buildPassengerList();
+
+      // Add-ons roll into the FULL total; for seat-lock they go to the remaining
+      // balance (nothing extra collected now). Server re-validates before charge.
+      const addonsTotal = hasAddons ? addonsTotalClient : 0;
+      const addonsNow = paymentMethod === 'seat_lock' ? 0 : addonsTotal;
+      const chargeNow = finalAmount + addonsNow;
 
       const bookingPayload = {
         trip_id: trip.id,
@@ -528,6 +627,8 @@ export default function BookTripPage() {
         emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
         aadhaar_id: aadhaarId || null,
         passengers: allPassengers,
+        addon_selections: hasAddons ? addonSelections : [],
+        addons_total: addonsTotal,
         payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
         payment_mode: 'razorpay',
         payment_status: 'pending',
@@ -547,9 +648,9 @@ export default function BookTripPage() {
         throw new Error(bookingData.error || 'Failed to create booking');
       }
 
-      // Zero-amount case: wallet + coupon fully cover the trip.
+      // Zero-amount case: wallet + coupon fully cover the trip (and no add-ons due now).
       // Razorpay can't process < ₹1, so skip the gateway and confirm directly.
-      if (finalAmount < 1) {
+      if (chargeNow < 1) {
         const confirmRes = await fetch('/api/bookings/confirm-zero-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -577,7 +678,7 @@ export default function BookTripPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: finalAmount, // This is already reduced by wallet amount
+          amount: chargeNow, // base (after wallet/coupon) + add-ons due now
           bookingId: bookingData.id,
           tripId: trip.id,
         }),
@@ -749,23 +850,7 @@ export default function BookTripPage() {
       // Calculate final amount after wallet
       let finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
-      const allPassengers = [
-        {
-          name: primaryName,
-          email: primaryEmail,
-          phone: primaryPhone.replace(/\D/g, ''),
-          age: parseInt(primaryAge),
-          gender: primaryGender,
-          is_primary: true,
-        },
-        ...passengers.map(p => ({
-          name: p.name,
-          phone: p.phone.replace(/\D/g, ''),
-          age: parseInt(p.age),
-          gender: p.gender,
-          is_primary: false,
-        }))
-      ];
+      const allPassengers = buildPassengerList();
 
       const cashBookingPayload = {
         trip_id: trip.id,
@@ -784,6 +869,8 @@ export default function BookTripPage() {
         emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
         aadhaar_id: aadhaarId || null,
         passengers: allPassengers,
+        addon_selections: hasAddons ? addonSelections : [],
+        addons_total: hasAddons ? addonsTotalClient : 0,
         payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
         payment_mode: 'cash',
         payment_status: 'cash_pending',
@@ -828,13 +915,16 @@ export default function BookTripPage() {
 
   const handleCashPayment = () => {
     if (!trip || !user) return;
-    if (currentStep === 1 && !validateStep(1)) return;
-    if (currentStep === 2 && !validateStep(2)) return;
+    // Ensure every data-entry step (passenger, customize, id) is valid first.
+    for (const k of stepKeys) {
+      if (k === 'payment') break;
+      if (!validateStep(stepIndexOf(k))) { setCurrentStep(stepIndexOf(k)); return; }
+    }
     setShowCashConfirm(true);
   };
 
   const addPassenger = () => {
-    setPassengers([...passengers, { name: '', phone: '', age: '', gender: '', aadhaar_id: '' }]);
+    setPassengers([...passengers, { name: '', phone: '', age: '', gender: '', aadhaar_id: '', pid: makePid() }]);
   };
 
   const removePassenger = (index: number) => {
@@ -848,14 +938,34 @@ export default function BookTripPage() {
   };
 
 
+  const validateCustomize = (): boolean => {
+    setError('');
+    if (!hasAddons) return true;
+    const pids = paxList.map((p) => p.pid);
+    const ctx = { paxCount: pids.length, tripDurationDays: trip?.duration_days || 1 };
+    const withReq = withRequiredSelections(addons, addonSelections, pids);
+    for (const s of withReq) {
+      const a = addons.find((x) => x.id === s.addon_id);
+      if (!a) continue;
+      const err = validateSelection(a, s, ctx);
+      if (err) { setError(err); return false; }
+    }
+    const byId: Record<string, TripAddon> = {};
+    addons.forEach((a) => { byId[a.id] = a; });
+    const conflict = validateRoomUpgradeConflicts(withReq, byId);
+    if (conflict) { setError(conflict); return false; }
+    return true;
+  };
+
   const validateStep = (step: number): boolean => {
     setError('');
-    if (step === 3 && showPaymentDetails) {
-      // Don't validate step 3 if we're showing payment details - validation happens on submit
+    const key = stepKeys[step - 1];
+    if (key === 'payment' && showPaymentDetails) {
+      // Don't validate payment step while showing payment details — that happens on submit.
       return true;
     }
-    switch (step) {
-      case 1:
+    switch (key) {
+      case 'passenger':
         if (trip?.is_recurring && !departureDate) {
           setError('Please choose a departure date for this trip');
           return false;
@@ -901,14 +1011,16 @@ export default function BookTripPage() {
           }
         }
         return true;
-      case 2:
+      case 'customize':
+        return validateCustomize();
+      case 'id':
         // Aadhaar is optional, but if entered it must be a valid 12-digit number.
         if (aadhaarId && aadhaarId.replace(/\D/g, '').length !== 12) {
           setError('Please enter a valid 12-digit Aadhaar number');
           return false;
         }
         return true;
-      case 3:
+      case 'payment':
         if (!transactionId.trim()) {
           setError('Please enter your transaction ID');
           return false;
@@ -1013,6 +1125,11 @@ export default function BookTripPage() {
     return finalAmount;
   };
 
+  // Add-ons collected NOW: full-pay collects them; seat-lock rolls them into the
+  // remaining balance (Due Later). getPayableNow() is the true amount charged today.
+  const getAddonsNow = () => (hasAddons && paymentMethod !== 'seat_lock' ? addonsTotalClient : 0);
+  const getPayableNow = () => calculateTotalPrice() + getAddonsNow();
+
   const handleSubmit = async () => {
     if (!validateStep(currentStep) || !trip || !user) return;
 
@@ -1023,24 +1140,8 @@ export default function BookTripPage() {
       const totalPassengers = 1 + passengers.length;
       const totalPrice = calculateTotalPrice();
 
-      // Prepare passengers array
-      const allPassengers = [
-        {
-          name: primaryName,
-          email: primaryEmail,
-          phone: primaryPhone.replace(/\D/g, ''),
-          age: parseInt(primaryAge),
-          gender: primaryGender,
-          is_primary: true,
-        },
-        ...passengers.map(p => ({
-          name: p.name,
-          phone: p.phone.replace(/\D/g, ''),
-          age: parseInt(p.age),
-          gender: p.gender,
-          is_primary: false,
-        }))
-      ];
+      // Prepare passengers array (with stable pids)
+      const allPassengers = buildPassengerList();
 
       // Get base price and calculate final amount
       const basePrice = getBasePrice();
@@ -1083,6 +1184,11 @@ export default function BookTripPage() {
       // Calculate final amount after wallet
       const finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
+      // Add-ons: full-pay collects them now; seat-lock rolls them into the balance.
+      const addonsTotal = hasAddons ? addonsTotalClient : 0;
+      const addonsNow = paymentMethod === 'seat_lock' ? 0 : addonsTotal;
+      const chargeNow = finalAmount + addonsNow;
+
       // Create booking
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
@@ -1092,7 +1198,8 @@ export default function BookTripPage() {
             user_id: user.id,
             number_of_participants: totalPassengers,
             total_price: basePrice, // Base price before coupon
-            final_amount: finalAmount, // Final amount after coupon and wallet
+            final_amount: finalAmount, // Base amount due now (excludes add-ons)
+            addons_total: addonsTotal,
             coupon_code: couponApplied?.coupon?.code || null,
             coupon_discount: couponDiscount,
             wallet_amount_used: walletAmountUsed,
@@ -1108,7 +1215,7 @@ export default function BookTripPage() {
             payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
             payment_mode: 'manual',
             reference_id: transactionId.trim(),
-            payment_amount: finalAmount,
+            payment_amount: chargeNow,
             payment_status: 'pending',
             booking_status: 'pending',
             amount_paid: 0,
@@ -1121,6 +1228,16 @@ export default function BookTripPage() {
 
       if (bookingError) throw bookingError;
 
+      // Snapshot the selected add-ons server-side (client can't write booking_addons
+      // under RLS). Best-effort; the booking already carries addons_total.
+      if (hasAddons && bookingData?.id && addonSelections.length > 0) {
+        await fetch(`/api/bookings/${bookingData.id}/addons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selections: addonSelections }),
+        }).catch(() => {});
+      }
+
       // Create payment transaction for this booking
       if (bookingData.id && transactionId.trim()) {
         const { error: transactionError } = await supabase
@@ -1129,7 +1246,7 @@ export default function BookTripPage() {
             {
               booking_id: bookingData.id,
               transaction_id: transactionId.trim(),
-              amount: finalAmount,
+              amount: chargeNow,
               payment_type: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
               payment_status: 'pending',
               payment_mode: 'manual', // Track payment mode
@@ -1227,9 +1344,9 @@ export default function BookTripPage() {
   const availableSpots = unlimitedSeats ? Infinity : trip.max_participants - trip.current_participants;
   const canBook = unlimitedSeats || availableSpots >= totalPassengers;
 
-  // Polished progress bar (Passenger → ID → Payment)
+  // Polished progress bar (Passenger → [Customize] → ID → Payment)
   const StepIndicator = () => {
-    const labels = ['Passenger Details', 'ID Verification', 'Payment'];
+    const labels = stepKeys.map((k) => STEP_SHORT[k]);
     return (
       <div className="flex items-center justify-center">
         {labels.map((label, i) => {
@@ -1256,7 +1373,7 @@ export default function BookTripPage() {
                   {label}
                 </span>
               </div>
-              {i < 2 && (
+              {i < labels.length - 1 && (
                 <div
                   className="h-0.5 w-8 sm:w-14 md:w-20 mx-2 sm:mb-5 rounded-full transition-all duration-500"
                   style={{ background: done ? '#10B981' : '#E2E8F0' }}
@@ -1314,7 +1431,7 @@ export default function BookTripPage() {
       {seatLockModal && (() => {
         const net = Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0));
         const lockNow = Math.min((trip?.seat_lock_price || 0) * totalPassengers, net);
-        const remaining = Math.max(0, net - lockNow);
+        const remaining = Math.max(0, net - lockNow) + (hasAddons ? addonsTotalClient : 0);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="seatlock-title">
             <div className="bg-white rounded-[20px] shadow-2xl max-w-sm w-full p-6" style={{ border: '1px solid #E2E8F0' }}>
@@ -1377,15 +1494,15 @@ export default function BookTripPage() {
             <X className="h-4 w-4" /><span className="hidden sm:inline">Cancel</span>
           </Link>
           <div className="flex justify-center min-w-0"><StepIndicator /></div>
-          <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/3</span>
+          <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ border: '1px solid rgba(124,58,237,0.2)' }}>Step {currentStep}/{totalSteps}</span>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8">
-        {!(currentStep === 3 && showPaymentDetails) && (
+        {!(stepKey === 'payment' && showPaymentDetails) && (
           <div className="mb-6 md:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{['Passenger Details', 'ID Verification', 'Complete Payment'][currentStep - 1]}</h1>
-            <p className="text-gray-500 mt-1.5 text-sm">{['Fill in traveller information for your trip', 'Verify your identity to proceed to payment', 'Choose your option and confirm your booking'][currentStep - 1]}</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{STEP_TITLE[stepKey]}</h1>
+            <p className="text-gray-500 mt-1.5 text-sm">{STEP_SUB[stepKey]}</p>
           </div>
         )}
 
@@ -1403,7 +1520,7 @@ export default function BookTripPage() {
         )}
 
         {/* Step 1: Passenger Details */}
-        {currentStep === 1 && (
+        {stepKey === 'passenger' && (
           <div className="max-w-[680px] mx-auto space-y-6">
 
             {/* Departure date — horizontal cards */}
@@ -1566,13 +1683,30 @@ export default function BookTripPage() {
             <button type="button" onClick={nextStep} disabled={!canBook}
               className="w-full py-4 text-white font-bold text-base rounded-[12px] transition-all hover:opacity-95 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
               style={{ background: PURPLE_GRAD, boxShadow: '0 8px 24px rgba(124,58,237,0.35)' }}>
-              Continue to ID Verification <ArrowRight className="w-4 h-4" />
+              Continue to {STEP_SHORT[stepKeys[1]]} <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
+        {/* Step: Customize Trip (only when the trip has active add-ons) */}
+        {stepKey === 'customize' && (
+          <CustomizeTripStep
+            addons={addons}
+            passengers={paxList}
+            selections={addonSelections}
+            onSelectionsChange={setAddonSelections}
+            tripDurationDays={trip.duration_days || 1}
+            basePackageLabel={`₹${getEffectivePrice().toLocaleString('en-IN')} × ${totalPassengers} traveller${totalPassengers === 1 ? '' : 's'}`}
+            baseGrandTotal={Math.max(0, getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0) - (useWallet ? walletAmount : 0))}
+            amountPayableNowBase={calculateTotalPrice()}
+            paymentMethod={paymentMethod}
+            onBack={prevStep}
+            onContinue={nextStep}
+          />
+        )}
+
         {/* Step 2: ID Verification (centered) */}
-        {currentStep === 2 && (
+        {stepKey === 'id' && (
           <div className="max-w-[560px] mx-auto space-y-5">
             <div className="rounded-[20px] bg-white p-5 sm:p-6 space-y-4 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
               <div className="flex items-center gap-3">
@@ -1620,7 +1754,7 @@ export default function BookTripPage() {
         )}
 
         {/* Step 3: Payment */}
-        {currentStep === 3 && !showPaymentDetails && (
+        {stepKey === 'payment' && !showPaymentDetails && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 lg:gap-8 lg:items-start">
             {/* A — options, wallet, coupon */}
             <div className="lg:col-start-1 lg:row-start-1 space-y-6">
@@ -1869,14 +2003,15 @@ export default function BookTripPage() {
                   <div className="h-px bg-[#f1f5f9]" />
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between"><span className="text-[#64748B]">Base Fare</span><span className="font-medium text-[#0F172A]">₹{getBasePrice().toLocaleString('en-IN')}</span></div>
+                    {hasAddons && addonsTotalClient > 0 && <div className="flex justify-between"><span className="text-[#64748B] flex items-center gap-1"><Sparkles className="w-3 h-3 text-[#7C3AED]" />Add-ons &amp; Upgrades</span><span className="font-medium text-[#0F172A]">₹{addonsTotalClient.toLocaleString('en-IN')}</span></div>}
                     {couponApplied && <div className="flex justify-between"><span className="text-[#10B981] flex items-center gap-1"><Tag className="w-3 h-3" />Discount</span><span className="font-semibold text-[#10B981]">−₹{couponApplied.discount_amount.toLocaleString('en-IN')}</span></div>}
                     {useWallet && walletAmount > 0 && <div className="flex justify-between"><span className="text-[#10B981]">Wallet Used</span><span className="font-semibold text-[#10B981]">−₹{walletAmount.toLocaleString('en-IN')}</span></div>}
-                    {paymentMethod === 'seat_lock' && trip.seat_lock_price && <div className="flex justify-between"><span className="text-[#D97706]">Due Later</span><span className="font-medium text-[#D97706]">₹{Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - getAmountToPayBeforeWallet()).toLocaleString('en-IN')}</span></div>}
+                    {paymentMethod === 'seat_lock' && trip.seat_lock_price && <div className="flex justify-between"><span className="text-[#D97706]">Due Later</span><span className="font-medium text-[#D97706]">₹{(Math.max(0, (getBasePrice() - (couponApplied ? couponApplied.discount_amount : 0)) - getAmountToPayBeforeWallet()) + (hasAddons ? addonsTotalClient : 0)).toLocaleString('en-IN')}</span></div>}
                   </div>
                   <div className="h-px bg-[#f1f5f9]" />
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-[#0F172A]">{paymentMethod === 'seat_lock' ? 'Paying Today' : 'Total Amount'}</span>
-                    <span className="text-2xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+                    <span className="text-2xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{getPayableNow().toLocaleString('en-IN')}</span>
                   </div>
                   <p className="text-[11px] text-[#94a3b8] text-center">All taxes &amp; fees included · No hidden charges</p>
                 </div>
@@ -1913,7 +2048,7 @@ export default function BookTripPage() {
                     disabled={processingRazorpay || paymentOverlay !== 'idle'}
                     className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {calculateTotalPrice() < 1 ? (
+                    {getPayableNow() < 1 ? (
                       <>
                         <CheckCircle className="h-4 w-4 md:h-6 md:w-6" />
                         <span>Confirm Booking (Fully Covered)</span>
@@ -1921,7 +2056,7 @@ export default function BookTripPage() {
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
-                        <span>Pay ₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+                        <span>Pay ₹{getPayableNow().toLocaleString('en-IN')}</span>
                       </>
                     )}
                   </button>
@@ -1963,7 +2098,7 @@ export default function BookTripPage() {
         )}
 
         {/* Payment Details: QR Code and Transaction ID (Manual Mode Only) */}
-        {currentStep === 3 && showPaymentDetails && paymentMode === 'manual' && (
+        {stepKey === 'payment' && showPaymentDetails && paymentMode === 'manual' && (
           <div className="max-w-[520px] mx-auto space-y-4">
             {/* Header */}
             <div className="flex items-center gap-3">
@@ -1979,13 +2114,13 @@ export default function BookTripPage() {
             {/* Amount */}
             <div className="rounded-[16px] px-5 py-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.07),rgba(147,51,234,0.02))', border: '1px solid rgba(124,58,237,0.14)' }}>
               <span className="text-sm font-medium text-[#64748B]">Amount to pay</span>
-              <span className="text-xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{calculateTotalPrice().toLocaleString('en-IN')}</span>
+              <span className="text-xl font-bold" style={{ background: PURPLE_GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>₹{getPayableNow().toLocaleString('en-IN')}</span>
             </div>
 
             {/* Pay directly via UPI app (mobile) */}
             <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
               <UpiPayButton
-                amount={calculateTotalPrice()}
+                amount={getPayableNow()}
                 note={upiNote(paymentMethod === 'seat_lock' ? 'seat_lock' : 'full', trip?.title || 'Ghumakkars')}
                 upiId={paymentSettings.upiId}
               />
@@ -2065,7 +2200,7 @@ export default function BookTripPage() {
         )}
 
         {/* Step 3 back link (steps 1 & 2 have their own buttons) */}
-        {currentStep === 3 && !showPaymentDetails && (
+        {stepKey === 'payment' && !showPaymentDetails && (
           <button type="button" onClick={prevStep} className="mt-5 flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#7C3AED] transition-colors">
             <ArrowLeft className="w-4 h-4" />Back to ID Verification
           </button>

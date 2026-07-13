@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth-helpers';
 import { isValidDeparture } from '@/lib/recurrence';
+import { validateAndPriceAddons, writeBookingAddons, passengerNameMap } from '@/lib/addons-server';
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,8 @@ export async function POST(request: NextRequest) {
       reference_id,
       departure_date,
       pickup_point,
+      addon_selections,
+      addons_total,
     } = body;
 
     if (!trip_id || !number_of_participants || number_of_participants < 1) {
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const { data: trip, error: tripError } = await adminClient
       .from('trips')
-      .select('id, max_participants, current_participants, is_active, booking_disabled, discounted_price, seat_lock_price, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead')
+      .select('id, max_participants, current_participants, is_active, booking_disabled, discounted_price, seat_lock_price, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, addons_enabled')
       .eq('id', trip_id)
       .single();
 
@@ -201,6 +204,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─── Add-ons: re-validate + re-price against the DB (anti-tamper) ───
+    // Never trust the client's add-on prices/quantities; recompute authoritatively
+    // and re-check capacity before the booking (and any payment order) is created.
+    let addonsTotalServer = 0;
+    let pricedAddons: Awaited<ReturnType<typeof validateAndPriceAddons>> | null = null;
+    if (trip.addons_enabled) {
+      pricedAddons = await validateAndPriceAddons(adminClient, {
+        tripId: trip_id,
+        tripDurationDays: Number(trip.duration_days) || 1,
+        paxCount: requested,
+        selections: addon_selections,
+      });
+      if (pricedAddons.error) {
+        return NextResponse.json({ error: pricedAddons.error }, { status: 400 });
+      }
+      addonsTotalServer = pricedAddons.addonsTotal;
+      if (addons_total != null && Math.abs(Number(addons_total) - addonsTotalServer) > 1) {
+        return NextResponse.json(
+          { error: 'Your booking total has changed. Please review the updated amount before payment.' },
+          { status: 400 }
+        );
+      }
+    }
+
     const bookingPayload = {
       trip_id,
       user_id: auth.user.id,
@@ -227,6 +254,7 @@ export async function POST(request: NextRequest) {
       payment_status: payment_status === 'cash_pending' ? 'cash_pending' : 'pending',
       booking_status: 'pending',
       amount_paid: 0,
+      addons_total: addonsTotalServer,
       reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
       departure_date: validatedDeparture,
       pickup_point: pickup_point ? String(pickup_point).slice(0, 200) : null,
@@ -244,6 +272,21 @@ export async function POST(request: NextRequest) {
         { error: insertError.message || 'Failed to create booking' },
         { status: 500 }
       );
+    }
+
+    // Snapshot the add-ons onto the booking (immutable name/price at booking time).
+    if (pricedAddons && booking?.id) {
+      try {
+        await writeBookingAddons(
+          adminClient,
+          booking.id,
+          pricedAddons,
+          { paxCount: requested, tripDurationDays: Number(trip.duration_days) || 1 },
+          passengerNameMap(passengers),
+        );
+      } catch (e) {
+        console.error('booking_addons write error:', e);
+      }
     }
 
     if (coupon_code && booking?.id) {

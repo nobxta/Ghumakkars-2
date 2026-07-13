@@ -14,6 +14,8 @@ import {
 import { resolveDueDate } from '@/lib/payment-due';
 import { moneyOf } from '@/lib/booking-money';
 import { bookingStatusLabel, paymentStatusLabel, bookingStatusChip, paymentStatusChip, MANUAL_STATUSES, effectiveBookingStatus } from '@/lib/booking-status-labels';
+import AdminBookingAddons from '@/components/admin/AdminBookingAddons';
+import AddonsSummary from '@/components/booking/AddonsSummary';
 
 export default function AdminBookingDetailsPage() {
   const params = useParams();
@@ -721,6 +723,29 @@ export default function AdminBookingDetailsPage() {
             <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-2" />
             <p className="text-sm text-gray-500 mb-1">No payments recorded yet.</p>
             <p className="text-xs text-gray-400">Use Actions → Record payment when you collect one.</p>
+          </div>
+        )}
+
+        {/* Add-ons & Upgrades — view + manage (only when the booking has any) */}
+        {Array.isArray(booking.booking_addons) && booking.booking_addons.length > 0 && (
+          <div className="print:hidden">
+            <AdminBookingAddons
+              bookingId={booking.id}
+              tripId={booking.trip_id}
+              addons={booking.booking_addons}
+              passengers={(booking.passengers || []).map((p: any, i: number) => ({
+                pid: p.pid || (p.is_primary ? 'primary' : `pax_idx_${i - 1}`),
+                name: p.name,
+                is_primary: p.is_primary,
+              }))}
+              onChanged={fetchBooking}
+            />
+          </div>
+        )}
+        {/* Read-only add-on summary for the printed/PDF copy */}
+        {Array.isArray(booking.booking_addons) && booking.booking_addons.length > 0 && (
+          <div className="hidden print:block">
+            <AddonsSummary addons={booking.booking_addons} />
           </div>
         )}
 
