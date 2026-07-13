@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getRazorpayConfig } from '@/lib/razorpay';
+import { payableNowOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,29 @@ export async function POST(request: NextRequest) {
     // Only payment_mode (a non-secret feature flag) is read from DB.
     // Keys come from env vars via getRazorpayConfig() — never from the database.
     const adminClient = createAdminClient();
+
+    if (bookingId) {
+      const { data: booking, error: bookingError } = await adminClient
+        .from('bookings')
+        .select('id, user_id, payment_method, booking_status, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, is_offline_booking, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
+        .eq('id', bookingId)
+        .single();
+
+      if (bookingError || !booking) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+      if ((booking as any).user_id !== user.id) {
+        return NextResponse.json({ error: 'Unauthorized booking' }, { status: 403 });
+      }
+
+      const expectedPayableNow = payableNowOf(booking as any, (booking as any).trips);
+      if (Math.abs(Number(amount) - expectedPayableNow) > 1) {
+        return NextResponse.json(
+          { error: 'Payment amount mismatch. Please refresh the page and try again.' },
+          { status: 400 }
+        );
+      }
+    }
     const { data: paymentSettings } = await adminClient
       .from('payment_settings')
       .select('payment_mode')

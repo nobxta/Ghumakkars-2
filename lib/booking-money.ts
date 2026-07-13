@@ -102,6 +102,20 @@ export function owedOf(b: BookingLike, trip?: TripLike | null): number {
   return Math.max(0, fullOwed(b, trip) - waivedOf(b));
 }
 
+/**
+ * Amount that should be collected for the current payment attempt. Full payment
+ * collects the outstanding grand total; seat-lock collects only the configured
+ * deposit stored on the booking, capped at the remaining grand total.
+ */
+export function payableNowOf(b: BookingLike, trip?: TripLike | null): number {
+  const remaining = remainingOf(b, trip);
+  if (b.payment_method === 'seat_lock') {
+    const deposit = Math.max(0, num(b.final_amount) || num(b.total_price));
+    return Math.min(deposit, remaining);
+  }
+  return remaining;
+}
+
 /** Remaining balance (e.g. to be collected offline on the bus). Never forced to 0. */
 export function remainingOf(b: BookingLike, trip?: TripLike | null): number {
   return Math.max(0, owedOf(b, trip) - paidOf(b));

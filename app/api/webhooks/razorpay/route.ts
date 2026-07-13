@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { getRazorpayWebhookSecret } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
+import { derivePaymentStatus, owedOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -102,7 +103,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     // Find booking by razorpay_payment_id or razorpay_order_id
     const { data: bookings, error: bookingError } = await adminClient
       .from('bookings')
-      .select('id, final_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status, addons_total')
+      .select('id, final_amount, total_price, coupon_discount, wallet_amount_used, waived_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status, addons_total, trips(discounted_price)')
       .or(`razorpay_payment_id.eq.${razorpayPaymentId},razorpay_order_id.eq.${razorpayOrderId}`)
       .limit(1);
 
@@ -119,14 +120,18 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       return;
     }
 
+    const owed = owedOf(booking as any, (booking as any).trips);
+    const paymentStatus = derivePaymentStatus(amount, owed, false);
+    const bookingStatus = booking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed';
+
     // Update booking
     const updateData: any = {
-      payment_status: 'paid',
+      payment_status: paymentStatus,
       amount_paid: amount,
       razorpay_payment_id: razorpayPaymentId,
       razorpay_order_id: razorpayOrderId,
       razorpay_response: payment,
-      booking_status: 'confirmed',
+      booking_status: bookingStatus,
       reference_id: razorpayPaymentId,
     };
 

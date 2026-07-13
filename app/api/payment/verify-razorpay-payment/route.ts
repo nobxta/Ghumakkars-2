@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
+import { derivePaymentStatus, owedOf, payableNowOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       // 1. Verify booking exists and belongs to the authenticated user
       const { data: existingBooking, error: fetchBookingError } = await adminClient
         .from('bookings')
-        .select('id, user_id, final_amount, payment_method, trip_id, number_of_participants')
+        .select('id, user_id, final_amount, total_price, coupon_discount, wallet_amount_used, addons_total, waived_amount, amount_paid, payment_method, booking_status, trip_id, number_of_participants, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
         .eq('id', bookingId)
         .single();
 
@@ -76,8 +77,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 2. Optional: verify payment amount is at least the booking amount (allow small rounding)
-      const expectedAmount = parseFloat(String(existingBooking.final_amount ?? 0));
+      // 2. Verify payment amount against the amount due for this attempt, not
+      // always against the grand total. Full payment includes add-ons; seat-lock
+      // only collects the deposit and leaves add-ons in the remaining balance.
+      const expectedAmount = payableNowOf(existingBooking as any, (existingBooking as any).trips);
       if (expectedAmount > 0 && amountInRupees < expectedAmount - 0.01) {
         return NextResponse.json(
           { error: 'Payment amount does not match booking amount' },
@@ -85,17 +88,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const owed = owedOf(existingBooking as any, (existingBooking as any).trips);
+      const paymentStatus = derivePaymentStatus(amountInRupees, owed, false);
+      const bookingStatus = existingBooking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed';
+
       await adminClient
         .from('bookings')
         .update({
           payment_mode: 'razorpay',
-          payment_status: 'paid',
+          payment_status: paymentStatus,
           amount_paid: amountInRupees,
           reference_id: razorpay_payment_id,
           razorpay_order_id: razorpay_order_id,
           razorpay_payment_id: razorpay_payment_id,
           razorpay_response: payment as any,
-          booking_status: existingBooking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed',
+          booking_status: bookingStatus,
         })
         .eq('id', bookingId);
 
@@ -103,37 +110,50 @@ export async function POST(request: NextRequest) {
       const booking = existingBooking;
       const p: any = payment;
       const acquirer = p.acquirer_data || {};
-      await adminClient
+      const transactionPayload = {
+        booking_id: bookingId,
+        user_id: user.id,
+        transaction_id: razorpay_payment_id,
+        razorpay_order_id,
+        razorpay_payment_id,
+        amount: amountInRupees,
+        currency: p.currency || 'INR',
+        payment_type: booking.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
+        payment_status: 'verified',
+        payment_mode: 'razorpay',
+        payment_method: p.method || null,
+        captured: !!p.captured,
+        vpa: p.vpa || null,
+        upi_provider: acquirer.upi_provider || null,
+        card_network: p.card?.network || null,
+        card_type: p.card?.type || null,
+        card_last4: p.card?.last4 || null,
+        card_issuer: p.card?.issuer || null,
+        bank: p.bank || null,
+        wallet: p.wallet || null,
+        customer_name: p.notes?.name || null,
+        customer_email: p.email || null,
+        customer_phone: p.contact || null,
+        paid_at: p.created_at ? new Date(p.created_at * 1000).toISOString() : new Date().toISOString(),
+        razorpay_raw: p,
+      };
+      const { data: existingTransaction } = await adminClient
         .from('payment_transactions')
-        .insert([
-          {
-            booking_id: bookingId,
-            user_id: user.id,
-            transaction_id: razorpay_payment_id,
-            razorpay_order_id,
-            razorpay_payment_id,
-            amount: amountInRupees,
-            currency: p.currency || 'INR',
-            payment_type: booking.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
-            payment_status: 'verified',
-            payment_mode: 'razorpay',
-            payment_method: p.method || null,
-            captured: !!p.captured,
-            vpa: p.vpa || null,
-            upi_provider: acquirer.upi_provider || null,
-            card_network: p.card?.network || null,
-            card_type: p.card?.type || null,
-            card_last4: p.card?.last4 || null,
-            card_issuer: p.card?.issuer || null,
-            bank: p.bank || null,
-            wallet: p.wallet || null,
-            customer_name: p.notes?.name || null,
-            customer_email: p.email || null,
-            customer_phone: p.contact || null,
-            paid_at: p.created_at ? new Date(p.created_at * 1000).toISOString() : new Date().toISOString(),
-            razorpay_raw: p,
-          },
-        ]);
+        .select('id')
+        .eq('booking_id', bookingId)
+        .eq('transaction_id', razorpay_payment_id)
+        .maybeSingle();
+
+      if (existingTransaction) {
+        await adminClient
+          .from('payment_transactions')
+          .update(transactionPayload)
+          .eq('id', existingTransaction.id);
+      } else {
+        await adminClient
+          .from('payment_transactions')
+          .insert([transactionPayload]);
+      }
 
       // Full payment settles the add-ons too; seat-lock leaves them in the balance.
       if (booking.payment_method !== 'seat_lock') {
@@ -200,4 +220,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -143,17 +143,15 @@ export async function POST(request: NextRequest) {
     // ─── Server-side price validation (anti-tampering) ───
     // Never trust client-supplied amounts. Recompute the expected price and
     // verify the claimed discounts actually exist.
-    const perPerson = payment_method === 'seat_lock' && trip.seat_lock_price
-      ? Number(trip.seat_lock_price)
-      : Number(trip.discounted_price) || 0;
+    const perPerson = Number(trip.discounted_price) || 0;
     // Early bird can lower the per-person price; accept the lower of the two
     const earlyBirdPrice = Number(trip.early_bird_price) || 0;
     const minPerPerson = earlyBirdPrice > 0 ? Math.min(perPerson, earlyBirdPrice) : perPerson;
     const expectedBase = perPerson * requested;
     const minBase = minPerPerson * requested;
 
-    const claimedTotal = Number(total_price);
-    if (claimedTotal < minBase - 1 || claimedTotal > expectedBase + 1) {
+    const claimedBaseTotal = Number(total_price);
+    if (claimedBaseTotal < minBase - 1 || claimedBaseTotal > expectedBase + 1) {
       return NextResponse.json(
         { error: 'Price mismatch. Please refresh the page and try again.' },
         { status: 400 }
@@ -173,7 +171,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid or expired coupon.' }, { status: 400 });
       }
       const maxAllowed = coupon.discount_type === 'percentage'
-        ? Math.min((claimedTotal * Number(coupon.discount_value)) / 100, Number(coupon.max_discount) || Infinity)
+        ? Math.min((claimedBaseTotal * Number(coupon.discount_value)) / 100, Number(coupon.max_discount) || Infinity)
         : Number(coupon.discount_value);
       verifiedCouponDiscount = Math.min(Number(coupon_discount), maxAllowed);
       if (Number(coupon_discount) > maxAllowed + 1) {
@@ -181,7 +179,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify wallet: claimed usage can't exceed the user's actual balance.
+    const baseAfterCoupon = Math.max(0, claimedBaseTotal - verifiedCouponDiscount);
+    const payableBaseBeforeWallet = payment_method === 'seat_lock' && trip.seat_lock_price
+      ? Math.min(Number(trip.seat_lock_price) * requested, baseAfterCoupon)
+      : baseAfterCoupon;
+
+    // Verify wallet: claimed usage can't exceed the amount being collected now.
     let verifiedWalletUsed = 0;
     if (Number(wallet_amount_used) > 0) {
       const { data: profile } = await adminClient
@@ -192,11 +195,12 @@ export async function POST(request: NextRequest) {
       // Note: by the time this runs, /api/wallet/use may already have deducted.
       // Allow claimed usage up to balance + claimed (covers both orderings),
       // but never more than the price being paid.
-      verifiedWalletUsed = Math.min(Number(wallet_amount_used), claimedTotal);
+      void profile;
+      verifiedWalletUsed = Math.min(Number(wallet_amount_used), payableBaseBeforeWallet);
     }
 
     // Final amount must equal total − coupon − wallet (±1 rupee rounding).
-    const expectedFinal = Math.max(0, claimedTotal - verifiedCouponDiscount - Number(wallet_amount_used || 0));
+    const expectedFinal = Math.max(0, payableBaseBeforeWallet - verifiedWalletUsed);
     if (Math.abs(Number(final_amount) - expectedFinal) > 1) {
       return NextResponse.json(
         { error: 'Amount mismatch. Please refresh the page and try again.' },
@@ -236,7 +240,7 @@ export async function POST(request: NextRequest) {
       final_amount: Number(final_amount),
       coupon_code: coupon_code || null,
       coupon_discount: Number(coupon_discount) || 0,
-      wallet_amount_used: Number(wallet_amount_used) || 0,
+      wallet_amount_used: verifiedWalletUsed,
       primary_passenger_name: String(primary_passenger_name).trim(),
       primary_passenger_email: String(primary_passenger_email).trim(),
       primary_passenger_phone: String(primary_passenger_phone).replace(/\D/g, ''),

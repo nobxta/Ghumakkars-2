@@ -115,7 +115,9 @@ export async function POST(request: NextRequest) {
       if (hasRejected && !hasVerified) {
         bookingStatus = 'rejected';
       } else if (hasVerified && currentStatus === 'pending') {
-        bookingStatus = 'seat_locked';
+        bookingStatus = paymentStatus === 'paid' && (bookingData as any)?.payment_method !== 'seat_lock'
+          ? 'confirmed'
+          : 'seat_locked';
       }
       finalBookingStatus = bookingStatus;
       statusChanged = bookingStatus !== currentStatus;
@@ -203,4 +205,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
