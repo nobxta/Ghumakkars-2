@@ -150,7 +150,7 @@ export default function AdminBookingsPage() {
       const fa = parseFloat(b.final_amount || 0);
       net = fa > 0 ? fa : Math.max(0, (parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax) - coupon - wallet);
     }
-    return Math.max(0, net - waived);
+    return Math.max(0, net + Math.max(0, parseFloat(b.addons_total || 0)) - waived);
   };
 
   // ── Scope: by trip, then by departure batch ──
@@ -437,7 +437,12 @@ export default function AdminBookingsPage() {
 
   const openCashPaymentModal = (booking: any) => {
     setSelectedBooking(booking);
-    setCashAmountPaid(booking.final_amount || booking.total_price || '');
+    const paid = paidOf(booking);
+    const due = Math.max(0, fullOf(booking) - paid);
+    const dueNow = booking.payment_method === 'seat_lock'
+      ? Math.min(parseFloat(String(booking.final_amount || booking.total_price || 0)) || due, due)
+      : due;
+    setCashAmountPaid(dueNow > 0 ? String(dueNow) : '');
     setCashNotes('');
     setShowCashPaymentModal(true);
   };

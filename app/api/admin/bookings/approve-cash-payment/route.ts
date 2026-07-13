@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Fetch booking
     const { data: booking, error: fetchError } = await adminClient
       .from('bookings')
-      .select('id, final_amount, payment_mode, payment_status, booking_status')
+      .select('id, final_amount, total_price, coupon_discount, wallet_amount_used, waived_amount, addons_total, payment_method, payment_mode, payment_status, booking_status, number_of_participants, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
       .eq('id', bookingId)
       .single();
 
@@ -52,12 +52,14 @@ export async function POST(request: NextRequest) {
 
     // Payment Status is DERIVED from money; Booking Status is independent. We only
     // activate a brand-new (pending) booking to seat_locked — never auto-confirm.
-    const { derivePaymentStatus } = await import('@/lib/booking-money');
-    const owed = parseFloat(String(booking.final_amount || 0));
+    const { derivePaymentStatus, fullOwed } = await import('@/lib/booking-money');
+    const owed = fullOwed(booking as any, (booking as any).trips);
     const paid = parseFloat(amountPaid);
     const newPaymentStatus = derivePaymentStatus(paid, owed, false);
     const activated = booking.booking_status === 'pending';
-    const newBookingStatus = activated ? 'seat_locked' : booking.booking_status;
+    const newBookingStatus = activated
+      ? (newPaymentStatus === 'paid' && booking.payment_method !== 'seat_lock' ? 'confirmed' : 'seat_locked')
+      : booking.booking_status;
 
     const updateData: any = {
       payment_status: newPaymentStatus,
@@ -142,4 +144,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

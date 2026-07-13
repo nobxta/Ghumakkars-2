@@ -9,6 +9,9 @@ export interface PaymentData {
   remainingAmount: number;
   fullCost: number;
   submittedPending: number;
+  dueNow?: number;
+  remainingAfterDueNow?: number;
+  pendingCash?: boolean;
   couponCode?: string | null;
   couponDiscount: number;
   paymentDueBy?: string | null;
@@ -105,7 +108,7 @@ function Row({ label, value, valueColor, strong }: { label: string; value: strin
 
 function PaymentSummary({ config, payment, accent }: { config: StatusConfig; payment: PaymentData; accent: string }) {
   const { paymentVariant } = config;
-  const { paidAmount, remainingAmount, fullCost, submittedPending, couponCode, couponDiscount, paymentDueBy, refundedAmount } = payment;
+  const { paidAmount, remainingAmount, fullCost, submittedPending, dueNow = 0, remainingAfterDueNow = 0, pendingCash, couponCode, couponDiscount, paymentDueBy, refundedAmount } = payment;
 
   // Verification pending (pending-with-submission + remaining_submitted)
   if (paymentVariant === 'verifying') {
@@ -216,6 +219,21 @@ function PaymentSummary({ config, payment, accent }: { config: StatusConfig; pay
   }
 
   // Awaiting payment (pending, nothing submitted yet)
+  if (pendingCash) {
+    return (
+      <div className="space-y-3 rounded-2xl bg-black/[0.02] p-5">
+        <Row label="Payment due in person" value={inr(dueNow)} valueColor={accent} strong />
+        <div className="border-t border-black/[0.06]" />
+        <Row label="Balance after this payment" value={inr(remainingAfterDueNow)} />
+        <Row label="Grand total" value={inr(fullCost)} />
+        <div className="mt-1 flex items-start gap-2 border-t border-black/[0.06] pt-3">
+          <Info className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: accent }} />
+          <p className="text-xs leading-relaxed text-[#414754]">Our team will contact you shortly to collect this payment in person and confirm your trip.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-2xl bg-black/[0.02] p-5">
       <Row label="Amount Paid" value={inr(paidAmount)} strong />

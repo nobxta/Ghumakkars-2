@@ -21,7 +21,10 @@ interface BookingLike {
   addons_total?: number | string | null;
   total_price?: number | string | null;
   final_amount?: number | string | null;
+  payment_amount?: number | string | null;
   payment_method?: string | null;
+  payment_mode?: string | null;
+  payment_status?: string | null;
   booking_status?: string | null;
   amount_paid?: number | string | null;
   is_offline_booking?: boolean | null;
@@ -114,6 +117,23 @@ export function payableNowOf(b: BookingLike, trip?: TripLike | null): number {
     return Math.min(deposit, remaining);
   }
   return remaining;
+}
+
+export function isPendingCashBooking(b: BookingLike): boolean {
+  return b.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(b.payment_status));
+}
+
+/** Pending Pay in Person summary: due now is not paid until admin confirms it. */
+export function pendingCashOf(b: BookingLike, trip?: TripLike | null) {
+  const money = moneyOf(b, trip);
+  const dueNow = isPendingCashBooking(b) ? payableNowOf(b, trip) : 0;
+  return {
+    grandTotal: money.owed,
+    amountPaid: money.paid,
+    dueNow,
+    remainingAfterDueNow: Math.max(0, money.remaining - dueNow),
+    totalOutstanding: money.remaining,
+  };
 }
 
 /** Remaining balance (e.g. to be collected offline on the bus). Never forced to 0. */

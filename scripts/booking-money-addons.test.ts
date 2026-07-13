@@ -3,7 +3,7 @@
  *   npx tsx scripts/booking-money-addons.test.ts
  */
 import assert from 'node:assert/strict';
-import { fullOwed, paidOf, payableNowOf, remainingOf, moneyOf } from '../lib/booking-money';
+import { derivePaymentStatus, fullOwed, paidOf, payableNowOf, pendingCashOf, remainingOf, moneyOf } from '../lib/booking-money';
 
 let passed = 0;
 const check = (name: string, fn: () => void) => {
@@ -76,6 +76,66 @@ check('regression: seat-lock accepts 3000 now and leaves 11998', () => {
   assert.equal(paidOf(paid), 3000);
   assert.equal(remainingOf(paid), 11998);
   assert.equal(moneyOf(paid).status, 'partial');
+});
+
+check('pay-in-person seat-lock with add-ons shows due now, not paid', () => {
+  const b = {
+    number_of_participants: 2,
+    total_price: 12998, final_amount: 3000, addons_total: 2000,
+    payment_method: 'seat_lock', payment_mode: 'cash', payment_status: 'cash_pending',
+    booking_status: 'pending', amount_paid: 0,
+    payment_transactions: [],
+    trips: { discounted_price: 6499 },
+  };
+  const cash = pendingCashOf(b);
+  assert.equal(cash.grandTotal, 14998);
+  assert.equal(cash.amountPaid, 0);
+  assert.equal(cash.dueNow, 3000);
+  assert.equal(cash.remainingAfterDueNow, 11998);
+  assert.equal(cash.totalOutstanding, 14998);
+});
+
+check('pay-in-person full with add-ons shows full grand total due now', () => {
+  const b = {
+    number_of_participants: 2,
+    total_price: 12998, final_amount: 12998, addons_total: 2000,
+    payment_method: 'full', payment_mode: 'cash', payment_status: 'cash_pending',
+    booking_status: 'pending', amount_paid: 0,
+    payment_transactions: [],
+    trips: { discounted_price: 6499 },
+  };
+  const cash = pendingCashOf(b);
+  assert.equal(cash.grandTotal, 14998);
+  assert.equal(cash.amountPaid, 0);
+  assert.equal(cash.dueNow, 14998);
+  assert.equal(cash.remainingAfterDueNow, 0);
+  assert.equal(cash.totalOutstanding, 14998);
+});
+
+check('admin cash approval: 3000 seat-lock remains partial', () => {
+  const b = {
+    number_of_participants: 2,
+    total_price: 12998, final_amount: 3000, addons_total: 2000,
+    payment_method: 'seat_lock', payment_mode: 'cash',
+    payment_transactions: [{ amount: 3000, payment_status: 'verified' }],
+    trips: { discounted_price: 6499 },
+  };
+  assert.equal(paidOf(b), 3000);
+  assert.equal(remainingOf(b), 11998);
+  assert.equal(derivePaymentStatus(paidOf(b), fullOwed(b), false), 'partial');
+});
+
+check('admin cash approval: 14998 full payment is paid', () => {
+  const b = {
+    number_of_participants: 2,
+    total_price: 12998, final_amount: 12998, addons_total: 2000,
+    payment_method: 'full', payment_mode: 'cash',
+    payment_transactions: [{ amount: 14998, payment_status: 'verified' }],
+    trips: { discounted_price: 6499 },
+  };
+  assert.equal(paidOf(b), 14998);
+  assert.equal(remainingOf(b), 0);
+  assert.equal(derivePaymentStatus(paidOf(b), fullOwed(b), false), 'paid');
 });
 
 check('no add-ons remains unchanged', () => {

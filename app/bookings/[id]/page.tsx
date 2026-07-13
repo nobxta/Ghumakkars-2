@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { IMG } from '@/lib/image';
 import { resolveDueDate } from '@/lib/payment-due';
-import { derivePaymentStatus } from '@/lib/booking-money';
+import { derivePaymentStatus, moneyOf, payableNowOf, isPendingCashBooking } from '@/lib/booking-money';
 import { customerBookingStatus, paymentStatusLabel, paymentStatusChip } from '@/lib/booking-status-labels';
 import UpiPayButton from '@/components/UpiPayButton';
 import AddonsSummary from '@/components/booking/AddonsSummary';
@@ -179,21 +179,7 @@ export default function BookingDetailsPage() {
 
   const calculateRemainingAmount = () => {
     if (!booking?.trips || booking.payment_method !== 'seat_lock') return 0;
-    // Full trip cost after the customer's coupon + wallet discounts. (For
-    // seat-lock bookings final_amount only holds the deposit, so we must use
-    // list price x pax here.)
-    const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
-    const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
-    const waived = parseFloat(String((booking as any).waived_amount || 0)) || 0;
-    const addons = parseFloat(String((booking as any).addons_total || 0)) || 0;
-    // Add-ons roll into the seat-lock balance, so they're part of what's still owed.
-    const fullPrice = Math.max(0, (booking.trips.discounted_price || 0) * (booking.number_of_participants || 1) - coupon - wallet - waived) + addons;
-    // Paid = verified transactions (source of truth, includes admin-recorded
-    // cash), falling back to payment_amount / final_amount.
-    const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
-    const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
-    const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || booking.final_amount || 0));
-    return Math.max(0, Math.round(fullPrice - paidAmount));
+    return Math.round(moneyOf(booking as any, booking.trips as any).remaining);
   };
 
   const handlePayRemaining = async () => {
@@ -433,10 +419,10 @@ export default function BookingDetailsPage() {
   const waivedAmount = parseFloat(String((booking as any).waived_amount || 0)) || 0;
   const addonsTotal = parseFloat(String((booking as any).addons_total || 0)) || 0;
   const finalAmount = Math.max(0, totalAmount - couponDiscount - walletUsed - waivedAmount) + addonsTotal;
-  // Money actually received = verified transactions (source of truth), else payment_amount.
+  // Money actually received = verified transactions (source of truth), else amount_paid.
   const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
   const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
-  const paidAmount = verifiedPaid || parseFloat(String(booking.payment_amount || (booking as any).amount_paid || 0));
+  const paidAmount = verifiedPaid || parseFloat(String((booking as any).amount_paid || 0));
   // Amount the customer has submitted that we haven't verified yet.
   const submittedPending = txns.filter((t) => t.payment_status === 'pending').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
   // Payment Status is derived from money and is INDEPENDENT of booking status — a
@@ -444,6 +430,9 @@ export default function BookingDetailsPage() {
   const refundedTotal = txns.reduce((s, t) => s + parseFloat(String(t.amount_refunded || 0)), 0);
   const custPaymentStatus = derivePaymentStatus(paidAmount, finalAmount, refundedTotal > 0);
   const offlineRemaining = Math.max(0, finalAmount - paidAmount);
+  const pendingCash = isPendingCashBooking(booking as any);
+  const dueNow = pendingCash ? payableNowOf(booking as any, trip as any) : 0;
+  const remainingAfterDueNow = Math.max(0, offlineRemaining - dueNow);
   const showOfflineBalance = offlineRemaining > 0 && !['cancelled', 'rejected'].includes(status) && !hasPendingTxn;
 
   const maskPhone = (p?: string) => {
@@ -925,7 +914,7 @@ export default function BookingDetailsPage() {
                 const perPerson = (trip?.discounted_price && trip.discounted_price > 0)
                   ? trip.discounted_price
                   : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
-                const shownPaid = Math.max(paidAmount, finalAmount - remainingAmount);
+                const shownPaid = paidAmount;
                 const payBefore = resolveDueDate(effectiveStart, trip?.payment_due_days_before, paymentSettings.dueDaysBefore);
                 const fmtPay = payBefore ? payBefore.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
@@ -1012,10 +1001,24 @@ export default function BookingDetailsPage() {
                               )}
                             </>
                           ) : (
+                            <>
                             <div className="flex justify-between items-baseline">
-                              <span className="text-gray-600">Amount paid</span>
-                              <span className="font-bold text-gray-900">₹{shownPaid.toLocaleString('en-IN')}</span>
+                              <span className="text-gray-600">{pendingCash ? 'Payment due in person' : 'Amount paid'}</span>
+                              <span className="font-bold text-gray-900">₹{(pendingCash ? dueNow : shownPaid).toLocaleString('en-IN')}</span>
                             </div>
+                            {pendingCash && (
+                              <>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="text-gray-600">Balance after this payment</span>
+                                  <span className="font-bold text-gray-900">₹{remainingAfterDueNow.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="text-gray-600">Grand total</span>
+                                  <span className="font-bold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</span>
+                                </div>
+                              </>
+                            )}
+                            </>
                           )}
                           <p className={`text-sm text-gray-600 pt-2 mt-1 border-t ${cfg.sub} leading-relaxed`}>
                             {submittedPending > 0

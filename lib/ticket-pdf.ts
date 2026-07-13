@@ -9,6 +9,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isPendingCashBooking, moneyOf, pendingCashOf } from '@/lib/booking-money';
 
 export interface TicketPassenger {
   name?: string;
@@ -47,6 +48,9 @@ export interface TicketData {
   grandTotal: number;
   amountPaid: number;
   remaining: number;
+  pendingCash?: boolean;
+  dueNow?: number;
+  remainingAfterDueNow?: number;
   txnId?: string;
   bookedOn: string;
 }
@@ -143,19 +147,10 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
   }));
   const addonsTotal = addons.reduce((s, a) => s + a.total, 0);
 
-  const grandTotal = Math.max(0, tripPrice - couponDiscount - walletUsed) + addonsTotal;
-
-  const txns: any[] = Array.isArray((booking as any).payment_transactions) ? (booking as any).payment_transactions : [];
-  const verifiedPaid = txns.filter((t) => t.payment_status === 'verified').reduce((s, t) => s + parseFloat(String(t.amount || 0)), 0);
-  const paidAmount = verifiedPaid || parseFloat(String((booking as any).payment_amount || (booking as any).amount_paid || 0));
-
-  let remaining = 0;
-  if ((booking as any).payment_method === 'seat_lock') {
-    const fullPrice = Math.max(0, (trip.discounted_price || 0) * pax - couponDiscount - walletUsed) + addonsTotal;
-    remaining = Math.max(0, Math.round(fullPrice - paidAmount));
-  } else {
-    remaining = Math.max(0, Math.round(grandTotal - paidAmount));
-  }
+  const money = moneyOf(booking as any, trip as any);
+  const grandTotal = money.owed;
+  const pendingCash = isPendingCashBooking(booking as any);
+  const pendingCashMoney = pendingCashOf(booking as any, trip as any);
 
   return {
     ref,
@@ -177,8 +172,11 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
     couponDiscount,
     walletUsed,
     grandTotal,
-    amountPaid: Math.max(paidAmount, grandTotal - remaining),
-    remaining,
+    amountPaid: money.paid,
+    remaining: money.remaining,
+    pendingCash,
+    dueNow: pendingCash ? pendingCashMoney.dueNow : undefined,
+    remainingAfterDueNow: pendingCash ? pendingCashMoney.remainingAfterDueNow : undefined,
     txnId: (booking as any).reference_id || (booking as any).transaction_id || undefined,
     bookedOn: fmtDate((booking as any).created_at),
   };
@@ -333,8 +331,13 @@ export function buildTicketDoc(t: TicketData): jsPDF {
   doc.line(M, y, W - M, y);
   y += 6;
   payRow('Grand total', rupee(t.grandTotal), { bold: true, size: 12 });
-  payRow('Amount paid', rupee(t.amountPaid), { bold: true, color: [21, 128, 5] });
-  if (t.remaining > 0) payRow('Pending balance', rupee(t.remaining), { bold: true, color: [194, 65, 12] });
+  if (t.pendingCash) {
+    payRow('Payment due in person', rupee(t.dueNow || 0), { bold: true, color: [194, 65, 12] });
+    payRow('Balance after this payment', rupee(t.remainingAfterDueNow || 0), { bold: true, color: [194, 65, 12] });
+  } else {
+    payRow('Amount paid', rupee(t.amountPaid), { bold: true, color: [21, 128, 5] });
+    if (t.remaining > 0) payRow('Pending balance', rupee(t.remaining), { bold: true, color: [194, 65, 12] });
+  }
   if (t.txnId) {
     y += 2;
     doc.setFont('courier', 'normal');
