@@ -1,1537 +1,745 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { Settings, Save, Bell, Mail, Lock, Shield, CreditCard, QrCode, Phone, Upload, Plus, X, Tag, Percent, DollarSign, Calendar, MapPin, Users, Clock, Filter, MessageSquare, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  Bell,
+  CheckCircle,
+  CreditCard,
+  IndianRupee,
+  Loader2,
+  MessageCircle,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Save,
+  Send,
+  Settings,
+  Smartphone,
+  Trash2,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
+
+type TabKey = 'general' | 'payment' | 'whatsapp' | 'telegram';
+type Toast = { type: 'success' | 'error' | 'info'; message: string } | null;
+
+type ManualMethod = {
+  id: string;
+  nickname: string;
+  upi_id: string;
+  payee_name: string;
+  qr_image_url: string | null;
+  instructions: string | null;
+  is_enabled: boolean;
+  is_default: boolean;
+  display_order: number;
+};
+
+type MethodDraft = {
+  id?: string;
+  nickname: string;
+  upi_id: string;
+  payee_name: string;
+  instructions: string;
+  is_enabled: boolean;
+  is_default: boolean;
+  qr_image?: File | null;
+  qr_preview?: string;
+  remove_qr?: boolean;
+};
+
+const tabs: { key: TabKey; label: string }[] = [
+  { key: 'general', label: 'General' },
+  { key: 'payment', label: 'Payment' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'telegram', label: 'Telegram' },
+];
+
+const emptyDraft: MethodDraft = {
+  nickname: '',
+  upi_id: '',
+  payee_name: '',
+  instructions: '',
+  is_enabled: true,
+  is_default: false,
+  qr_image: null,
+};
+
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-sm font-semibold text-slate-900">{label}</span>
+      {children}
+      {hint && <span className="block text-xs leading-relaxed text-slate-500">{hint}</span>}
+    </label>
+  );
+}
+
+function Card({ title, description, icon: Icon, children, action }: {
+  title: string;
+  description?: string;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-purple-100 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+        <div className="flex min-w-0 gap-3">
+          {Icon && <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-700"><Icon className="h-4 w-4" /></div>}
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-slate-950">{title}</h2>
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-500">{description}</p>}
+          </div>
+        </div>
+        {action}
+      </div>
+      <div className="p-4 sm:p-5">{children}</div>
+    </section>
+  );
+}
+
+function StatusPill({ status, label }: { status: 'ok' | 'warn' | 'error' | 'muted'; label: string }) {
+  const cls = {
+    ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    warn: 'border-amber-200 bg-amber-50 text-amber-700',
+    error: 'border-red-200 bg-red-50 text-red-700',
+    muted: 'border-slate-200 bg-slate-50 text-slate-600',
+  }[status];
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold ${cls}`}>{label}</span>;
+}
+
+function Toggle({ checked, onChange, disabled, label, description }: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+  label: string;
+  description?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      disabled={disabled}
+      className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-purple-200 hover:bg-purple-50/30 disabled:cursor-not-allowed disabled:opacity-60"
+      aria-pressed={checked}
+    >
+      <span>
+        <span className="block text-sm font-semibold text-slate-900">{label}</span>
+        {description && <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{description}</span>}
+      </span>
+      <span className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${checked ? 'bg-purple-600' : 'bg-slate-300'}`}>
+        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${checked ? 'left-6' : 'left-1'}`} />
+      </span>
+    </button>
+  );
+}
+
+function buildMethodForm(draft: MethodDraft) {
+  const form = new FormData();
+  form.set('nickname', draft.nickname);
+  form.set('upi_id', draft.upi_id);
+  form.set('payee_name', draft.payee_name);
+  form.set('instructions', draft.instructions);
+  form.set('is_enabled', String(draft.is_enabled));
+  form.set('is_default', String(draft.is_default));
+  if (draft.remove_qr) form.set('remove_qr', 'true');
+  if (draft.qr_image) form.set('qr_image', draft.qr_image);
+  return form;
+}
 
 export default function AdminSettingsPage() {
-  const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<'general' | 'payment' | 'whatsapp' | 'telegram'>('general');
-  const [tg, setTg] = useState({ enabled: false, bot_token: '', bot_username: '', admin_chat_ids: '', notify_new_booking: true, notify_payments: true });
-  const [tgSaving, setTgSaving] = useState(false);
-  const [tgBusy, setTgBusy] = useState<'' | 'test' | 'webhook'>('');
-  const [tgMsg, setTgMsg] = useState('');
+  const [activeTab, setActiveTab] = useState<TabKey>('general');
+  const [toast, setToast] = useState<Toast>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState('');
 
-  const loadTelegram = async () => {
+  const [general, setGeneral] = useState({
+    email_notifications: true,
+    booking_alerts: true,
+    weekly_reports: false,
+    maintenance_mode: false,
+    updated_at: null as string | null,
+  });
+  const [savedGeneral, setSavedGeneral] = useState('');
+  const [payment, setPayment] = useState({
+    payment_mode: 'manual',
+    referral_reward_amount: 100,
+    referral_friend_reward_amount: 50,
+    seat_lock_due_days_before: 5,
+    updated_at: null as string | null,
+    razorpay: { status: 'missing_configuration', configured: false, webhookConfigured: false },
+  });
+  const [savedPayment, setSavedPayment] = useState('');
+  const [methods, setMethods] = useState<ManualMethod[]>([]);
+  const [methodDraft, setMethodDraft] = useState<MethodDraft | null>(null);
+  const [methodBusy, setMethodBusy] = useState('');
+
+  const [wa, setWa] = useState<any>({ configured: true, online: false, connected: false, state: 'disconnected' });
+  const [waPhone, setWaPhone] = useState('');
+  const [waPairingCode, setWaPairingCode] = useState('');
+  const [waQr, setWaQr] = useState('');
+  const [waBusy, setWaBusy] = useState('');
+
+  const [tg, setTg] = useState<any>({
+    enabled: false,
+    bot_token: '',
+    masked_bot_token: null,
+    has_bot_token: false,
+    admin_chat_ids: [] as string[],
+    notify_new_booking: true,
+    notify_payments: true,
+    webhook_status: 'not_configured',
+  });
+  const [chatIdInput, setChatIdInput] = useState('');
+  const [tgBusy, setTgBusy] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
+
+  const showToast = (message: string, type: NonNullable<Toast>['type'] = 'success') => {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 3600);
+  };
+
+  const loadSettings = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/admin/telegram-settings');
-      if (!res.ok) return;
-      const d = await res.json();
-      setTg({
-        enabled: !!d.enabled,
-        bot_token: d.bot_token || '',
-        bot_username: d.bot_username || '',
-        admin_chat_ids: Array.isArray(d.admin_chat_ids) ? d.admin_chat_ids.join(', ') : '',
-        notify_new_booking: d.notify_new_booking !== false,
-        notify_payments: d.notify_payments !== false,
+      const [settingsRes, methodsRes, waRes, tgRes] = await Promise.all([
+        fetch('/api/admin/settings', { cache: 'no-store' }),
+        fetch('/api/admin/manual-payment-methods', { cache: 'no-store' }),
+        fetch('/api/admin/whatsapp', { cache: 'no-store' }),
+        fetch('/api/admin/telegram-settings', { cache: 'no-store' }),
+      ]);
+      const settings = await settingsRes.json();
+      const manual = await methodsRes.json();
+      const whatsapp = await waRes.json();
+      const telegram = await tgRes.json();
+      if (!settingsRes.ok) throw new Error(settings.error || 'Failed to load settings');
+      setGeneral(settings.general);
+      setPayment(settings.payment);
+      setSavedGeneral(JSON.stringify(settings.general));
+      setSavedPayment(JSON.stringify({
+        payment_mode: settings.payment.payment_mode,
+        referral_reward_amount: settings.payment.referral_reward_amount,
+        referral_friend_reward_amount: settings.payment.referral_friend_reward_amount,
+        seat_lock_due_days_before: settings.payment.seat_lock_due_days_before,
+      }));
+      setMethods(manual.methods || []);
+      setWa(whatsapp);
+      setTg((prev: any) => ({ ...prev, ...telegram, bot_token: '', admin_chat_ids: telegram.admin_chat_ids || [] }));
+    } catch (error: any) {
+      showToast(error.message || 'Failed to load settings', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const hasUnsavedGeneral = savedGeneral && JSON.stringify(general) !== savedGeneral;
+    const currentPayment = JSON.stringify({
+      payment_mode: payment.payment_mode,
+      referral_reward_amount: payment.referral_reward_amount,
+      referral_friend_reward_amount: payment.referral_friend_reward_amount,
+      seat_lock_due_days_before: payment.seat_lock_due_days_before,
+    });
+    const hasUnsavedPayment = savedPayment && currentPayment !== savedPayment;
+    if (!hasUnsavedGeneral && !hasUnsavedPayment) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [general, payment, savedGeneral, savedPayment]);
+
+  const manualAvailable = methods.some((m) => m.is_enabled);
+  const paymentModeOptions = useMemo(() => [
+    { value: 'manual', label: 'Manual payment', disabled: !manualAvailable, detail: manualAvailable ? 'Use enabled UPI/QR methods' : 'Add an enabled manual method first' },
+    { value: 'razorpay', label: 'Razorpay', disabled: !payment.razorpay.configured, detail: payment.razorpay.configured ? 'Online payment gateway' : 'Missing Razorpay environment keys' },
+    { value: 'both', label: 'Both', disabled: !manualAvailable || !payment.razorpay.configured, detail: 'Customers can choose manual UPI or Razorpay' },
+  ], [manualAvailable, payment.razorpay.configured]);
+
+  const saveGeneral = async () => {
+    setSaving('general');
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'general', ...general }),
       });
-    } catch { /* ignore */ }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save general settings');
+      setGeneral(data.general);
+      setSavedGeneral(JSON.stringify(data.general));
+      showToast('General settings saved');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  const savePayment = async () => {
+    setSaving('payment');
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'payment', ...payment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save payment settings');
+      setPayment((prev) => ({ ...prev, ...data.payment }));
+      setSavedPayment(JSON.stringify({
+        payment_mode: data.payment.payment_mode,
+        referral_reward_amount: data.payment.referral_reward_amount,
+        referral_friend_reward_amount: data.payment.referral_friend_reward_amount,
+        seat_lock_due_days_before: data.payment.seat_lock_due_days_before,
+      }));
+      showToast('Payment settings saved');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  const refreshMethods = async () => {
+    const res = await fetch('/api/admin/manual-payment-methods', { cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok) setMethods(data.methods || []);
+  };
+
+  const submitMethod = async () => {
+    if (!methodDraft) return;
+    setMethodBusy(methodDraft.id ? 'update' : 'create');
+    try {
+      const res = await fetch(methodDraft.id ? `/api/admin/manual-payment-methods/${methodDraft.id}` : '/api/admin/manual-payment-methods', {
+        method: methodDraft.id ? 'PATCH' : 'POST',
+        body: buildMethodForm(methodDraft),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save payment method');
+      await refreshMethods();
+      setMethodDraft(null);
+      showToast('Payment method saved');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setMethodBusy('');
+    }
+  };
+
+  const deleteMethod = async (method: ManualMethod) => {
+    if (!confirm(`Delete ${method.nickname}? Existing bookings keep their saved payment snapshot.`)) return;
+    setMethodBusy(method.id);
+    try {
+      const res = await fetch(`/api/admin/manual-payment-methods/${method.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete payment method');
+      await refreshMethods();
+      showToast('Payment method deleted');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setMethodBusy('');
+    }
+  };
+
+  const quickUpdateMethod = async (method: ManualMethod, patch: Partial<ManualMethod>) => {
+    const draft: MethodDraft = {
+      id: method.id,
+      nickname: patch.nickname ?? method.nickname,
+      upi_id: patch.upi_id ?? method.upi_id,
+      payee_name: patch.payee_name ?? method.payee_name,
+      instructions: patch.instructions ?? method.instructions ?? '',
+      is_enabled: patch.is_enabled ?? method.is_enabled,
+      is_default: patch.is_default ?? method.is_default,
+    };
+    setMethodBusy(method.id);
+    try {
+      const res = await fetch(`/api/admin/manual-payment-methods/${method.id}`, { method: 'PATCH', body: buildMethodForm(draft) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update payment method');
+      await refreshMethods();
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setMethodBusy('');
+    }
+  };
+
+  const moveMethod = async (method: ManualMethod, direction: -1 | 1) => {
+    const ordered = [...methods].sort((a, b) => a.display_order - b.display_order);
+    const index = ordered.findIndex((m) => m.id === method.id);
+    const next = index + direction;
+    if (next < 0 || next >= ordered.length) return;
+    [ordered[index], ordered[next]] = [ordered[next], ordered[index]];
+    setMethods(ordered.map((m, i) => ({ ...m, display_order: i })));
+    await fetch('/api/admin/manual-payment-methods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reorder', ids: ordered.map((m) => m.id) }),
+    });
+  };
+
+  const refreshWhatsApp = async () => {
+    setWaBusy('refresh');
+    try {
+      const res = await fetch('/api/admin/whatsapp', { cache: 'no-store' });
+      const data = await res.json();
+      setWa(data);
+      if (data.qr) setWaQr(data.qr);
+    } finally {
+      setWaBusy('');
+    }
+  };
+
+  const whatsappAction = async (action: 'login' | 'qr' | 'logout' | 'test') => {
+    setWaBusy(action);
+    setWaPairingCode('');
+    if (action !== 'qr') setWaQr('');
+    try {
+      const body = action === 'login'
+        ? { action: 'login', mode: 'pairing', phone: waPhone }
+        : action === 'qr'
+          ? { action: 'login', mode: 'qr' }
+          : { action };
+      const res = await fetch('/api/admin/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'WhatsApp action failed');
+      if (data.pairingCode) setWaPairingCode(data.pairingCode);
+      if (data.qr) setWaQr(data.qr);
+      await refreshWhatsApp();
+      showToast(action === 'logout' ? 'WhatsApp disconnected' : 'WhatsApp action completed');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setWaBusy('');
+    }
   };
 
   const saveTelegram = async () => {
-    setTgSaving(true); setTgMsg('');
+    setTgBusy('save');
     try {
       const res = await fetch('/api/admin/telegram-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save', enabled: tg.enabled, bot_token: tg.bot_token, admin_chat_ids: tg.admin_chat_ids, notify_new_booking: tg.notify_new_booking, notify_payments: tg.notify_payments }),
+        body: JSON.stringify({
+          action: 'save',
+          enabled: tg.enabled,
+          bot_token: tg.bot_token,
+          admin_chat_ids: tg.admin_chat_ids,
+          notify_new_booking: tg.notify_new_booking,
+          notify_payments: tg.notify_payments,
+        }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to save');
-      setTgMsg('Saved.');
-      await loadTelegram();
-    } catch (e: any) { setTgMsg(e.message); }
-    finally { setTgSaving(false); }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save Telegram settings');
+      setTg((prev: any) => ({ ...prev, ...data.settings, bot_token: '' }));
+      showToast('Telegram settings saved');
+    } catch (error: any) {
+      showToast(error.message, 'error');
+    } finally {
+      setTgBusy('');
+    }
   };
 
-  const tgAction = async (action: 'test' | 'webhook') => {
-    setTgBusy(action === 'webhook' ? 'webhook' : 'test'); setTgMsg('');
+  const telegramAction = async (action: 'webhook' | 'test') => {
+    setTgBusy(action);
     try {
       const res = await fetch('/api/admin/telegram-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: action === 'webhook' ? 'set_webhook' : 'test' }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed');
-      setTgMsg(d.message || 'Done.');
-      if (action === 'webhook') await loadTelegram();
-    } catch (e: any) { setTgMsg(e.message); }
-    finally { setTgBusy(''); }
-  };
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  
-  // WhatsApp (self-hosted VPS worker — linked from here via pairing code)
-  const [waLoading, setWaLoading] = useState(true);
-  const [waConfigured, setWaConfigured] = useState(true);
-  const [waConnected, setWaConnected] = useState(false);
-  const [waNumber, setWaNumber] = useState<string | null>(null);
-  const [waOnline, setWaOnline] = useState(true);      // is the VPS worker reachable
-  const [waPhone, setWaPhone] = useState('');          // number to link
-  const [waMethod, setWaMethod] = useState<'pairing' | 'qr'>('pairing');
-  const [waPairingCode, setWaPairingCode] = useState<string | null>(null);
-  const [waQr, setWaQr] = useState<string | null>(null);   // QR PNG data URL
-  const [waBusy, setWaBusy] = useState<'' | 'login' | 'qr' | 'logout'>('');
-  const [waError, setWaError] = useState<string | null>(null);
-  // Test sender
-  const [waTestPhone, setWaTestPhone] = useState('');
-  const [waTestTemplate, setWaTestTemplate] = useState('confirmed');
-  const [waTestCustom, setWaTestCustom] = useState('');
-  const [waTestBusy, setWaTestBusy] = useState(false);
-  const [waTestMsg, setWaTestMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  
-  // General Settings
-  const [settings, setSettings] = useState({
-    emailNotifications: true,
-    bookingAlerts: true,
-    weeklyReports: false,
-    maintenanceMode: false,
-  });
-
-  // Payment Settings
-  const [paymentSettings, setPaymentSettings] = useState({
-    qrUrl: '',
-    upiId: '',
-    qrFile: null as File | null,
-    qrPreview: '',
-    paymentMode: 'manual', // 'manual' or 'razorpay'
-    razorpayKeyId: '',
-    razorpayKeySecret: '',
-    razorpayWebhookSecret: '',
-    referralRewardAmount: '100',
-    referralFriendRewardAmount: '50',
-    dueDaysBefore: '5',
-  });
-
-  // Coupons
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [trips, setTrips] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [showCouponForm, setShowCouponForm] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState<any>(null);
-  const [couponForm, setCouponForm] = useState({
-    code: '',
-    discount_type: 'percentage',
-    discount_value: '',
-    min_amount: '',
-    max_discount: '',
-    usage_limit: '',
-    expiry_date: '',
-    start_date: '',
-    description: '',
-    is_active: true,
-    // New fields
-    trip_ids: [] as string[],
-    apply_to_all_trips: true,
-    user_ids: [] as string[],
-    apply_to_all_users: true,
-    is_early_bird: false,
-    early_bird_days_before: '',
-    per_user_limit: '',
-    max_total_discount: '',
-  });
-
-  const fetchCoupons = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('coupon_codes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCoupons(data || []);
-    } catch (error) {
-      console.error('Error fetching coupons:', error);
-    }
-  };
-
-  const fetchPaymentSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('payment_settings')
-        .select('*')
-        .limit(1)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching payment settings:', error);
-      } else if (data) {
-        setPaymentSettings({
-          qrUrl: data.payment_qr_url || '',
-          upiId: data.payment_upi_id || '',
-          qrFile: null,
-          qrPreview: data.payment_qr_url || '',
-          paymentMode: data.payment_mode || 'manual',
-          razorpayKeyId: data.razorpay_key_id || '',
-          razorpayKeySecret: data.razorpay_key_secret || '',
-          razorpayWebhookSecret: data.razorpay_webhook_secret || '',
-          referralRewardAmount: data.referral_reward_amount?.toString() || '100',
-          referralFriendRewardAmount: data.referral_friend_reward_amount?.toString() || '50',
-          dueDaysBefore: data.seat_lock_due_days_before?.toString() || '5',
-        });
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  // WhatsApp runs on the self-hosted VPS worker (Baileys). We link/unlink it
-  // from here through a server-side proxy (/api/admin/whatsapp) so the secret
-  // stays on the server.
-  const refreshWhatsApp = async () => {
-    try {
-      const res = await fetch('/api/admin/whatsapp', { cache: 'no-store' });
       const data = await res.json();
-      setWaConfigured(data.configured !== false);
-      setWaConnected(!!data.connected);
-      setWaNumber(data.number || null);
-      setWaOnline(data.online !== false);
-      if (data.connected) { setWaPairingCode(null); setWaQr(null); }
-      // Refresh a rotated QR only while one is already showing (QR flow active).
-      else if (data.qr) setWaQr((prev) => (prev ? data.qr : prev));
-    } catch {
-      setWaOnline(false);
-    } finally {
-      setWaLoading(false);
-    }
-  };
-
-  const linkWhatsApp = async () => {
-    setWaError(null); setWaPairingCode(null); setWaQr(null); setWaBusy('login');
-    try {
-      const res = await fetch('/api/admin/whatsapp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', mode: 'pairing', phone: waPhone }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setWaError(data.error || 'Could not start linking.'); return; }
-      if (data.alreadyConnected) { setWaConnected(true); setWaNumber(data.number || null); return; }
-      setWaPairingCode(data.pairingCode || null);
-    } catch { setWaError('Could not reach the worker.'); }
-    finally { setWaBusy(''); }
-  };
-
-  const showQrCode = async () => {
-    setWaError(null); setWaPairingCode(null); setWaBusy('qr');
-    try {
-      const res = await fetch('/api/admin/whatsapp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', mode: 'qr' }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setWaError(data.error || 'Could not start QR login.'); return; }
-      if (data.alreadyConnected) { setWaConnected(true); setWaNumber(data.number || null); return; }
-      setWaQr(data.qr || null);
-    } catch { setWaError('Could not reach the worker.'); }
-    finally { setWaBusy(''); }
-  };
-
-  const unlinkWhatsApp = async () => {
-    if (!confirm('Unlink WhatsApp? The worker will stop sending until you link a number again.')) return;
-    setWaError(null); setWaBusy('logout');
-    try {
-      const res = await fetch('/api/admin/whatsapp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'logout' }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setWaError(data.error || 'Logout failed.'); return; }
-      setWaConnected(false); setWaNumber(null); setWaPairingCode(null);
-    } catch { setWaError('Could not reach the worker.'); }
-    finally { setWaBusy(''); }
-  };
-
-  const sendTestWhatsApp = async () => {
-    setWaTestMsg(null); setWaTestBusy(true);
-    try {
-      const res = await fetch('/api/admin/whatsapp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'test', phone: waTestPhone, template: waTestTemplate, message: waTestCustom }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setWaTestMsg({ type: 'err', text: data.error || 'Send failed.' }); return; }
-      setWaTestMsg({ type: 'ok', text: 'Sent! Check WhatsApp on that number.' });
-    } catch { setWaTestMsg({ type: 'err', text: 'Could not reach the worker.' }); }
-    finally { setWaTestBusy(false); }
-  };
-
-  useEffect(() => {
-    fetchPaymentSettings();
-    fetchCoupons();
-    loadTelegram();
-    refreshWhatsApp();
-    setLoading(false);
-  }, []);
-
-  // While a pairing code or QR is on screen, poll for the connection completing
-  // (and to refresh a rotated QR).
-  useEffect(() => {
-    if ((!waPairingCode && !waQr) || waConnected) return;
-    const t = setInterval(refreshWhatsApp, 3500);
-    return () => clearInterval(t);
-  }, [waPairingCode, waQr, waConnected]);
-
-  const handleSavePaymentSettings = async () => {
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      let qrUrl = paymentSettings.qrUrl;
-
-      // Upload QR code to Cloudinary if file is selected
-      if (paymentSettings.qrFile) {
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', paymentSettings.qrFile);
-
-        const uploadResponse = await fetch('/api/upload/cloudinary', {
-          method: 'POST',
-          body: uploadFormData,
-        });
-
-        if (!uploadResponse.ok) {
-          const error = await uploadResponse.json();
-          throw new Error(error.error || 'Failed to upload QR code');
-        }
-
-        const uploadData = await uploadResponse.json();
-        qrUrl = uploadData.url;
-      }
-
-      // Check if payment settings exist
-      const { data: existing } = await supabase
-        .from('payment_settings')
-        .select('id')
-        .limit(1)
-        .single();
-
-        if (existing) {
-          // Update existing
-          const { error } = await supabase
-            .from('payment_settings')
-            .update({
-              payment_qr_url: qrUrl,
-              payment_upi_id: paymentSettings.upiId,
-              payment_mode: paymentSettings.paymentMode,
-              // Razorpay secrets are managed via env vars — never written to DB
-              razorpay_key_id: null,
-              razorpay_key_secret: null,
-              razorpay_webhook_secret: null,
-              referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
-              referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
-              seat_lock_due_days_before: parseInt(paymentSettings.dueDaysBefore, 10) || 5,
-              updated_by: user?.id,
-            })
-            .eq('id', existing.id);
-
-          if (error) throw error;
-        } else {
-          // Create new
-          const { error } = await supabase
-            .from('payment_settings')
-            .insert([
-              {
-                payment_qr_url: qrUrl,
-                payment_upi_id: paymentSettings.upiId,
-                payment_mode: paymentSettings.paymentMode,
-                razorpay_key_id: paymentSettings.razorpayKeyId || null,
-                razorpay_key_secret: paymentSettings.razorpayKeySecret || null,
-                razorpay_webhook_secret: paymentSettings.razorpayWebhookSecret || null,
-                referral_reward_amount: parseFloat(paymentSettings.referralRewardAmount) || 100,
-                referral_friend_reward_amount: parseFloat(paymentSettings.referralFriendRewardAmount) || 50,
-                seat_lock_due_days_before: parseInt(paymentSettings.dueDaysBefore, 10) || 5,
-                updated_by: user?.id,
-              },
-            ]);
-
-          if (error) throw error;
-        }
-
-      alert('Payment settings saved successfully!');
-      await fetchPaymentSettings();
+      if (!res.ok) throw new Error(data.error || 'Telegram action failed');
+      showToast(data.message || 'Telegram action completed');
+      const next = await fetch('/api/admin/telegram-settings', { cache: 'no-store' }).then((r) => r.json());
+      setTg((prev: any) => ({ ...prev, ...next, bot_token: '', admin_chat_ids: next.admin_chat_ids || [] }));
     } catch (error: any) {
-      console.error('Error saving payment settings:', error);
-      alert('Failed to save payment settings: ' + error.message);
+      showToast(error.message, 'error');
     } finally {
-      setSaving(false);
+      setTgBusy('');
     }
   };
-
-  const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPaymentSettings({
-        ...paymentSettings,
-        qrFile: file,
-        qrPreview: URL.createObjectURL(file),
-      });
-    }
-  };
-
-  const handleSaveCoupon = async () => {
-    if (!couponForm.code || !couponForm.discount_value) {
-      alert('Please fill in required fields');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const couponData: any = {
-        code: couponForm.code.toUpperCase().trim(),
-        discount_type: couponForm.discount_type,
-        discount_value: parseFloat(couponForm.discount_value),
-        min_amount: couponForm.min_amount ? parseFloat(couponForm.min_amount) : 0,
-        max_discount: couponForm.max_discount ? parseFloat(couponForm.max_discount) : null,
-        usage_limit: couponForm.usage_limit ? parseInt(couponForm.usage_limit) : null,
-        expiry_date: couponForm.expiry_date || null,
-        start_date: couponForm.start_date || null,
-        description: couponForm.description || null,
-        is_active: couponForm.is_active,
-        // New fields
-        trip_ids: couponForm.apply_to_all_trips ? null : (couponForm.trip_ids.length > 0 ? couponForm.trip_ids : null),
-        user_ids: couponForm.apply_to_all_users ? null : (couponForm.user_ids.length > 0 ? couponForm.user_ids : null),
-        is_early_bird: couponForm.is_early_bird,
-        early_bird_days_before: couponForm.is_early_bird && couponForm.early_bird_days_before ? parseInt(couponForm.early_bird_days_before) : null,
-        per_user_limit: couponForm.per_user_limit ? parseInt(couponForm.per_user_limit) : null,
-        max_total_discount: couponForm.max_total_discount ? parseFloat(couponForm.max_total_discount) : null,
-        created_by: user?.id,
-      };
-
-      if (editingCoupon) {
-        const { error } = await supabase
-          .from('coupon_codes')
-          .update(couponData)
-          .eq('id', editingCoupon.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('coupon_codes')
-          .insert([couponData]);
-
-        if (error) throw error;
-      }
-
-      alert('Coupon saved successfully!');
-      setShowCouponForm(false);
-      setEditingCoupon(null);
-      resetCouponForm();
-      await fetchCoupons();
-    } catch (error: any) {
-      console.error('Error saving coupon:', error);
-      alert('Failed to save coupon: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetCouponForm = () => {
-    setCouponForm({
-      code: '',
-      discount_type: 'percentage',
-      discount_value: '',
-      min_amount: '',
-      max_discount: '',
-      usage_limit: '',
-      expiry_date: '',
-      start_date: '',
-      description: '',
-      is_active: true,
-      trip_ids: [],
-      apply_to_all_trips: true,
-      user_ids: [],
-      apply_to_all_users: true,
-      is_early_bird: false,
-      early_bird_days_before: '',
-      per_user_limit: '',
-      max_total_discount: '',
-    });
-  };
-
-  const handleEditCoupon = (coupon: any) => {
-    setEditingCoupon(coupon);
-    setCouponForm({
-      code: coupon.code,
-      discount_type: coupon.discount_type,
-      discount_value: coupon.discount_value.toString(),
-      min_amount: coupon.min_amount?.toString() || '',
-      max_discount: coupon.max_discount?.toString() || '',
-      usage_limit: coupon.usage_limit?.toString() || '',
-      expiry_date: coupon.expiry_date ? coupon.expiry_date.split('T')[0] : '',
-      start_date: coupon.start_date ? coupon.start_date.split('T')[0] : '',
-      description: coupon.description || '',
-      is_active: coupon.is_active,
-      trip_ids: coupon.trip_ids || [],
-      apply_to_all_trips: !coupon.trip_ids || coupon.trip_ids.length === 0,
-      user_ids: coupon.user_ids || [],
-      apply_to_all_users: !coupon.user_ids || coupon.user_ids.length === 0,
-      is_early_bird: coupon.is_early_bird || false,
-      early_bird_days_before: coupon.early_bird_days_before?.toString() || '',
-      per_user_limit: coupon.per_user_limit?.toString() || '',
-      max_total_discount: coupon.max_total_discount?.toString() || '',
-    });
-    setShowCouponForm(true);
-  };
-
-  const handleDeleteCoupon = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this coupon?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('coupon_codes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      alert('Coupon deleted successfully!');
-      await fetchCoupons();
-    } catch (error: any) {
-      console.error('Error deleting coupon:', error);
-      alert('Failed to delete coupon: ' + error.message);
-    }
-  };
-
-  const handleSave = () => {
-    alert('Settings saved successfully!');
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">Settings</h1>
-        <p className="text-sm text-gray-600">Manage admin settings and preferences</p>
+    <div className="mx-auto w-full max-w-6xl space-y-5">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 text-purple-700">
+          <Settings className="h-5 w-5" />
+          <span className="text-xs font-bold uppercase tracking-wide">Admin settings</span>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">Settings</h1>
+        <p className="max-w-2xl text-sm text-slate-500">Manage supported system preferences, payments, and messaging integrations.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex space-x-1 sm:space-x-2 border-b sm:border-b-2 border-purple-200 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
-            activeTab === 'general'
-              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
-              : 'text-gray-600 hover:text-purple-600'
-          }`}
-        >
-          General
-        </button>
-        <button
-          onClick={() => setActiveTab('payment')}
-          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
-            activeTab === 'payment'
-              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
-              : 'text-gray-600 hover:text-purple-600'
-          }`}
-        >
-          Payment
-        </button>
-        <button
-          onClick={() => setActiveTab('whatsapp')}
-          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
-            activeTab === 'whatsapp'
-              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
-              : 'text-gray-600 hover:text-purple-600'
-          }`}
-        >
-          WhatsApp
-        </button>
-        <button
-          onClick={() => setActiveTab('telegram')}
-          className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-colors whitespace-nowrap ${
-            activeTab === 'telegram'
-              ? 'text-purple-600 border-b-2 border-purple-600 -mb-0.5'
-              : 'text-gray-600 hover:text-purple-600'
-          }`}
-        >
-          Telegram
-        </button>
+      <div className="sticky top-12 z-20 -mx-4 overflow-x-auto border-y border-purple-100 bg-white/95 px-4 py-2 backdrop-blur sm:top-14 md:top-16">
+        <div className="flex min-w-max gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`h-11 rounded-xl px-4 text-sm font-semibold transition ${activeTab === tab.key ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-purple-50 hover:text-purple-700'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Telegram Tab */}
-      {activeTab === 'telegram' && (
-        <div className="max-w-2xl space-y-5">
-          <div className="neon-card rounded-2xl border border-purple-200 p-4 sm:p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center"><MessageSquare className="h-5 w-5 mr-2 text-purple-600" />Telegram alerts</h3>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <span className="text-sm text-gray-600">{tg.enabled ? 'On' : 'Off'}</span>
-                <input type="checkbox" checked={tg.enabled} onChange={(e) => setTg({ ...tg, enabled: e.target.checked })} className="h-5 w-5 accent-purple-600" />
-              </label>
-            </div>
-            <p className="text-sm text-gray-500 mb-5">Get a Telegram message for every new booking and payment, and approve or reject payments right from the chat.</p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Bot token</label>
-                <input type="text" value={tg.bot_token} onChange={(e) => setTg({ ...tg, bot_token: e.target.value })} placeholder="123456:ABC-DEF…" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white font-mono" />
-                <p className="text-xs text-gray-400 mt-1">From @BotFather → /newbot. {tg.bot_username && <>Connected as <span className="font-semibold text-gray-600">@{tg.bot_username}</span>.</>}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Admin Chat IDs</label>
-                <input type="text" value={tg.admin_chat_ids} onChange={(e) => setTg({ ...tg, admin_chat_ids: e.target.value })} placeholder="e.g. 123456789, 987654321" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white" />
-                <p className="text-xs text-gray-400 mt-1">Message your bot and send <code>/start</code> — it replies with your Chat ID. Paste it here (comma-separated for multiple admins).</p>
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700"><input type="checkbox" checked={tg.notify_new_booking} onChange={(e) => setTg({ ...tg, notify_new_booking: e.target.checked })} className="h-4 w-4 accent-purple-600" />New bookings</label>
-                <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700"><input type="checkbox" checked={tg.notify_payments} onChange={(e) => setTg({ ...tg, notify_payments: e.target.checked })} className="h-4 w-4 accent-purple-600" />Payment approvals</label>
-              </div>
-            </div>
-
-            {tgMsg && <p className="mt-4 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg px-3 py-2">{tgMsg}</p>}
-
-            <div className="flex flex-wrap gap-2 mt-5">
-              <button onClick={saveTelegram} disabled={tgSaving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 disabled:opacity-50"><Save className="h-4 w-4" />{tgSaving ? 'Saving…' : 'Save'}</button>
-              <button onClick={() => tgAction('webhook')} disabled={tgBusy !== ''} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"><RefreshCw className="h-4 w-4" />{tgBusy === 'webhook' ? 'Connecting…' : 'Connect webhook'}</button>
-              <button onClick={() => tgAction('test')} disabled={tgBusy !== ''} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"><CheckCircle className="h-4 w-4" />{tgBusy === 'test' ? 'Sending…' : 'Send test'}</button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 p-4 sm:p-5 bg-gray-50/60 text-sm text-gray-600 leading-relaxed">
-            <p className="font-bold text-gray-900 mb-2">Setup (one time)</p>
-            <ol className="list-decimal ml-4 space-y-1">
-              <li>In Telegram, open <span className="font-semibold">@BotFather</span> → <code>/newbot</code> → copy the token here and Save.</li>
-              <li>Open your new bot, press Start, send <code>/start</code> — it replies with your Chat ID. Paste it in Admin Chat IDs and Save.</li>
-              <li>Click <span className="font-semibold">Connect webhook</span>, then <span className="font-semibold">Send test</span>. You should get a message.</li>
-            </ol>
-          </div>
+      {loading ? (
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-purple-100 bg-white">
+          <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
         </div>
-      )}
-
-      {/* General Settings Tab */}
-      {activeTab === 'general' && (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="neon-card rounded-2xl border sm:border border-purple-200 p-4 sm:p-6 shadow-xl">
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <Bell className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
-            Notifications
-          </h3>
-          <div className="space-y-4">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-gray-700">Email Notifications</span>
-              <input
-                type="checkbox"
-                checked={settings.emailNotifications}
-                onChange={(e) => setSettings({ ...settings, emailNotifications: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-              />
-            </label>
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-gray-700">Booking Alerts</span>
-              <input
-                type="checkbox"
-                checked={settings.bookingAlerts}
-                onChange={(e) => setSettings({ ...settings, bookingAlerts: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-              />
-            </label>
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-gray-700">Weekly Reports</span>
-              <input
-                type="checkbox"
-                checked={settings.weeklyReports}
-                onChange={(e) => setSettings({ ...settings, weeklyReports: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div className="neon-card rounded-2xl border sm:border border-purple-200 p-4 sm:p-6 shadow-xl">
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-            <Shield className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
-            System Settings
-          </h3>
-          <div className="space-y-4">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-gray-700">Maintenance Mode</span>
-              <input
-                type="checkbox"
-                checked={settings.maintenanceMode}
-                onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-              />
-            </label>
-            <div className="pt-4">
-              <button onClick={handleSave} className="neon-button w-full px-4 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2">
-                <Save className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span>Save Settings</span>
+      ) : (
+        <>
+          {activeTab === 'general' && (
+            <Card title="General preferences" description="Only supported settings are shown here." icon={Bell} action={general.updated_at && <span className="text-xs text-slate-500">Saved {new Date(general.updated_at).toLocaleString()}</span>}>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Toggle checked={general.email_notifications} onChange={(v) => setGeneral({ ...general, email_notifications: v })} label="Email notifications" description="Allow operational email notifications." />
+                <Toggle checked={general.booking_alerts} onChange={(v) => setGeneral({ ...general, booking_alerts: v })} label="Booking alerts" description="Send admin alerts for booking events." />
+                <Toggle checked={general.weekly_reports} onChange={(v) => setGeneral({ ...general, weekly_reports: v })} label="Weekly reports" description="Enable scheduled weekly summaries when configured." />
+                <Toggle checked={general.maintenance_mode} onChange={(v) => setGeneral({ ...general, maintenance_mode: v })} label="Maintenance mode" description="Persist the maintenance flag for system checks." />
+              </div>
+              <button onClick={saveGeneral} disabled={saving === 'general'} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 sm:w-auto">
+                {saving === 'general' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save general settings
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
+            </Card>
+          )}
 
-      {/* Payment Settings Tab */}
-      {activeTab === 'payment' && (
-        <div className="bg-white rounded-2xl border sm:border border-purple-200 shadow-xl p-4 sm:p-6 md:p-8">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 text-purple-600" />
-            Payment Configuration
-          </h2>
-
-          <div className="space-y-6">
-            {/* QR Code Upload */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Payment QR Code
-              </label>
-              {paymentSettings.qrPreview && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <img
-                    src={paymentSettings.qrPreview}
-                    alt="QR Code Preview"
-                    className="w-36 h-36 sm:w-48 sm:h-48 object-contain mx-auto rounded-lg"
-                  />
-                </div>
-              )}
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-purple-400 transition-colors">
-                <input
-                  type="file"
-                  id="qr-upload"
-                  accept="image/*"
-                  onChange={handleQRUpload}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="qr-upload"
-                  className="cursor-pointer flex flex-col items-center"
-                >
-                  <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                  <p className="text-sm font-medium text-gray-700 mb-1">
-                    {paymentSettings.qrPreview ? 'Change QR Code' : 'Upload QR Code Image'}
-                  </p>
-                  <p className="text-xs text-gray-500">PNG, JPG up to 5MB</p>
-                </label>
-              </div>
-            </div>
-
-            {/* Payment Mode Selection */}
-            <div className="mb-6 pb-6 border-b-2 border-purple-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-4">
-                Payment Mode <span className="text-red-500">*</span>
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className={`flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                  paymentSettings.paymentMode === 'manual'
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 hover:border-purple-200'
-                }`}>
-                  <input
-                    type="radio"
-                    name="paymentMode"
-                    value="manual"
-                    checked={paymentSettings.paymentMode === 'manual'}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentMode: e.target.value })}
-                    className="w-5 h-5 text-purple-600"
-                  />
-                  <div className="ml-3">
-                    <div className="font-semibold text-gray-900">Manual Payment</div>
-                    <div className="text-xs text-gray-600 mt-1">QR Code + UTR/Reference ID</div>
-                  </div>
-                </label>
-                <label className={`flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                  paymentSettings.paymentMode === 'razorpay'
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 hover:border-purple-200'
-                }`}>
-                  <input
-                    type="radio"
-                    name="paymentMode"
-                    value="razorpay"
-                    checked={paymentSettings.paymentMode === 'razorpay'}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentMode: e.target.value })}
-                    className="w-5 h-5 text-purple-600"
-                  />
-                  <div className="ml-3">
-                    <div className="font-semibold text-gray-900">Razorpay Gateway</div>
-                    <div className="text-xs text-gray-600 mt-1">Online payment processing</div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Manual Payment Settings */}
-            {paymentSettings.paymentMode === 'manual' && (
-              <>
-                {/* UPI ID */}
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    UPI ID
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-5 w-5 text-purple-600" />
-                    <input
-                      type="text"
-                      value={paymentSettings.upiId}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, upiId: e.target.value })}
-                      placeholder="your-upi-id@paytm"
-                      className="flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-mono"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Enter the UPI ID for receiving payments</p>
-                </div>
-              </>
-            )}
-
-            {/* Razorpay Settings — read from env vars only, not editable here */}
-            {paymentSettings.paymentMode === 'razorpay' && (
-              <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="h-5 w-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0h-2m9-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-amber-900 text-sm sm:text-base mb-1">Razorpay keys are managed via environment variables</h3>
-                    <p className="text-xs sm:text-sm text-amber-900 leading-relaxed">
-                      For security, payment secrets are no longer stored in the database. Set them in:
-                    </p>
-                    <ul className="text-xs sm:text-sm text-amber-900 mt-2 space-y-1 font-mono">
-                      <li>• <strong>RAZORPAY_KEY_ID</strong></li>
-                      <li>• <strong>RAZORPAY_KEY_SECRET</strong></li>
-                      <li>• <strong>RAZORPAY_WEBHOOK_SECRET</strong></li>
-                    </ul>
-                    <p className="text-xs sm:text-sm text-amber-900 mt-3 leading-relaxed">
-                      Vercel → Project Settings → Environment Variables. Then redeploy.
-                    </p>
-                    <p className="text-xs text-blue-700 mt-3 font-medium break-all">
-                      Webhook URL to register in Razorpay Dashboard:<br />
-                      <span className="font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/razorpay</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Seat-lock balance deadline */}
-            <div className="mb-6 pb-6 border-b border-purple-200">
-              <h3 className="text-sm font-bold text-gray-900 mb-4">Seat-lock balance deadline</h3>
-              <div className="max-w-xs">
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Balance due (days before departure)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={paymentSettings.dueDaysBefore}
-                  onChange={(e) => setPaymentSettings({ ...paymentSettings, dueDaysBefore: e.target.value })}
-                  placeholder="5"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-semibold"
-                />
-                <p className="text-[11px] text-gray-400 mt-1">Default for all trips. A trip can override this on its own form. The customer is told to pay the balance this many days before departure.</p>
-              </div>
-            </div>
-
-            {/* Referral Rewards */}
-            <div className="mb-6 pb-6 border-b border-purple-200">
-              <h3 className="text-sm font-bold text-gray-900 mb-4">Referral Rewards</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Referrer Reward (₹)
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg font-bold text-purple-600">₹</span>
-                    <input
-                      type="number"
-                      value={paymentSettings.referralRewardAmount}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, referralRewardAmount: e.target.value })}
-                      placeholder="100"
-                      min="0"
-                      step="1"
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-900 font-semibold"
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1">Person who shares the code</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Friend Bonus (₹)
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg font-bold text-green-600">₹</span>
-                    <input
-                      type="number"
-                      value={paymentSettings.referralFriendRewardAmount}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, referralFriendRewardAmount: e.target.value })}
-                      placeholder="50"
-                      min="0"
-                      step="1"
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none transition-all text-gray-900 font-semibold"
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1">Friend who signs up &amp; books</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-3">
-                Both rewards are credited after the referred friend completes their first booking
-              </p>
-            </div>
-
-            <button
-              onClick={handleSavePaymentSettings}
-              disabled={saving}
-              className="w-full px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5" />
-                  <span>Save Payment Settings</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* WhatsApp Tab — link/unlink the self-hosted VPS worker from here */}
-      {activeTab === 'whatsapp' && (
-        <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-6 md:p-8 max-w-3xl">
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center">
-                <MessageSquare className="h-6 w-6 mr-3 text-purple-600" />
-                WhatsApp
-              </h2>
-              <p className="text-sm text-gray-500">Link the WhatsApp number your self-hosted worker sends from — right here, no console needed.</p>
-            </div>
-            <button onClick={refreshWhatsApp} className="text-xs font-medium text-purple-600 hover:text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-50 whitespace-nowrap">
-              Refresh
-            </button>
-          </div>
-
-          {/* Status banner */}
-          <div className={`rounded-xl border p-4 mb-5 flex items-center gap-3 ${
-            waLoading ? 'border-gray-200 bg-gray-50'
-            : !waConfigured ? 'border-amber-200 bg-amber-50'
-            : !waOnline ? 'border-red-200 bg-red-50'
-            : waConnected ? 'border-green-200 bg-green-50'
-            : 'border-amber-200 bg-amber-50'
-          }`}>
-            <span className={`h-2.5 w-2.5 rounded-full ${
-              waLoading ? 'bg-gray-400'
-              : !waConfigured ? 'bg-amber-500'
-              : !waOnline ? 'bg-red-500'
-              : waConnected ? 'bg-green-500 animate-pulse'
-              : 'bg-amber-500'
-            }`} />
-            <div className="text-sm">
-              {waLoading ? (
-                <span className="text-gray-600">Checking worker…</span>
-              ) : !waConfigured ? (
-                <span className="text-amber-800">Not configured — set <code className="font-mono text-xs">WHATSAPP_API_URL</code> &amp; <code className="font-mono text-xs">VPS_API_SECRET</code> on Vercel.</span>
-              ) : !waOnline ? (
-                <span className="text-red-800">Worker unreachable. Is the VPS up at your <code className="font-mono text-xs">WHATSAPP_API_URL</code>?</span>
-              ) : waConnected ? (
-                <span className="text-green-800">Connected{waNumber ? <> as <strong>+{waNumber}</strong></> : ''} — messages are sending.</span>
-              ) : (
-                <span className="text-amber-800">Not linked. Enter a number below to connect WhatsApp.</span>
-              )}
-            </div>
-          </div>
-
-          {/* Connected → show unlink. Not connected → show link form. */}
-          {waConfigured && waOnline && !waLoading && (
-            waConnected ? (
-              <div className="rounded-xl border border-gray-200 p-5">
-                <p className="text-sm text-gray-700 mb-4">This number is linked and active. Unlink it to switch to a different WhatsApp number.</p>
-                <button onClick={unlinkWhatsApp} disabled={waBusy === 'logout'}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60">
-                  {waBusy === 'logout' ? 'Unlinking…' : 'Unlink WhatsApp'}
-                </button>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-gray-200 p-5 space-y-4">
-                {/* Choose how to link */}
-                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
-                  <button
-                    onClick={() => { setWaMethod('pairing'); setWaQr(null); setWaError(null); }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${waMethod === 'pairing' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                    Pairing code
-                  </button>
-                  <button
-                    onClick={() => { setWaMethod('qr'); setWaPairingCode(null); setWaError(null); }}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${waMethod === 'qr' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-                    QR code
-                  </button>
-                </div>
-
-                {waMethod === 'pairing' ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">WhatsApp number to link</label>
-                      <input
-                        value={waPhone}
-                        onChange={(e) => setWaPhone(e.target.value)}
-                        placeholder="919876543210 (with country code)"
-                        inputMode="numeric"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Country code + number, digits only. This is the number that will send messages.</p>
-                    </div>
-                    <button onClick={linkWhatsApp} disabled={waBusy === 'login' || !waPhone.replace(/\D/g, '')}
-                      className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
-                      {waBusy === 'login' ? 'Generating code…' : 'Get pairing code'}
+          {activeTab === 'payment' && (
+            <div className="space-y-5">
+              <Card title="Payment mode" description="The customer payment page only shows options that are actually configured." icon={CreditCard}>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {paymentModeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={option.disabled}
+                      onClick={() => setPayment({ ...payment, payment_mode: option.value })}
+                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${payment.payment_mode === option.value ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-100' : 'border-slate-200 hover:border-purple-200'}`}
+                    >
+                      <span className="block text-sm font-bold text-slate-950">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-500">{option.detail}</span>
                     </button>
+                  ))}
+                </div>
+              </Card>
 
-                    {waPairingCode && (
-                      <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                        <p className="text-sm text-gray-700 mb-2">On the phone for <strong>+{waPhone.replace(/\D/g, '')}</strong>, open <strong>WhatsApp → Settings → Linked devices → Link a device → “Link with phone number instead”</strong> and enter:</p>
-                        <div className="text-2xl font-bold tracking-[0.3em] text-purple-700 font-mono text-center py-2">{waPairingCode}</div>
-                        <p className="text-xs text-gray-500 text-center">Waiting for you to enter the code… this updates automatically once linked.</p>
-                      </div>
-                    )}
-                  </>
+              <Card title="Manual payment methods" description="Manage the UPI and QR options shown to customers." icon={QrCode} action={<button type="button" onClick={() => setMethodDraft({ ...emptyDraft })} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white hover:bg-purple-700"><Plus className="h-4 w-4" /> Add method</button>}>
+                {methods.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+                    <QrCode className="mx-auto h-8 w-8 text-slate-400" />
+                    <p className="mt-2 text-sm font-semibold text-slate-700">No manual payment methods yet</p>
+                    <p className="mt-1 text-xs text-slate-500">Add a UPI ID and optional QR image before enabling manual payments.</p>
+                  </div>
                 ) : (
-                  <>
-                    <p className="text-sm text-gray-700">On the phone, open <strong>WhatsApp → Settings → Linked devices → Link a device</strong> and scan the QR below.</p>
-                    {!waQr ? (
-                      <button onClick={showQrCode} disabled={waBusy === 'qr'}
-                        className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
-                        {waBusy === 'qr' ? 'Generating QR…' : 'Show QR code'}
-                      </button>
-                    ) : (
-                      <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={waQr} alt="WhatsApp QR code" className="mx-auto h-56 w-56 rounded-lg bg-white p-2" />
-                        <p className="text-xs text-gray-500 mt-2">Scan it — this refreshes automatically and flips to Connected once linked.</p>
+                  <div className="grid gap-3">
+                    {methods.map((method, index) => (
+                      <div key={method.id} className="rounded-xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex min-w-0 gap-3">
+                            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                              {method.qr_image_url ? <img src={method.qr_image_url} alt={`${method.nickname} QR code`} className="h-full w-full object-contain p-1" /> : <QrCode className="h-6 w-6 text-slate-400" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-bold text-slate-950">{method.nickname}</p>
+                                {method.is_default && <StatusPill status="ok" label="Default" />}
+                                <StatusPill status={method.is_enabled ? 'ok' : 'muted'} label={method.is_enabled ? 'Enabled' : 'Disabled'} />
+                              </div>
+                              <p className="mt-1 break-all font-mono text-sm text-purple-700">{method.upi_id}</p>
+                              <p className="text-xs text-slate-500">{method.payee_name}</p>
+                              {method.instructions && <p className="mt-2 text-xs leading-relaxed text-slate-500">{method.instructions}</p>}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => moveMethod(method, -1)} disabled={index === 0} className="h-10 rounded-lg border border-slate-200 px-3 text-slate-600 disabled:opacity-40" title="Move up"><ArrowUp className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => moveMethod(method, 1)} disabled={index === methods.length - 1} className="h-10 rounded-lg border border-slate-200 px-3 text-slate-600 disabled:opacity-40" title="Move down"><ArrowDown className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => quickUpdateMethod(method, { is_enabled: !method.is_enabled })} disabled={methodBusy === method.id} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">{method.is_enabled ? 'Disable' : 'Enable'}</button>
+                            <button type="button" onClick={() => quickUpdateMethod(method, { is_default: true, is_enabled: true })} disabled={method.is_default || methodBusy === method.id} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Set default</button>
+                            <button type="button" onClick={() => setMethodDraft({ id: method.id, nickname: method.nickname, upi_id: method.upi_id, payee_name: method.payee_name, instructions: method.instructions || '', is_enabled: method.is_enabled, is_default: method.is_default, qr_preview: method.qr_image_url || undefined })} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">Edit</button>
+                            <button type="button" onClick={() => deleteMethod(method)} disabled={methodBusy === method.id} className="h-10 rounded-lg border border-red-200 px-3 text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )
-          )}
-
-          {waError && <p className="text-sm text-red-600 mt-3">{waError}</p>}
-
-          {/* Test sender */}
-          {waConfigured && waOnline && waConnected && !waLoading && (
-            <div className="rounded-xl border border-gray-200 p-5 mt-5">
-              <h3 className="text-sm font-bold text-gray-900 mb-1">Send a test message</h3>
-              <p className="text-xs text-gray-500 mb-4">Send any template (or a custom message) to any number to check formatting.</p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Send to (number)</label>
-                    <input
-                      value={waTestPhone}
-                      onChange={(e) => setWaTestPhone(e.target.value)}
-                      placeholder="919876543210"
-                      inputMode="numeric"
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                    />
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Template</label>
-                    <select
-                      value={waTestTemplate}
-                      onChange={(e) => setWaTestTemplate(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                    >
-                      <option value="pending">Booking pending</option>
-                      <option value="seat_locked">Seat locked</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="rejected">Rejected</option>
-                      <option value="cancelled">Cancelled</option>
-                      <option value="otp">OTP code</option>
-                      <option value="custom">Custom message…</option>
-                    </select>
-                  </div>
-                </div>
-                {waTestTemplate === 'custom' && (
-                  <textarea
-                    value={waTestCustom}
-                    onChange={(e) => setWaTestCustom(e.target.value)}
-                    rows={4}
-                    placeholder="Type your message… (use *text* for bold)"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
                 )}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={sendTestWhatsApp}
-                    disabled={waTestBusy || !waTestPhone.replace(/\D/g, '')}
-                    className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-60">
-                    {waTestBusy ? 'Sending…' : 'Send test'}
-                  </button>
-                  {waTestMsg && (
-                    <span className={`text-sm ${waTestMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{waTestMsg.text}</span>
-                  )}
+              </Card>
+
+              <Card title="Razorpay status" description="Secrets are read from server environment variables and are never returned to the browser." icon={CreditCard}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <StatusPill status={payment.razorpay.configured ? 'ok' : 'error'} label={payment.razorpay.configured ? 'Configured' : 'Missing configuration'} />
+                  <StatusPill status={payment.razorpay.webhookConfigured ? 'ok' : 'warn'} label={payment.razorpay.webhookConfigured ? 'Webhook secret configured' : 'Webhook secret missing'} />
                 </div>
-              </div>
+                <p className="mt-3 text-sm text-slate-500">Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in the deployment environment.</p>
+              </Card>
+
+              <Card title="Seat-lock rules and referrals" description="These values are consumed by booking reminders and referral calculations." icon={IndianRupee}>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field label="Balance due days before departure" hint="Used when seat-lock payment reminders calculate the due date.">
+                    <input type="number" min={0} max={60} value={payment.seat_lock_due_days_before} onChange={(e) => setPayment({ ...payment, seat_lock_due_days_before: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                  </Field>
+                  <Field label="Referrer reward (₹)">
+                    <input type="number" min={0} value={payment.referral_reward_amount} onChange={(e) => setPayment({ ...payment, referral_reward_amount: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                  </Field>
+                  <Field label="Friend bonus (₹)">
+                    <input type="number" min={0} value={payment.referral_friend_reward_amount} onChange={(e) => setPayment({ ...payment, referral_friend_reward_amount: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                  </Field>
+                </div>
+                <button onClick={savePayment} disabled={saving === 'payment'} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 sm:w-auto">
+                  {saving === 'payment' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save payment settings
+                </button>
+              </Card>
             </div>
           )}
 
-          <p className="text-xs text-gray-500 mt-5">
-            Booking updates (pending, seat-locked, confirmed, rejected, cancelled) send automatically once linked. Setup details: <code className="font-mono">whatsapp-worker/README.md</code>.
-          </p>
+          {activeTab === 'whatsapp' && (
+            <Card title="WhatsApp worker" description="Status is fetched from the self-hosted worker through the server proxy." icon={MessageCircle} action={<button type="button" onClick={refreshWhatsApp} disabled={!!waBusy} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"><RefreshCw className={`h-4 w-4 ${waBusy === 'refresh' ? 'animate-spin' : ''}`} /> Refresh</button>}>
+              <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill status={!wa.configured ? 'error' : wa.online === false ? 'warn' : wa.connected ? 'ok' : 'muted'} label={!wa.configured ? 'Worker not configured' : wa.online === false ? 'Worker unavailable' : wa.connected ? 'Connected' : (wa.state || 'Disconnected').replace(/_/g, ' ')} />
+                    {wa.number && <StatusPill status="ok" label={`+${wa.number}`} />}
+                  </div>
+                  <dl className="grid gap-2 text-xs text-slate-600">
+                    <div><dt className="font-semibold text-slate-800">Last connected</dt><dd>{wa.lastConnectedAt ? new Date(wa.lastConnectedAt).toLocaleString() : 'Not available'}</dd></div>
+                    <div><dt className="font-semibold text-slate-800">Last message</dt><dd>{wa.lastMessageAt ? new Date(wa.lastMessageAt).toLocaleString() : 'Not available'}</dd></div>
+                    {wa.error && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">{wa.error}</div>}
+                  </dl>
+                </div>
+                <div className="space-y-4">
+                  {!wa.connected && (
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                      <Field label="WhatsApp number">
+                        <input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="919876543210" className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                      </Field>
+                      <button type="button" onClick={() => whatsappAction('login')} disabled={!!waBusy || !waPhone.trim()} className="self-end inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white disabled:opacity-60"><Smartphone className="h-4 w-4" /> Get pairing code</button>
+                      <button type="button" onClick={() => whatsappAction('qr')} disabled={!!waBusy} className="self-end inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 disabled:opacity-60"><QrCode className="h-4 w-4" /> QR login</button>
+                    </div>
+                  )}
+                  {waPairingCode && <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center"><p className="text-xs font-semibold text-purple-700">Pairing code</p><p className="mt-1 break-all font-mono text-2xl font-bold text-purple-950">{waPairingCode}</p></div>}
+                  {waQr && <div className="inline-flex rounded-xl border border-slate-200 bg-white p-3"><img src={waQr} alt="WhatsApp login QR code" className="h-52 w-52 object-contain" /></div>}
+                  {wa.connected && <button type="button" onClick={() => whatsappAction('logout')} disabled={!!waBusy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600 disabled:opacity-60"><XCircle className="h-4 w-4" /> Disconnect</button>}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {activeTab === 'telegram' && (
+            <Card title="Telegram alerts" description="Bot token is write-only in this UI. Saved tokens are masked." icon={Send}>
+              <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="space-y-4">
+                  <Toggle checked={tg.enabled} onChange={(v) => setTg({ ...tg, enabled: v })} label="Enable Telegram alerts" description="Allow booking and payment approval alerts to be sent to configured chats." />
+                  <Field label={tg.has_bot_token ? `Bot token (${tg.masked_bot_token})` : 'Bot token'}>
+                    <input value={tg.bot_token} onChange={(e) => setTg({ ...tg, bot_token: e.target.value })} placeholder={tg.has_bot_token ? 'Enter a new token to replace the saved token' : '123456:ABC...'} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                  </Field>
+                  <div>
+                    <Field label="Admin chat IDs">
+                      <div className="flex gap-2">
+                        <input value={chatIdInput} onChange={(e) => setChatIdInput(e.target.value)} placeholder="-1001234567890" className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                        <button type="button" onClick={() => { const id = chatIdInput.trim(); if (!/^-?\d+$/.test(id)) return showToast('Chat ID must be numeric', 'error'); setTg({ ...tg, admin_chat_ids: [...new Set([...(tg.admin_chat_ids || []), id])] }); setChatIdInput(''); }} className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700">Add</button>
+                      </div>
+                    </Field>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(tg.admin_chat_ids || []).map((id: string) => (
+                        <span key={id} className="inline-flex items-center gap-2 rounded-full border border-purple-100 bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700">{id}<button type="button" onClick={() => setTg({ ...tg, admin_chat_ids: tg.admin_chat_ids.filter((x: string) => x !== id) })}><X className="h-3 w-3" /></button></span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Toggle checked={tg.notify_new_booking} onChange={(v) => setTg({ ...tg, notify_new_booking: v })} label="New booking alerts" />
+                    <Toggle checked={tg.notify_payments} onChange={(v) => setTg({ ...tg, notify_payments: v })} label="Payment approval alerts" />
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button type="button" onClick={saveTelegram} disabled={!!tgBusy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-bold text-white disabled:opacity-60">{tgBusy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save settings</button>
+                    <button type="button" onClick={() => telegramAction('webhook')} disabled={!!tgBusy || !tg.has_bot_token} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 disabled:opacity-60">Connect webhook</button>
+                    <button type="button" onClick={() => telegramAction('test')} disabled={!!tgBusy || !tg.has_bot_token || !(tg.admin_chat_ids || []).length} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 disabled:opacity-60">Send test</button>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-bold text-slate-950">Webhook status</p>
+                    <div className="mt-2"><StatusPill status={tg.webhook_status === 'connected' ? 'ok' : tg.webhook_status === 'webhook_error' ? 'error' : 'muted'} label={(tg.webhook_status || 'not_configured').replace(/_/g, ' ')} /></div>
+                    {tg.bot_username && <p className="mt-2 break-all text-xs text-slate-500">@{tg.bot_username}</p>}
+                  </div>
+                  <button type="button" onClick={() => setShowGuide(!showGuide)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">Setup guide</button>
+                  {showGuide && (
+                    <ol className="list-decimal space-y-2 rounded-xl border border-slate-200 bg-white p-4 pl-8 text-sm leading-relaxed text-slate-600">
+                      <li>Create a bot with BotFather and paste the token here.</li>
+                      <li>Open the bot in Telegram and press Start.</li>
+                      <li>Send /id to the bot, add the returned chat ID, save, connect webhook, then send a test.</li>
+                    </ol>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
+
+      {methodDraft && (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/40 p-0 sm:items-center sm:justify-center sm:p-4" onClick={() => setMethodDraft(null)}>
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h3 className="text-lg font-bold text-slate-950">{methodDraft.id ? 'Edit payment method' : 'Add payment method'}</h3>
+              <button type="button" onClick={() => setMethodDraft(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <Field label="Nickname">
+                <input value={methodDraft.nickname} onChange={(e) => setMethodDraft({ ...methodDraft, nickname: e.target.value })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+              </Field>
+              <Field label="UPI ID">
+                <input value={methodDraft.upi_id} onChange={(e) => setMethodDraft({ ...methodDraft, upi_id: e.target.value })} placeholder="vivek2k@upi" className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+              </Field>
+              <Field label="Payee name">
+                <input value={methodDraft.payee_name} onChange={(e) => setMethodDraft({ ...methodDraft, payee_name: e.target.value })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+              </Field>
+              <Field label="QR image" hint="PNG, JPG, JPEG, or WebP. Max 5MB.">
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    <Upload className="h-4 w-4" /> Choose file
+                    <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setMethodDraft({ ...methodDraft, qr_image: file, qr_preview: URL.createObjectURL(file), remove_qr: false });
+                    }} />
+                  </label>
+                  {methodDraft.qr_preview && <button type="button" onClick={() => setMethodDraft({ ...methodDraft, qr_preview: '', qr_image: null, remove_qr: true })} className="text-sm font-semibold text-red-600">Remove QR</button>}
+                </div>
+              </Field>
+              {methodDraft.qr_preview && <div className="sm:col-span-2"><img src={methodDraft.qr_preview} alt="Payment method QR preview" className="h-32 w-32 rounded-xl border border-slate-200 object-contain p-2" /></div>}
+              <div className="sm:col-span-2">
+                <Field label="Instructions">
+                  <textarea rows={3} value={methodDraft.instructions} onChange={(e) => setMethodDraft({ ...methodDraft, instructions: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                </Field>
+              </div>
+              <Toggle checked={methodDraft.is_enabled} onChange={(v) => setMethodDraft({ ...methodDraft, is_enabled: v, is_default: v ? methodDraft.is_default : false })} label="Enabled" />
+              <Toggle checked={methodDraft.is_default} onChange={(v) => setMethodDraft({ ...methodDraft, is_default: v, is_enabled: v ? true : methodDraft.is_enabled })} label="Default method" />
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 p-5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setMethodDraft(null)} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700">Cancel</button>
+              <button type="button" onClick={submitMethod} disabled={!!methodBusy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-bold text-white disabled:opacity-60">{methodBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save method</button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Coupons Tab - Moved to /admin/coupons */}
-      {false && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-              <CreditCard className="h-6 w-6 mr-3 text-purple-600" />
-              Coupon Management
-            </h2>
-            <button
-              onClick={() => {
-                setShowCouponForm(true);
-                setEditingCoupon(null);
-                resetCouponForm();
-              }}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors flex items-center space-x-2"
-            >
-              <Plus className="h-5 w-5" />
-              <span>Add Coupon</span>
-            </button>
-          </div>
-
-          {/* Coupon Form Modal */}
-          {showCouponForm && (
-            <div className="bg-white rounded-2xl border border-purple-200 shadow-xl p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">
-                  {editingCoupon ? 'Edit Coupon' : 'Create New Coupon'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowCouponForm(false);
-                    setEditingCoupon(null);
-                    resetCouponForm();
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Basic Information Section */}
-              <div className="mb-8">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Tag className="h-5 w-5 mr-2 text-purple-600" />
-                  Basic Information
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Coupon Code <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={couponForm.code}
-                      onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
-                      placeholder="SAVE20"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Discount Type <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={couponForm.discount_type}
-                      onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    >
-                      <option value="percentage">Percentage (%)</option>
-                      <option value="fixed">Fixed Amount (₹)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Discount Value <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      {couponForm.discount_type === 'percentage' ? (
-                        <Percent className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      ) : (
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      )}
-                      <input
-                        type="number"
-                        value={couponForm.discount_value}
-                        onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
-                        placeholder={couponForm.discount_type === 'percentage' ? '20' : '500'}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                      />
-                    </div>
-                  </div>
-                  {couponForm.discount_type === 'percentage' && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Max Discount Per Transaction (₹)
-                      </label>
-                      <input
-                        type="number"
-                        value={couponForm.max_discount}
-                        onChange={(e) => setCouponForm({ ...couponForm, max_discount: e.target.value })}
-                        placeholder="1000"
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Minimum Booking Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={couponForm.min_amount}
-                      onChange={(e) => setCouponForm({ ...couponForm, min_amount: e.target.value })}
-                      placeholder="1000"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      value={couponForm.description}
-                      onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })}
-                      rows={2}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                      placeholder="Describe this coupon..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Date Range Section */}
-              <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Calendar className="h-5 w-5 mr-2 text-purple-600" />
-                  Validity Period
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Valid From
-                    </label>
-                    <input
-                      type="date"
-                      value={couponForm.start_date}
-                      onChange={(e) => setCouponForm({ ...couponForm, start_date: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Valid Until
-                    </label>
-                    <input
-                      type="date"
-                      value={couponForm.expiry_date}
-                      onChange={(e) => setCouponForm({ ...couponForm, expiry_date: e.target.value })}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Trip Selection Section */}
-              <div className="mb-8 p-4 bg-blue-50 rounded-xl border-2 border-blue-100">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2 text-blue-600" />
-                  Trip Selection
-                </h4>
-                <div className="mb-4">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={couponForm.apply_to_all_trips}
-                      onChange={(e) => setCouponForm({ ...couponForm, apply_to_all_trips: e.target.checked, trip_ids: [] })}
-                      className="w-5 h-5 text-purple-600 rounded"
-                    />
-                    <span className="text-sm font-semibold text-gray-700">Apply to All Trips</span>
-                  </label>
-                </div>
-                {!couponForm.apply_to_all_trips && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Select Specific Trips
-                    </label>
-                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
-                      {trips.map((trip) => (
-                        <label key={trip.id} className="flex items-center space-x-2 cursor-pointer hover:bg-purple-50 p-2 rounded">
-                          <input
-                            type="checkbox"
-                            checked={couponForm.trip_ids.includes(trip.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setCouponForm({ ...couponForm, trip_ids: [...couponForm.trip_ids, trip.id] });
-                              } else {
-                                setCouponForm({ ...couponForm, trip_ids: couponForm.trip_ids.filter(id => id !== trip.id) });
-                              }
-                            }}
-                            className="w-4 h-4 text-purple-600 rounded"
-                          />
-                          <span className="text-sm text-gray-700">{trip.title} - {trip.destination}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* User Selection Section */}
-              <div className="mb-8 p-4 bg-green-50 rounded-xl border-2 border-green-100">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Users className="h-5 w-5 mr-2 text-green-600" />
-                  User Selection
-                </h4>
-                <div className="mb-4">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={couponForm.apply_to_all_users}
-                      onChange={(e) => setCouponForm({ ...couponForm, apply_to_all_users: e.target.checked, user_ids: [] })}
-                      className="w-5 h-5 text-purple-600 rounded"
-                    />
-                    <span className="text-sm font-semibold text-gray-700">Apply to All Users</span>
-                  </label>
-                </div>
-                {!couponForm.apply_to_all_users && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Select Specific Users
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Search users by name or email..."
-                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900 mb-2"
-                      id="user-search"
-                    />
-                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
-                      {allUsers.map((user) => (
-                        <label key={user.id} className="flex items-center space-x-2 cursor-pointer hover:bg-purple-50 p-2 rounded">
-                          <input
-                            type="checkbox"
-                            checked={couponForm.user_ids.includes(user.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setCouponForm({ ...couponForm, user_ids: [...couponForm.user_ids, user.id] });
-                              } else {
-                                setCouponForm({ ...couponForm, user_ids: couponForm.user_ids.filter(id => id !== user.id) });
-                              }
-                            }}
-                            className="w-4 h-4 text-purple-600 rounded"
-                          />
-                          <span className="text-sm text-gray-700">
-                            {user.first_name} {user.last_name} ({user.email})
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Early Bird Section */}
-              <div className="mb-8 p-4 bg-orange-50 rounded-xl border-2 border-orange-100">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Clock className="h-5 w-5 mr-2 text-orange-600" />
-                  Early Bird Discount
-                </h4>
-                <div className="mb-4">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={couponForm.is_early_bird}
-                      onChange={(e) => setCouponForm({ ...couponForm, is_early_bird: e.target.checked })}
-                      className="w-5 h-5 text-purple-600 rounded"
-                    />
-                    <span className="text-sm font-semibold text-gray-700">Enable Early Bird Discount</span>
-                  </label>
-                </div>
-                {couponForm.is_early_bird && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Days Before Trip Start Date
-                    </label>
-                    <input
-                      type="number"
-                      value={couponForm.early_bird_days_before}
-                      onChange={(e) => setCouponForm({ ...couponForm, early_bird_days_before: e.target.value })}
-                      placeholder="e.g., 30 (for 30 days before trip)"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Coupon will only be valid if booking is made X days before trip start date</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Usage Limits Section */}
-              <div className="mb-8 p-4 bg-indigo-50 rounded-xl border-2 border-indigo-100">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Filter className="h-5 w-5 mr-2 text-indigo-600" />
-                  Usage Limits & Restrictions
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Total Usage Limit
-                    </label>
-                    <input
-                      type="number"
-                      value={couponForm.usage_limit}
-                      onChange={(e) => setCouponForm({ ...couponForm, usage_limit: e.target.value })}
-                      placeholder="Leave empty for unlimited"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Total times this coupon can be used</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Per User Limit
-                    </label>
-                    <input
-                      type="number"
-                      value={couponForm.per_user_limit}
-                      onChange={(e) => setCouponForm({ ...couponForm, per_user_limit: e.target.value })}
-                      placeholder="Leave empty for unlimited"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">How many times one user can use this</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Maximum Total Discount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={couponForm.max_total_discount}
-                      onChange={(e) => setCouponForm({ ...couponForm, max_total_discount: e.target.value })}
-                      placeholder="Leave empty for unlimited"
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl focus:border-purple-500 outline-none text-gray-900"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Maximum total discount amount across all uses (e.g., ₹50,000 total)</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Section */}
-              <div className="mb-6">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={couponForm.is_active}
-                    onChange={(e) => setCouponForm({ ...couponForm, is_active: e.target.checked })}
-                    className="w-5 h-5 text-purple-600 rounded"
-                  />
-                  <span className="text-sm font-semibold text-gray-700">Active (Coupon is enabled and can be used)</span>
-                </label>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-4 pt-4 border-t-2 border-gray-200">
-                <button
-                  onClick={handleSaveCoupon}
-                  disabled={saving}
-                  className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
-                >
-                  <Save className="h-5 w-5" />
-                  <span>{saving ? 'Saving...' : 'Save Coupon'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCouponForm(false);
-                    setEditingCoupon(null);
-                    resetCouponForm();
-                  }}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Coupons List */}
-          <div className="bg-white rounded-2xl border border-purple-200 shadow-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-200">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Code</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Discount</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Usage</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Expiry</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-purple-100">
-                  {coupons.map((coupon) => (
-                    <tr key={coupon.id} className="hover:bg-purple-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="font-mono font-bold text-gray-900">{coupon.code}</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {coupon.discount_type === 'percentage' ? (
-                          <span>{coupon.discount_value}%</span>
-                        ) : (
-                          <span>₹{coupon.discount_value}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {coupon.used_count}/{coupon.usage_limit || '∞'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          coupon.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {coupon.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-700 text-sm">
-                        {coupon.expiry_date ? new Date(coupon.expiry_date).toLocaleDateString() : 'No expiry'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEditCoupon(coupon)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCoupon(coupon.id)}
-                            className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {coupons.length === 0 && (
-                <div className="text-center py-12">
-                  <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600">No coupons created yet</p>
-                </div>
-              )}
-            </div>
-          </div>
+      {toast && (
+        <div className={`fixed right-4 top-20 z-[60] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-xl border bg-white p-4 shadow-xl ${toast.type === 'success' ? 'border-emerald-200' : toast.type === 'error' ? 'border-red-200' : 'border-blue-200'}`}>
+          {toast.type === 'success' ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-600" /> : toast.type === 'error' ? <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-600" /> : <AlertCircle className="h-5 w-5 flex-shrink-0 text-blue-600" />}
+          <p className="text-sm font-semibold text-slate-800">{toast.message}</p>
         </div>
       )}
     </div>

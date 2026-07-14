@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       pickup_point,
       addon_selections,
       addons_total,
+      manual_payment_method_id,
     } = body;
 
     if (!trip_id || !number_of_participants || number_of_participants < 1) {
@@ -232,6 +233,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let manualPaymentSnapshot: Record<string, unknown> | null = null;
+    let verifiedManualMethodId: string | null = null;
+    if (payment_mode === 'manual') {
+      const selectedId = String(manual_payment_method_id || '').trim();
+      const methodQuery = adminClient
+        .from('manual_payment_methods')
+        .select('id, nickname, upi_id, payee_name, qr_image_url, instructions')
+        .eq('is_enabled', true);
+      const { data: manualMethod } = selectedId && selectedId !== 'legacy'
+        ? await methodQuery.eq('id', selectedId).single()
+        : await methodQuery.order('is_default', { ascending: false }).order('display_order', { ascending: true }).limit(1).single();
+
+      if (!manualMethod) {
+        return NextResponse.json({ error: 'Manual payment is not available. Please choose another payment option.' }, { status: 400 });
+      }
+      verifiedManualMethodId = manualMethod.id;
+      manualPaymentSnapshot = {
+        id: manualMethod.id,
+        nickname: manualMethod.nickname,
+        upi_id: manualMethod.upi_id,
+        payee_name: manualMethod.payee_name,
+        qr_image_url: manualMethod.qr_image_url,
+        instructions: manualMethod.instructions,
+        amount: expectedFinal + addonsTotalServer,
+        submitted_at: new Date().toISOString(),
+      };
+    }
+
     const bookingPayload = {
       trip_id,
       user_id: auth.user.id,
@@ -260,6 +289,8 @@ export async function POST(request: NextRequest) {
       amount_paid: 0,
       addons_total: addonsTotalServer,
       reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
+      manual_payment_method_id: verifiedManualMethodId,
+      manual_payment_snapshot: manualPaymentSnapshot,
       departure_date: validatedDeparture,
       pickup_point: pickup_point ? String(pickup_point).slice(0, 200) : null,
     };

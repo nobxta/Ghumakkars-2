@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single();
 
-    if (!paymentSettings || paymentSettings.payment_mode !== 'razorpay') {
+    if (!paymentSettings || !['razorpay', 'both'].includes(paymentSettings.payment_mode)) {
       return NextResponse.json({ error: 'Razorpay is not enabled in admin settings' }, { status: 400 });
     }
 

@@ -177,12 +177,22 @@ export default function BookTripPage() {
       }
     }
   }, [trip, paymentMethod]);
-  const [paymentMode, setPaymentMode] = useState<'manual' | 'razorpay'>('manual');
+  const [paymentMode, setPaymentMode] = useState<'manual' | 'razorpay' | 'both'>('manual');
   const [paymentSettings, setPaymentSettings] = useState<{ 
     qrUrl?: string; 
     upiId?: string; 
-    paymentMode?: 'manual' | 'razorpay';
+    paymentMode?: 'manual' | 'razorpay' | 'both';
+    manualMethods?: Array<{
+      id: string;
+      nickname: string;
+      upi_id: string;
+      payee_name: string;
+      qr_image_url?: string | null;
+      instructions?: string | null;
+      is_default?: boolean;
+    }>;
   }>({});
+  const [selectedManualMethodId, setSelectedManualMethodId] = useState('');
   const [processingRazorpay, setProcessingRazorpay] = useState(false);
   const [paymentOverlay, setPaymentOverlay] = useState<'idle' | 'preparing' | 'processing'>('idle');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -478,12 +488,15 @@ export default function BookTripPage() {
       const res = await fetch('/api/payment/settings');
       if (!res.ok) return;
       const data = await res.json();
-      const mode = (data.paymentMode ?? data.payment_mode ?? 'manual') as 'manual' | 'razorpay';
+      const mode = (data.paymentMode ?? data.payment_mode ?? 'manual') as 'manual' | 'razorpay' | 'both';
+      const manualMethods = Array.isArray(data.manualMethods) ? data.manualMethods : [];
       setPaymentMode(mode);
+      setSelectedManualMethodId((current) => current || manualMethods[0]?.id || '');
       setPaymentSettings({
         qrUrl: data.qrUrl ?? data.payment_qr_url ?? undefined,
         upiId: data.upiId ?? data.payment_upi_id ?? undefined,
         paymentMode: mode,
+        manualMethods,
       });
     } catch (error) {
       console.error('Error fetching payment settings:', error);
@@ -669,7 +682,7 @@ export default function BookTripPage() {
         setProcessingRazorpay(false);
         showToast('Booking confirmed! Fully covered by wallet + coupon.', 'success');
         clearDraft();
-      router.push(`/booking-success/${bookingData.id}`);
+      router.push(`/booking-status/${bookingData.id}`);
         return;
       }
 
@@ -738,7 +751,7 @@ export default function BookTripPage() {
               setProcessingRazorpay(false);
               showToast('Payment successful! Your booking is confirmed.', 'success');
               clearDraft();
-      router.push(`/booking-success/${bookingData.id}`);
+      router.push(`/booking-status/${bookingData.id}`);
             } catch (error: any) {
               console.error('Payment verification error:', error);
               setPaymentOverlay('idle');
@@ -903,7 +916,7 @@ export default function BookTripPage() {
 
       showToast('Booking created! Admin will contact you to collect payment and confirm.', 'success');
       clearDraft();
-      router.push(`/booking-success/${bookingData.id}`);
+      router.push(`/booking-status/${bookingData.id}`);
     } catch (error: any) {
       console.error('Error creating cash payment booking:', error);
       setError(error.message || 'Failed to create booking');
@@ -1188,6 +1201,23 @@ export default function BookTripPage() {
       const addonsTotal = hasAddons ? addonsTotalClient : 0;
       const addonsNow = paymentMethod === 'seat_lock' ? 0 : addonsTotal;
       const chargeNow = finalAmount + addonsNow;
+      const selectedManualMethod = (paymentSettings.manualMethods || []).find((m) => m.id === selectedManualMethodId) || paymentSettings.manualMethods?.[0];
+      if (!selectedManualMethod) {
+        setError('Manual payment is not available. Please choose another payment option.');
+        setSubmitting(false);
+        return;
+      }
+      const manualPaymentSnapshot = {
+        id: selectedManualMethod.id,
+        nickname: selectedManualMethod.nickname,
+        upi_id: selectedManualMethod.upi_id,
+        payee_name: selectedManualMethod.payee_name,
+        qr_image_url: selectedManualMethod.qr_image_url || null,
+        instructions: selectedManualMethod.instructions || null,
+        amount: chargeNow,
+        reference_id: transactionId.trim(),
+        submitted_at: new Date().toISOString(),
+      };
 
       // Create booking
       const { data: bookingData, error: bookingError } = await supabase
@@ -1215,6 +1245,8 @@ export default function BookTripPage() {
             payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
             payment_mode: 'manual',
             reference_id: transactionId.trim(),
+            manual_payment_method_id: selectedManualMethod.id === 'legacy' ? null : selectedManualMethod.id,
+            manual_payment_snapshot: manualPaymentSnapshot,
             payment_amount: chargeNow,
             payment_status: 'pending',
             booking_status: 'pending',
@@ -1250,6 +1282,8 @@ export default function BookTripPage() {
               payment_type: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
               payment_status: 'pending',
               payment_mode: 'manual', // Track payment mode
+              manual_payment_method_id: selectedManualMethod.id === 'legacy' ? null : selectedManualMethod.id,
+              manual_payment_snapshot: manualPaymentSnapshot,
             },
           ]);
 
@@ -1309,7 +1343,7 @@ export default function BookTripPage() {
       // We'll do this when admin confirms payment
 
       clearDraft();
-      router.push(`/booking-success/${bookingData.id}`);
+      router.push(`/booking-status/${bookingData.id}`);
     } catch (err: any) {
       console.error('Error creating booking:', err);
       setError(err.message || 'Failed to create booking. Please try again.');
@@ -1343,6 +1377,7 @@ export default function BookTripPage() {
   const unlimitedSeats = !trip.max_participants || trip.max_participants <= 0;
   const availableSpots = unlimitedSeats ? Infinity : trip.max_participants - trip.current_participants;
   const canBook = unlimitedSeats || availableSpots >= totalPassengers;
+  const selectedManualMethod = (paymentSettings.manualMethods || []).find((m) => m.id === selectedManualMethodId) || paymentSettings.manualMethods?.[0];
 
   // Polished progress bar (Passenger → [Customize] → ID → Payment)
   const StepIndicator = () => {
@@ -2030,18 +2065,19 @@ export default function BookTripPage() {
             <div className="lg:col-start-1 lg:row-start-2 space-y-3">
               <p className="text-sm font-medium text-gray-600 mb-1">Choose payment method</p>
               <div className="space-y-2 md:space-y-3">
-                {/* Pay Now — primary: Razorpay or QR based on settings */}
-                {paymentMode === 'manual' ? (
+                {/* Pay Now — show only configured payment options */}
+                {(paymentMode === 'manual' || paymentMode === 'both') && (
                   <button
                     type="button"
                     onClick={() => setShowPaymentDetails(true)}
-                    disabled={paymentOverlay !== 'idle'}
+                    disabled={paymentOverlay !== 'idle' || !(paymentSettings.manualMethods || []).length}
                     className="w-full px-4 md:px-8 py-3 md:py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm md:text-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <CreditCard className="h-4 w-4 md:h-6 md:w-6" />
-                    <span>Pay Now</span>
+                    <span>Pay by UPI / QR</span>
                   </button>
-                ) : (
+                )}
+                {(paymentMode === 'razorpay' || paymentMode === 'both') && (
                   <button
                     type="button"
                     onClick={handleRazorpayPayment}
@@ -2098,7 +2134,7 @@ export default function BookTripPage() {
         )}
 
         {/* Payment Details: QR Code and Transaction ID (Manual Mode Only) */}
-        {stepKey === 'payment' && showPaymentDetails && paymentMode === 'manual' && (
+        {stepKey === 'payment' && showPaymentDetails && (paymentMode === 'manual' || paymentMode === 'both') && (
           <div className="max-w-[520px] mx-auto space-y-4">
             {/* Header */}
             <div className="flex items-center gap-3">
@@ -2122,17 +2158,39 @@ export default function BookTripPage() {
               <UpiPayButton
                 amount={getPayableNow()}
                 note={upiNote(paymentMethod === 'seat_lock' ? 'seat_lock' : 'full', trip?.title || 'Ghumakkars')}
-                upiId={paymentSettings.upiId}
+                upiId={selectedManualMethod?.upi_id}
               />
             </div>
 
             {/* QR + UPI */}
             <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
-              {paymentSettings.qrUrl ? (
+              {(paymentSettings.manualMethods || []).length > 1 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Payment account</label>
+                  <select
+                    value={selectedManualMethodId}
+                    onChange={(e) => setSelectedManualMethodId(e.target.value)}
+                    className="w-full h-11 px-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
+                  >
+                    {(paymentSettings.manualMethods || []).map((method) => (
+                      <option key={method.id} value={method.id}>{method.nickname} - {method.upi_id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {selectedManualMethod && (
+                <div className="mb-4 rounded-[14px] bg-[#FAFAFC] px-4 py-3" style={{ border: '1px solid #E2E8F0' }}>
+                  <p className="text-sm font-bold text-[#0F172A]">{selectedManualMethod.nickname}</p>
+                  <p className="text-xs text-[#64748B]">Payee: {selectedManualMethod.payee_name}</p>
+                </div>
+              )}
+
+              {selectedManualMethod?.qr_image_url ? (
                 <div className="flex flex-col items-center">
                   <p className="text-xs font-semibold text-[#64748B] mb-3">Scan QR</p>
                   <div className="w-44 h-44 rounded-[14px] bg-white flex items-center justify-center overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
-                    <img src={paymentSettings.qrUrl} alt="Payment QR" className="w-full h-full object-contain p-1.5" />
+                    <img src={selectedManualMethod.qr_image_url} alt={`${selectedManualMethod.nickname} payment QR`} className="w-full h-full object-contain p-1.5" />
                   </div>
                 </div>
               ) : (
@@ -2142,18 +2200,21 @@ export default function BookTripPage() {
                 </div>
               )}
 
-              {paymentSettings.upiId && (
+              {selectedManualMethod?.upi_id && (
                 <>
                   <div className="flex items-center gap-3 my-4">
                     <div className="flex-1 h-px bg-[#E2E8F0]" /><span className="text-xs text-[#94a3b8]">Pay on UPI ID</span><div className="flex-1 h-px bg-[#E2E8F0]" />
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 rounded-[12px] px-3.5 py-2.5 bg-[#FAFAFC] min-w-0" style={{ border: '1px solid #E2E8F0' }}>
-                      <p className="font-mono text-sm font-bold text-[#7C3AED] truncate text-center">{paymentSettings.upiId}</p>
+                      <p className="font-mono text-sm font-bold text-[#7C3AED] truncate text-center">{selectedManualMethod.upi_id}</p>
                     </div>
-                    <button type="button" onClick={() => { navigator.clipboard.writeText(paymentSettings.upiId || ''); showToast('UPI ID copied!', 'success'); }}
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(selectedManualMethod.upi_id || ''); showToast('UPI ID copied!', 'success'); }}
                       className="flex-shrink-0 px-4 py-2.5 rounded-[12px] text-sm font-semibold text-white transition-all hover:opacity-95" style={{ background: PURPLE_GRAD }}>Copy</button>
                   </div>
+                  {selectedManualMethod.instructions && (
+                    <p className="mt-3 text-xs leading-relaxed text-[#64748B]">{selectedManualMethod.instructions}</p>
+                  )}
                 </>
               )}
             </div>

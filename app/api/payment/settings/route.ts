@@ -27,11 +27,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { data: methods, error: methodsError } = await adminClient
+      .from('manual_payment_methods')
+      .select('id, nickname, upi_id, payee_name, qr_image_url, instructions, is_default, display_order')
+      .eq('is_enabled', true)
+      .order('is_default', { ascending: false })
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (methodsError && methodsError.code !== '42P01') {
+      console.error('Error fetching manual payment methods:', methodsError);
+    }
+
+    const fallbackMethod = data?.payment_upi_id
+      ? [{
+          id: 'legacy',
+          nickname: 'Primary UPI',
+          upi_id: data.payment_upi_id,
+          payee_name: 'Ghumakkars',
+          qr_image_url: data.payment_qr_url,
+          instructions: null,
+          is_default: true,
+          display_order: 0,
+        }]
+      : [];
+    const manualMethods = methods && methods.length > 0 ? methods : fallbackMethod;
+    const configuredMode = data?.payment_mode || 'manual';
+    const paymentMode = configuredMode === 'both'
+      ? 'both'
+      : configuredMode === 'razorpay'
+        ? 'razorpay'
+        : manualMethods.length > 0
+          ? 'manual'
+          : 'razorpay';
+
     return NextResponse.json({
       qrUrl: data?.payment_qr_url || null,
       upiId: data?.payment_upi_id || null,
-      paymentMode: data?.payment_mode || 'manual',
+      paymentMode,
       dueDaysBefore: data?.seat_lock_due_days_before ?? 5,
+      manualMethods,
     });
   } catch (error: any) {
     console.error('Error in payment settings API:', error);
@@ -41,4 +76,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -11,7 +11,24 @@ export async function GET() {
   if (auth instanceof NextResponse) return auth;
   const admin = createAdminClient();
   const { data } = await admin.from('telegram_settings').select('*').eq('id', 1).single();
-  return NextResponse.json(data || {});
+  let webhookStatus = 'not_configured';
+  if (data?.bot_token) {
+    const info = await tgCall('getWebhookInfo', {}, data.bot_token).catch(() => null);
+    webhookStatus = info?.ok && info.result?.url
+      ? (info.result?.last_error_message ? 'webhook_error' : 'connected')
+      : 'not_configured';
+  }
+  return NextResponse.json(data ? {
+    enabled: data.enabled,
+    bot_username: data.bot_username,
+    admin_chat_ids: data.admin_chat_ids || [],
+    notify_new_booking: data.notify_new_booking,
+    notify_payments: data.notify_payments,
+    updated_at: data.updated_at,
+    has_bot_token: !!data.bot_token,
+    masked_bot_token: data.bot_token ? `${String(data.bot_token).slice(0, 8)}...${String(data.bot_token).slice(-4)}` : null,
+    webhook_status: webhookStatus,
+  } : {});
 }
 
 export async function POST(request: NextRequest) {
@@ -80,17 +97,33 @@ export async function POST(request: NextRequest) {
   // Default: save settings
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.enabled !== undefined) updates.enabled = !!body.enabled;
-  if (body.bot_token !== undefined) updates.bot_token = body.bot_token ? String(body.bot_token).trim() : null;
+  if (body.bot_token !== undefined && String(body.bot_token).trim()) updates.bot_token = String(body.bot_token).trim();
   if (body.notify_new_booking !== undefined) updates.notify_new_booking = !!body.notify_new_booking;
   if (body.notify_payments !== undefined) updates.notify_payments = !!body.notify_payments;
   if (body.admin_chat_ids !== undefined) {
     const ids = Array.isArray(body.admin_chat_ids)
       ? body.admin_chat_ids
       : String(body.admin_chat_ids).split(/[\s,]+/);
-    updates.admin_chat_ids = ids.map((x: string) => String(x).trim()).filter(Boolean);
+    const cleanIds = ids.map((x: string) => String(x).trim()).filter(Boolean);
+    if (cleanIds.some((x: string) => !/^-?\d+$/.test(x))) {
+      return NextResponse.json({ error: 'Telegram chat IDs must be numeric.' }, { status: 400 });
+    }
+    updates.admin_chat_ids = cleanIds;
   }
 
   const { data, error } = await admin.from('telegram_settings').update(updates).eq('id', 1).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, settings: data });
+  return NextResponse.json({
+    success: true,
+    settings: {
+      enabled: data.enabled,
+      bot_username: data.bot_username,
+      admin_chat_ids: data.admin_chat_ids || [],
+      notify_new_booking: data.notify_new_booking,
+      notify_payments: data.notify_payments,
+      updated_at: data.updated_at,
+      has_bot_token: !!data.bot_token,
+      masked_bot_token: data.bot_token ? `${String(data.bot_token).slice(0, 8)}...${String(data.bot_token).slice(-4)}` : null,
+    },
+  });
 }
