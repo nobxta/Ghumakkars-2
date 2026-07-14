@@ -16,6 +16,7 @@ const FROM_NAME = process.env.FROM_NAME || 'Ghumakkars';
 
 // Email aliases — all hosted on Hostinger under ghumakkars.in
 const EMAIL_ALIASES = {
+  admin: 'admin@ghumakkars.in',
   noreply: 'no-reply@ghumakkars.in',
   bookings: 'bookings@ghumakkars.in',
   offers: 'offers@ghumakkars.in',
@@ -23,6 +24,27 @@ const EMAIL_ALIASES = {
   hello: 'hello@ghumakkars.in',
 };
 const FROM_EMAIL = process.env.FROM_EMAIL || EMAIL_ALIASES.noreply;
+
+export const ADMIN_EMAIL_SENDERS = [
+  { email: EMAIL_ALIASES.admin, label: 'Administration' },
+  { email: EMAIL_ALIASES.hello, label: 'General communication' },
+  { email: EMAIL_ALIASES.support, label: 'Customer support' },
+  { email: EMAIL_ALIASES.bookings, label: 'Booking updates' },
+  { email: EMAIL_ALIASES.offers, label: 'Offers and discounts' },
+  { email: EMAIL_ALIASES.noreply, label: 'Automated notifications' },
+] as const;
+
+export const ADMIN_SENDER_NAMES = [
+  'Ghumakkars',
+  'Ghumakkars Support',
+  'Ghumakkars Bookings',
+  'Ghumakkars Team',
+  'Vivek from Ghumakkars',
+] as const;
+
+export function isAllowedAdminSender(email: string) {
+  return ADMIN_EMAIL_SENDERS.some((sender) => sender.email === email);
+}
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
 
@@ -401,9 +423,65 @@ export async function sendEmail(options: { to: string; subject: string; html: st
   });
 }
 
+export async function sendAdminComposedEmail(options: {
+  to: string;
+  fromEmail: string;
+  fromName: string;
+  subject: string;
+  text: string;
+  replyTo?: string;
+}) {
+  if (!isAllowedAdminSender(options.fromEmail)) {
+    throw new Error('Sender address is not allowed');
+  }
+
+  const safeName = sanitizeHeaderValue(options.fromName || FROM_NAME).slice(0, 80);
+  const safeSubject = sanitizeHeaderValue(options.subject).slice(0, 160);
+  const text = String(options.text || '').slice(0, 12000);
+  const html = textToHtmlEmail(text);
+
+  return send({
+    from: `"${safeName}" <${options.fromEmail}>`,
+    to: options.to,
+    subject: safeSubject,
+    html,
+    text,
+    replyTo: options.replyTo || (options.fromEmail === EMAIL_ALIASES.noreply ? EMAIL_ALIASES.support : options.fromEmail),
+  });
+}
+
 // ─────────────────────────── Internal helper ───────────────────────────
 
-async function send(mailOptions: { from: string; to: string; subject: string; html: string; text: string }) {
+function sanitizeHeaderValue(value: string) {
+  return String(value || '').replace(/[\r\n]/g, ' ').trim();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function textToHtmlEmail(text: string) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p style="margin:0 0 16px;line-height:1.6;">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+  return renderEmail({
+    theme: 'brand',
+    preheader: text.slice(0, 120),
+    title: 'A message from Ghumakkars',
+    intro: paragraphs || '<p style="margin:0;line-height:1.6;">Message body was empty.</p>',
+  });
+}
+
+async function send(mailOptions: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) {
   try {
     const info = await transporter.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };

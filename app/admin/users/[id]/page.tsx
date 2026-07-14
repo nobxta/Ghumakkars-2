@@ -242,6 +242,7 @@ export default function AdminUserDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -259,6 +260,20 @@ export default function AdminUserDetailsPage() {
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [emailSenders, setEmailSenders] = useState<Array<{ email: string; label: string }>>([]);
+  const [emailSenderNames, setEmailSenderNames] = useState<string[]>([]);
+  const [emailSender, setEmailSender] = useState('support@ghumakkars.in');
+  const [emailSenderName, setEmailSenderName] = useState('Ghumakkars Support');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailInstruction, setEmailInstruction] = useState('');
+  const [emailLength, setEmailLength] = useState<'short' | 'standard' | 'detailed'>('standard');
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailGenerating, setEmailGenerating] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailDraftGenerated, setEmailDraftGenerated] = useState(false);
+  const [emailDraftUpdated, setEmailDraftUpdated] = useState(false);
 
   useEffect(() => {
     checkUser();
@@ -454,6 +469,108 @@ export default function AdminUserDetailsPage() {
     }
   };
 
+  const loadEmailSenders = async () => {
+    if (emailSenders.length > 0) return;
+    const response = await fetch('/api/admin/email-senders');
+    if (!response.ok) {
+      throw new Error('Could not load sender addresses');
+    }
+    const data = await response.json();
+    setEmailSenders(data.senders || []);
+    setEmailSenderNames(data.senderNames || []);
+    if (data.senders?.some((sender: any) => sender.email === 'support@ghumakkars.in')) {
+      setEmailSender('support@ghumakkars.in');
+    } else if (data.senders?.[0]?.email) {
+      setEmailSender(data.senders[0].email);
+    }
+    if (data.senderNames?.includes('Ghumakkars Support')) {
+      setEmailSenderName('Ghumakkars Support');
+    }
+  };
+
+  const openEmailComposer = async () => {
+    setShowMoreMenu(false);
+    setShowEmailModal(true);
+    setShowEmailPreview(false);
+    setEmailDraftGenerated(false);
+    setEmailDraftUpdated(false);
+    setEmailSubject('');
+    setEmailMessage('');
+    setEmailInstruction('');
+    setShowAiPanel(false);
+    try {
+      await loadEmailSenders();
+    } catch (error: any) {
+      setActionMessage({ type: 'error', text: error.message || 'Could not load sender addresses' });
+    }
+  };
+
+  const handleGenerateEmailDraft = async (transform?: string) => {
+    if (!emailInstruction.trim() && !transform) {
+      setActionMessage({ type: 'error', text: 'Tell AI what the email should say.' });
+      return;
+    }
+
+    setEmailGenerating(true);
+    setActionMessage(null);
+    try {
+      const response = await fetch(`/api/admin/users/${params.id}/email/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction: emailInstruction,
+          length: emailLength,
+          senderEmail: emailSender,
+          senderName: emailSenderName,
+          existingSubject: emailSubject,
+          existingBody: emailMessage,
+          transform,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Draft could not be generated');
+      setEmailSubject(data.subject || '');
+      setEmailMessage(data.body || '');
+      setEmailDraftGenerated(true);
+      setEmailDraftUpdated(true);
+      setTimeout(() => setEmailDraftUpdated(false), 1600);
+    } catch (error: any) {
+      setActionMessage({ type: 'error', text: error.message || 'Generation failed. Your draft was preserved.' });
+    } finally {
+      setEmailGenerating(false);
+    }
+  };
+
+  const handleSendComposedEmail = async () => {
+    setEmailSending(true);
+    setActionMessage(null);
+    try {
+      const response = await fetch(`/api/admin/users/${params.id}/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderEmail: emailSender,
+          senderName: emailSenderName,
+          subject: emailSubject,
+          message: emailMessage,
+          idempotencyKey: `${params.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Email could not be sent. Your draft has been preserved.');
+      setActionMessage({ type: 'success', text: `Email sent to ${data.recipient || user.email}` });
+      setShowEmailModal(false);
+      setShowEmailPreview(false);
+      setTimeout(() => setActionMessage(null), 4000);
+      await fetchUserDetails();
+      setActiveTab('activity');
+    } catch (error: any) {
+      setActionMessage({ type: 'error', text: error.message || 'Email could not be sent. Your draft has been preserved.' });
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const handleImpersonate = async () => {
     setImpersonating(true);
     setActionMessage(null);
@@ -616,7 +733,7 @@ export default function AdminUserDetailsPage() {
               </Button>
               {showMoreMenu && (
                 <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-xl border border-[#E7E8EE] bg-white py-1 shadow-xl" role="menu">
-                  {user.email && <a href={`mailto:${user.email}`} className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-[#17171C] hover:bg-[#F7F8FC]" role="menuitem"><Mail className="h-4 w-4 text-[#8A8D99]" />Email user</a>}
+                  {user.email && <button type="button" onClick={openEmailComposer} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#17171C] hover:bg-[#F7F8FC]" role="menuitem"><Mail className="h-4 w-4 text-[#8A8D99]" />Email user</button>}
                   {user.phone && <a href={`https://wa.me/91${String(user.phone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-[#17171C] hover:bg-[#F7F8FC]" role="menuitem"><MessageCircle className="h-4 w-4 text-[#8A8D99]" />WhatsApp</a>}
                   <button type="button" onClick={handleImpersonate} disabled={impersonating} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[#17171C] hover:bg-[#F7F8FC] disabled:opacity-60" role="menuitem">
                     {impersonating ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#8758F6] border-t-transparent" /> : <LogIn className="h-4 w-4 text-[#8758F6]" />}
@@ -823,6 +940,154 @@ export default function AdminUserDetailsPage() {
           </SectionCard>
         )}
       </div>
+
+      {showEmailModal && user && (
+        <ModalShell
+          title="Email user"
+          subtitle="Write and send an email directly from the Ghumakkars dashboard."
+          icon={<Mail className="h-5 w-5" />}
+          onClose={() => setShowEmailModal(false)}
+          width="max-w-3xl"
+          footer={(
+            <>
+              <Button className="sm:mr-auto" onClick={() => setShowEmailPreview((value) => !value)} disabled={!emailSubject.trim() && !emailMessage.trim()}>
+                {showEmailPreview ? 'Hide preview' : 'Preview'}
+              </Button>
+              <Button onClick={() => setShowEmailModal(false)} disabled={emailSending}>Cancel</Button>
+              <Button variant="primary" onClick={handleSendComposedEmail} disabled={emailSending || !user.email || !emailSender || !emailSenderName.trim() || !emailSubject.trim() || !emailMessage.trim()}>
+                {emailSending ? 'Sending...' : 'Send email'}
+              </Button>
+            </>
+          )}
+        >
+          <div className="space-y-5">
+            <div className="rounded-xl border border-[#E7E8EE] bg-[#FAFAFD] p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-[#666873]">Customer</p>
+              <p className="mt-1 text-sm font-semibold text-[#17171C]">{fullName}</p>
+              <p className="mt-0.5 text-sm text-[#666873]">{user.email}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="To">
+                <div className="flex h-11 items-center rounded-xl border border-green-200 bg-green-50 px-3 text-sm font-medium text-green-800">
+                  <span className="truncate">{fullName} &lt;{user.email}&gt;</span>
+                </div>
+              </Field>
+              <Field label="Send from">
+                <select value={emailSender} onChange={(event) => setEmailSender(event.target.value)} className={inputCls}>
+                  {emailSenders.map((sender) => (
+                    <option key={sender.email} value={sender.email}>{sender.email} - {sender.label}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Sender name">
+                <input list="email-sender-names" value={emailSenderName} onChange={(event) => setEmailSenderName(event.target.value.replace(/[\r\n]/g, ''))} className={inputCls} placeholder="Ghumakkars Support" />
+                <datalist id="email-sender-names">
+                  {emailSenderNames.map((name) => <option key={name} value={name} />)}
+                </datalist>
+              </Field>
+              <Field label="Subject">
+                <input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value.replace(/[\r\n]/g, '').slice(0, 140))} className={`${inputCls} ${emailDraftUpdated ? 'ring-4 ring-[#8758F6]/10' : ''}`} placeholder="Write a clear subject" />
+                <span className="mt-1 block text-right text-xs text-[#8A8D99]">{emailSubject.length}/120 recommended</span>
+              </Field>
+            </div>
+
+            {emailSender === 'no-reply@ghumakkars.in' && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+                This address is for automated notifications. Replies should be directed to support@ghumakkars.in.
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-[#E7E8EE] bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#17171C]">AI email writer</h3>
+                  <p className="mt-0.5 text-xs text-[#666873]">Generate a draft, then review and edit before sending.</p>
+                </div>
+                <Button onClick={() => setShowAiPanel((value) => !value)}>
+                  {showAiPanel ? 'Hide AI' : 'Write with AI'}
+                </Button>
+              </div>
+
+              {showAiPanel && (
+                <div className="mt-4 space-y-4 border-t border-[#E7E8EE] pt-4">
+                  <Field label="What should the email say?">
+                    <textarea
+                      value={emailInstruction}
+                      onChange={(event) => setEmailInstruction(event.target.value)}
+                      className={textareaCls}
+                      placeholder="Write an email telling the customer that I have sent their ₹2,000 refund and it may take 5-7 working days to appear."
+                    />
+                  </Field>
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-[#4F5260]">Email length</p>
+                    <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#F7F8FC] p-1">
+                      {[
+                        ['short', 'Short', '50-90 words'],
+                        ['standard', 'Standard', '100-180 words'],
+                        ['detailed', 'Detailed', '200-350 words'],
+                      ].map(([value, label, words]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEmailLength(value as 'short' | 'standard' | 'detailed')}
+                          className={`rounded-lg px-2 py-2 text-center text-xs font-semibold transition ${emailLength === value ? 'bg-white text-[#8758F6] shadow-sm' : 'text-[#666873] hover:text-[#17171C]'}`}
+                        >
+                          {label}
+                          <span className="mt-0.5 block text-[10px] font-medium text-[#8A8D99]">{words}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="primary" onClick={() => handleGenerateEmailDraft()} disabled={emailGenerating}>
+                      {emailGenerating ? 'Generating draft...' : emailDraftGenerated ? 'Regenerate' : 'Generate draft'}
+                    </Button>
+                    {emailDraftGenerated && (
+                      <>
+                        <Button onClick={() => handleGenerateEmailDraft('Make it shorter')} disabled={emailGenerating}>Make shorter</Button>
+                        <Button onClick={() => handleGenerateEmailDraft('Make it more detailed')} disabled={emailGenerating}>More detailed</Button>
+                        <Button onClick={() => handleGenerateEmailDraft('Make it more formal')} disabled={emailGenerating}>More formal</Button>
+                        <Button onClick={() => handleGenerateEmailDraft('Make it more friendly')} disabled={emailGenerating}>More friendly</Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Field label="Message">
+              <textarea
+                value={emailMessage}
+                onChange={(event) => setEmailMessage(event.target.value)}
+                className={`${textareaCls} min-h-[260px] ${emailDraftUpdated ? 'ring-4 ring-[#8758F6]/10' : ''}`}
+                placeholder="Write your email here..."
+              />
+            </Field>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => navigator.clipboard?.writeText(emailMessage)} disabled={!emailMessage.trim()}><Copy className="h-4 w-4" />Copy</Button>
+              <Button onClick={() => { setEmailSubject(''); setEmailMessage(''); setEmailDraftGenerated(false); }} disabled={!emailSubject && !emailMessage}>Clear</Button>
+              {emailDraftGenerated && <span className="inline-flex items-center text-xs font-medium text-[#666873]">AI-generated draft. Review before sending.</span>}
+            </div>
+
+            {showEmailPreview && (
+              <div className="rounded-2xl border border-[#E7E8EE] bg-[#FAFAFD] p-4">
+                <h3 className="text-sm font-semibold text-[#17171C]">Preview</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <InfoRow label="From" value={`${emailSenderName || 'Ghumakkars'} <${emailSender}>`} />
+                  <InfoRow label="To" value={`${fullName} <${user.email}>`} />
+                  <InfoRow label="Subject" value={emailSubject || 'Not provided'} />
+                  <InfoRow label="Reply-to" value={emailSender === 'no-reply@ghumakkars.in' ? 'support@ghumakkars.in' : emailSender} />
+                </div>
+                <div className="mt-4 whitespace-pre-wrap rounded-xl border border-[#E7E8EE] bg-white p-4 text-sm leading-6 text-[#17171C]">
+                  {emailMessage || 'No message written yet.'}
+                </div>
+              </div>
+            )}
+          </div>
+        </ModalShell>
+      )}
 
       {showEditModal && user && (
         <ModalShell
