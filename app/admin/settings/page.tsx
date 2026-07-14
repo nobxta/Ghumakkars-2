@@ -69,6 +69,21 @@ const emptyDraft: MethodDraft = {
   qr_image: null,
 };
 
+const baseInputClass = 'h-11 w-full rounded-xl border px-3 text-sm text-slate-950 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-100';
+const baseTextareaClass = 'w-full rounded-xl border px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-100';
+const filledFieldClass = 'border-purple-200 bg-purple-50/60';
+const emptyFieldClass = 'border-slate-200 bg-slate-50';
+
+function fieldClass(value: unknown, extra = '') {
+  const filled = value !== null && value !== undefined && String(value).trim() !== '';
+  return `${baseInputClass} ${filled ? filledFieldClass : emptyFieldClass} ${extra}`.trim();
+}
+
+function textareaClass(value: unknown) {
+  const filled = value !== null && value !== undefined && String(value).trim() !== '';
+  return `${baseTextareaClass} ${filled ? filledFieldClass : emptyFieldClass}`;
+}
+
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <label className="block space-y-1.5">
@@ -184,6 +199,10 @@ export default function AdminSettingsPage() {
   const [waPairingCode, setWaPairingCode] = useState('');
   const [waQr, setWaQr] = useState('');
   const [waBusy, setWaBusy] = useState('');
+  const [waTestPhone, setWaTestPhone] = useState('');
+  const [waTestTemplate, setWaTestTemplate] = useState('confirmed');
+  const [waTestCustom, setWaTestCustom] = useState('');
+  const [waTestResult, setWaTestResult] = useState('');
 
   const [tg, setTg] = useState<any>({
     enabled: false,
@@ -240,6 +259,15 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if ((!waQr && !waPairingCode) || wa.connected) return;
+    const timer = window.setInterval(() => {
+      refreshWhatsApp();
+    }, 3500);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waQr, waPairingCode, wa.connected]);
 
   useEffect(() => {
     const hasUnsavedGeneral = savedGeneral && JSON.stringify(general) !== savedGeneral;
@@ -396,7 +424,12 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/whatsapp', { cache: 'no-store' });
       const data = await res.json();
       setWa(data);
-      if (data.qr) setWaQr(data.qr);
+      if (data.connected) {
+        setWaQr('');
+        setWaPairingCode('');
+      } else if (data.qr) {
+        setWaQr(data.qr);
+      }
     } finally {
       setWaBusy('');
     }
@@ -415,12 +448,40 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'WhatsApp action failed');
+      setWa((prev: any) => ({ ...prev, connected: !!data.alreadyConnected || prev.connected, state: data.alreadyConnected ? 'connected' : 'connecting' }));
       if (data.pairingCode) setWaPairingCode(data.pairingCode);
       if (data.qr) setWaQr(data.qr);
       await refreshWhatsApp();
       showToast(action === 'logout' ? 'WhatsApp disconnected' : 'WhatsApp action completed');
     } catch (error: any) {
       showToast(error.message, 'error');
+    } finally {
+      setWaBusy('');
+    }
+  };
+
+  const sendWhatsAppTest = async () => {
+    setWaBusy('test');
+    setWaTestResult('');
+    try {
+      const res = await fetch('/api/admin/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test',
+          phone: waTestPhone,
+          template: waTestTemplate,
+          message: waTestCustom,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not send test message');
+      setWaTestResult('Test message sent.');
+      showToast('WhatsApp test message sent');
+      await refreshWhatsApp();
+    } catch (error: any) {
+      setWaTestResult(error.message || 'Could not send test message');
+      showToast(error.message || 'Could not send test message', 'error');
     } finally {
       setWaBusy('');
     }
@@ -471,6 +532,18 @@ export default function AdminSettingsPage() {
       setTgBusy('');
     }
   };
+
+  const waIsConnecting = !wa.connected && (!!waBusy || !!waQr || !!waPairingCode || ['connecting', 'pairing_required'].includes(String(wa.state || '')));
+  const waStatusLabel = !wa.configured
+    ? 'Worker not configured'
+    : wa.online === false
+      ? 'Worker unavailable'
+      : wa.connected
+        ? 'Connected'
+        : waIsConnecting
+          ? 'Connecting'
+          : (wa.state || 'Disconnected').replace(/_/g, ' ');
+  const waStatusKind = !wa.configured ? 'error' : wa.online === false ? 'warn' : wa.connected ? 'ok' : waIsConnecting ? 'warn' : 'muted';
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -590,13 +663,13 @@ export default function AdminSettingsPage() {
               <Card title="Seat-lock rules and referrals" description="These values are consumed by booking reminders and referral calculations." icon={IndianRupee}>
                 <div className="grid gap-4 md:grid-cols-3">
                   <Field label="Balance due days before departure" hint="Used when seat-lock payment reminders calculate the due date.">
-                    <input type="number" min={0} max={60} value={payment.seat_lock_due_days_before} onChange={(e) => setPayment({ ...payment, seat_lock_due_days_before: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                    <input type="number" min={0} max={60} value={payment.seat_lock_due_days_before} onChange={(e) => setPayment({ ...payment, seat_lock_due_days_before: Number(e.target.value) })} className={fieldClass(payment.seat_lock_due_days_before)} />
                   </Field>
                   <Field label="Referrer reward (₹)">
-                    <input type="number" min={0} value={payment.referral_reward_amount} onChange={(e) => setPayment({ ...payment, referral_reward_amount: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                    <input type="number" min={0} value={payment.referral_reward_amount} onChange={(e) => setPayment({ ...payment, referral_reward_amount: Number(e.target.value) })} className={fieldClass(payment.referral_reward_amount)} />
                   </Field>
                   <Field label="Friend bonus (₹)">
-                    <input type="number" min={0} value={payment.referral_friend_reward_amount} onChange={(e) => setPayment({ ...payment, referral_friend_reward_amount: Number(e.target.value) })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                    <input type="number" min={0} value={payment.referral_friend_reward_amount} onChange={(e) => setPayment({ ...payment, referral_friend_reward_amount: Number(e.target.value) })} className={fieldClass(payment.referral_friend_reward_amount)} />
                   </Field>
                 </div>
                 <button onClick={savePayment} disabled={saving === 'payment'} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 sm:w-auto">
@@ -611,7 +684,7 @@ export default function AdminSettingsPage() {
               <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap gap-2">
-                    <StatusPill status={!wa.configured ? 'error' : wa.online === false ? 'warn' : wa.connected ? 'ok' : 'muted'} label={!wa.configured ? 'Worker not configured' : wa.online === false ? 'Worker unavailable' : wa.connected ? 'Connected' : (wa.state || 'Disconnected').replace(/_/g, ' ')} />
+                    <StatusPill status={waStatusKind} label={waStatusLabel} />
                     {wa.number && <StatusPill status="ok" label={`+${wa.number}`} />}
                   </div>
                   <dl className="grid gap-2 text-xs text-slate-600">
@@ -624,15 +697,49 @@ export default function AdminSettingsPage() {
                   {!wa.connected && (
                     <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
                       <Field label="WhatsApp number">
-                        <input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="919876543210" className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                        <input value={waPhone} onChange={(e) => setWaPhone(e.target.value)} placeholder="919876543210" className={fieldClass(waPhone)} />
                       </Field>
                       <button type="button" onClick={() => whatsappAction('login')} disabled={!!waBusy || !waPhone.trim()} className="self-end inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white disabled:opacity-60"><Smartphone className="h-4 w-4" /> Get pairing code</button>
                       <button type="button" onClick={() => whatsappAction('qr')} disabled={!!waBusy} className="self-end inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 disabled:opacity-60"><QrCode className="h-4 w-4" /> QR login</button>
                     </div>
                   )}
-                  {waPairingCode && <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center"><p className="text-xs font-semibold text-purple-700">Pairing code</p><p className="mt-1 break-all font-mono text-2xl font-bold text-purple-950">{waPairingCode}</p></div>}
-                  {waQr && <div className="inline-flex rounded-xl border border-slate-200 bg-white p-3"><img src={waQr} alt="WhatsApp login QR code" className="h-52 w-52 object-contain" /></div>}
-                  {wa.connected && <button type="button" onClick={() => whatsappAction('logout')} disabled={!!waBusy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600 disabled:opacity-60"><XCircle className="h-4 w-4" /> Disconnect</button>}
+                  {!wa.connected && waPairingCode && <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center"><p className="text-xs font-semibold text-purple-700">Pairing code</p><p className="mt-1 break-all font-mono text-2xl font-bold text-purple-950">{waPairingCode}</p><p className="mt-2 text-xs text-purple-700">Waiting for WhatsApp to connect. This panel refreshes automatically.</p></div>}
+                  {!wa.connected && waQr && <div className="space-y-2"><div className="inline-flex rounded-xl border border-slate-200 bg-white p-3"><img src={waQr} alt="WhatsApp login QR code" className="h-52 w-52 object-contain" /></div><p className="text-xs text-slate-500">Scan the QR in WhatsApp. Once connected, this QR will disappear automatically.</p></div>}
+                  {wa.connected && (
+                    <div className="space-y-4">
+                      <button type="button" onClick={() => whatsappAction('logout')} disabled={!!waBusy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600 disabled:opacity-60"><XCircle className="h-4 w-4" /> Disconnect</button>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <h3 className="text-sm font-bold text-slate-950">Send test message</h3>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <Field label="Test phone number">
+                            <input value={waTestPhone} onChange={(e) => setWaTestPhone(e.target.value)} placeholder="919876543210" className={fieldClass(waTestPhone)} />
+                          </Field>
+                          <Field label="Template">
+                            <select value={waTestTemplate} onChange={(e) => setWaTestTemplate(e.target.value)} className={fieldClass(waTestTemplate, 'min-w-44')}>
+                              <option value="confirmed">Confirmed booking</option>
+                              <option value="pending">Pending booking</option>
+                              <option value="seat_locked">Seat locked</option>
+                              <option value="rejected">Rejected</option>
+                              <option value="cancelled">Cancelled</option>
+                              <option value="otp">OTP</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          </Field>
+                        </div>
+                        {waTestTemplate === 'custom' && (
+                          <div className="mt-3">
+                            <Field label="Custom message">
+                              <textarea rows={3} value={waTestCustom} onChange={(e) => setWaTestCustom(e.target.value)} className={textareaClass(waTestCustom)} />
+                            </Field>
+                          </div>
+                        )}
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <button type="button" onClick={sendWhatsAppTest} disabled={waBusy === 'test' || !waTestPhone.trim()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white disabled:opacity-60">{waBusy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send test</button>
+                          {waTestResult && <p className={`text-sm font-semibold ${waTestResult === 'Test message sent.' ? 'text-emerald-700' : 'text-red-600'}`}>{waTestResult}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -644,12 +751,12 @@ export default function AdminSettingsPage() {
                 <div className="space-y-4">
                   <Toggle checked={tg.enabled} onChange={(v) => setTg({ ...tg, enabled: v })} label="Enable Telegram alerts" description="Allow booking and payment approval alerts to be sent to configured chats." />
                   <Field label={tg.has_bot_token ? `Bot token (${tg.masked_bot_token})` : 'Bot token'}>
-                    <input value={tg.bot_token} onChange={(e) => setTg({ ...tg, bot_token: e.target.value })} placeholder={tg.has_bot_token ? 'Enter a new token to replace the saved token' : '123456:ABC...'} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                    <input value={tg.bot_token} onChange={(e) => setTg({ ...tg, bot_token: e.target.value })} placeholder={tg.has_bot_token ? 'Enter a new token to replace the saved token' : '123456:ABC...'} className={fieldClass(tg.bot_token)} />
                   </Field>
                   <div>
                     <Field label="Admin chat IDs">
                       <div className="flex gap-2">
-                        <input value={chatIdInput} onChange={(e) => setChatIdInput(e.target.value)} placeholder="-1001234567890" className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                        <input value={chatIdInput} onChange={(e) => setChatIdInput(e.target.value)} placeholder="-1001234567890" className={fieldClass(chatIdInput, 'min-w-0 flex-1')} />
                         <button type="button" onClick={() => { const id = chatIdInput.trim(); if (!/^-?\d+$/.test(id)) return showToast('Chat ID must be numeric', 'error'); setTg({ ...tg, admin_chat_ids: [...new Set([...(tg.admin_chat_ids || []), id])] }); setChatIdInput(''); }} className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700">Add</button>
                       </div>
                     </Field>
@@ -699,13 +806,13 @@ export default function AdminSettingsPage() {
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <Field label="Nickname">
-                <input value={methodDraft.nickname} onChange={(e) => setMethodDraft({ ...methodDraft, nickname: e.target.value })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                <input value={methodDraft.nickname} onChange={(e) => setMethodDraft({ ...methodDraft, nickname: e.target.value })} className={fieldClass(methodDraft.nickname)} />
               </Field>
               <Field label="UPI ID">
-                <input value={methodDraft.upi_id} onChange={(e) => setMethodDraft({ ...methodDraft, upi_id: e.target.value })} placeholder="vivek2k@upi" className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                <input value={methodDraft.upi_id} onChange={(e) => setMethodDraft({ ...methodDraft, upi_id: e.target.value })} placeholder="vivek2k@upi" className={fieldClass(methodDraft.upi_id)} />
               </Field>
               <Field label="Payee name">
-                <input value={methodDraft.payee_name} onChange={(e) => setMethodDraft({ ...methodDraft, payee_name: e.target.value })} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                <input value={methodDraft.payee_name} onChange={(e) => setMethodDraft({ ...methodDraft, payee_name: e.target.value })} className={fieldClass(methodDraft.payee_name)} />
               </Field>
               <Field label="QR image" hint="PNG, JPG, JPEG, or WebP. Max 5MB.">
                 <div className="flex items-center gap-3">
@@ -722,7 +829,7 @@ export default function AdminSettingsPage() {
               {methodDraft.qr_preview && <div className="sm:col-span-2"><img src={methodDraft.qr_preview} alt="Payment method QR preview" className="h-32 w-32 rounded-xl border border-slate-200 object-contain p-2" /></div>}
               <div className="sm:col-span-2">
                 <Field label="Instructions">
-                  <textarea rows={3} value={methodDraft.instructions} onChange={(e) => setMethodDraft({ ...methodDraft, instructions: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100" />
+                  <textarea rows={3} value={methodDraft.instructions} onChange={(e) => setMethodDraft({ ...methodDraft, instructions: e.target.value })} className={textareaClass(methodDraft.instructions)} />
                 </Field>
               </div>
               <Toggle checked={methodDraft.is_enabled} onChange={(v) => setMethodDraft({ ...methodDraft, is_enabled: v, is_default: v ? methodDraft.is_default : false })} label="Enabled" />

@@ -184,12 +184,8 @@ export default function BookTripPage() {
     paymentMode?: 'manual' | 'razorpay' | 'both';
     manualMethods?: Array<{
       id: string;
-      nickname: string;
       upi_id: string;
-      payee_name: string;
       qr_image_url?: string | null;
-      instructions?: string | null;
-      is_default?: boolean;
     }>;
   }>({});
   const [selectedManualMethodId, setSelectedManualMethodId] = useState('');
@@ -1209,11 +1205,8 @@ export default function BookTripPage() {
       }
       const manualPaymentSnapshot = {
         id: selectedManualMethod.id,
-        nickname: selectedManualMethod.nickname,
         upi_id: selectedManualMethod.upi_id,
-        payee_name: selectedManualMethod.payee_name,
         qr_image_url: selectedManualMethod.qr_image_url || null,
-        instructions: selectedManualMethod.instructions || null,
         amount: chargeNow,
         reference_id: transactionId.trim(),
         submitted_at: new Date().toISOString(),
@@ -2164,33 +2157,11 @@ export default function BookTripPage() {
 
             {/* QR + UPI */}
             <div className="rounded-[20px] bg-white p-5 border border-[#E2E8F0]" style={BOOK_CARD_SHADOW}>
-              {(paymentSettings.manualMethods || []).length > 1 && (
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Payment account</label>
-                  <select
-                    value={selectedManualMethodId}
-                    onChange={(e) => setSelectedManualMethodId(e.target.value)}
-                    className="w-full h-11 px-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]"
-                  >
-                    {(paymentSettings.manualMethods || []).map((method) => (
-                      <option key={method.id} value={method.id}>{method.nickname} - {method.upi_id}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {selectedManualMethod && (
-                <div className="mb-4 rounded-[14px] bg-[#FAFAFC] px-4 py-3" style={{ border: '1px solid #E2E8F0' }}>
-                  <p className="text-sm font-bold text-[#0F172A]">{selectedManualMethod.nickname}</p>
-                  <p className="text-xs text-[#64748B]">Payee: {selectedManualMethod.payee_name}</p>
-                </div>
-              )}
-
               {selectedManualMethod?.qr_image_url ? (
                 <div className="flex flex-col items-center">
                   <p className="text-xs font-semibold text-[#64748B] mb-3">Scan QR</p>
                   <div className="w-44 h-44 rounded-[14px] bg-white flex items-center justify-center overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
-                    <img src={selectedManualMethod.qr_image_url} alt={`${selectedManualMethod.nickname} payment QR`} className="w-full h-full object-contain p-1.5" />
+                    <img src={selectedManualMethod.qr_image_url} alt="Payment QR" className="w-full h-full object-contain p-1.5" />
                   </div>
                 </div>
               ) : (
@@ -2212,9 +2183,6 @@ export default function BookTripPage() {
                     <button type="button" onClick={() => { navigator.clipboard.writeText(selectedManualMethod.upi_id || ''); showToast('UPI ID copied!', 'success'); }}
                       className="flex-shrink-0 px-4 py-2.5 rounded-[12px] text-sm font-semibold text-white transition-all hover:opacity-95" style={{ background: PURPLE_GRAD }}>Copy</button>
                   </div>
-                  {selectedManualMethod.instructions && (
-                    <p className="mt-3 text-xs leading-relaxed text-[#64748B]">{selectedManualMethod.instructions}</p>
-                  )}
                 </>
               )}
             </div>

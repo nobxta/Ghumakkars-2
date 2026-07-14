@@ -29,11 +29,12 @@ export async function GET(request: NextRequest) {
 
     const { data: methods, error: methodsError } = await adminClient
       .from('manual_payment_methods')
-      .select('id, nickname, upi_id, payee_name, qr_image_url, instructions, is_default, display_order')
+      .select('id, upi_id, qr_image_url')
       .eq('is_enabled', true)
       .order('is_default', { ascending: false })
       .order('display_order', { ascending: true })
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(1);
 
     if (methodsError && methodsError.code !== '42P01') {
       console.error('Error fetching manual payment methods:', methodsError);
@@ -42,13 +43,8 @@ export async function GET(request: NextRequest) {
     const fallbackMethod = data?.payment_upi_id
       ? [{
           id: 'legacy',
-          nickname: 'Primary UPI',
           upi_id: data.payment_upi_id,
-          payee_name: 'Ghumakkars',
           qr_image_url: data.payment_qr_url,
-          instructions: null,
-          is_default: true,
-          display_order: 0,
         }]
       : [];
     const manualMethods = methods && methods.length > 0 ? methods : fallbackMethod;
