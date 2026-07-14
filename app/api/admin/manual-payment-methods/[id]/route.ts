@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 const MAX_QR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_QR_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const UPI_RE = /^[a-z0-9._-]{2,256}@[a-z][a-z0-9._-]{2,64}$/i;
+const UPI_RE = /^[a-z0-9._-]{2,255}@[a-z][a-z0-9._-]{2,64}$/i;
 
 async function uploadQr(file: File) {
   if (!ALLOWED_QR_TYPES.has(file.type)) throw new Error('QR image must be PNG, JPG, JPEG, or WebP.');
@@ -52,7 +52,7 @@ async function normalizeDefault(admin: ReturnType<typeof createAdminClient>, id?
     await admin.from('manual_payment_methods').update({ is_default: false }).neq('id', id);
     return;
   }
-  const { data: firstEnabled } = await admin.from('manual_payment_methods').select('id').eq('is_enabled', true).order('display_order', { ascending: true }).order('created_at', { ascending: true }).limit(1).single();
+  const { data: firstEnabled } = await admin.from('manual_payment_methods').select('id').order('display_order', { ascending: true }).order('created_at', { ascending: true }).limit(1).single();
   if (firstEnabled?.id) await admin.from('manual_payment_methods').update({ is_default: true }).eq('id', firstEnabled.id);
 }
 
@@ -82,15 +82,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
   }
 
-  const isEnabled = form.get('is_enabled') !== 'false';
-  const wantsDefault = form.get('is_default') === 'true' && isEnabled;
+  const wantsDefault = form.get('is_default') === 'true';
+  if (wantsDefault && !existing.is_default) {
+    await admin.from('manual_payment_methods').update({ is_default: false }).eq('is_default', true);
+  }
   const payload = {
     nickname,
     upi_id: upiId,
     payee_name: payeeName,
     instructions: cleanText(form.get('instructions'), 1000) || null,
-    is_enabled: isEnabled,
-    is_default: wantsDefault,
+    is_enabled: true,
+    is_default: wantsDefault || !!existing.is_default,
     qr_image_url: qr ? qr.url : removeQr ? null : existing.qr_image_url,
     qr_image_public_id: qr ? qr.publicId : removeQr ? null : existing.qr_image_public_id,
     updated_by: auth.user.id,
@@ -101,11 +103,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (qr || removeQr) await deleteQr(existing.qr_image_public_id);
-  if (data.is_default) await normalizeDefault(admin, data.id);
-  if (!data.is_default) {
-    const { count } = await admin.from('manual_payment_methods').select('id', { count: 'exact', head: true }).eq('is_default', true).eq('is_enabled', true);
-    if (!count) await normalizeDefault(admin);
-  }
   return NextResponse.json({ success: true, method: data });
 }
 

@@ -160,7 +160,7 @@ function buildMethodForm(draft: MethodDraft) {
   form.set('upi_id', draft.upi_id);
   form.set('payee_name', draft.payee_name);
   form.set('instructions', draft.instructions);
-  form.set('is_enabled', String(draft.is_enabled));
+  form.set('is_enabled', 'true');
   form.set('is_default', String(draft.is_default));
   if (draft.remove_qr) form.set('remove_qr', 'true');
   if (draft.qr_image) form.set('qr_image', draft.qr_image);
@@ -287,7 +287,7 @@ export default function AdminSettingsPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [general, payment, savedGeneral, savedPayment]);
 
-  const manualAvailable = methods.some((m) => m.is_enabled);
+  const manualAvailable = methods.length > 0;
   const paymentModeOptions = useMemo(() => [
     { value: 'manual', label: 'Manual payment', disabled: !manualAvailable, detail: manualAvailable ? 'Use enabled UPI/QR methods' : 'Add an enabled manual method first' },
     { value: 'razorpay', label: 'Razorpay', disabled: !payment.razorpay.configured, detail: payment.razorpay.configured ? 'Online payment gateway' : 'Missing Razorpay environment keys' },
@@ -388,7 +388,7 @@ export default function AdminSettingsPage() {
       upi_id: patch.upi_id ?? method.upi_id,
       payee_name: patch.payee_name ?? method.payee_name,
       instructions: patch.instructions ?? method.instructions ?? '',
-      is_enabled: patch.is_enabled ?? method.is_enabled,
+      is_enabled: true,
       is_default: patch.is_default ?? method.is_default,
     };
     setMethodBusy(method.id);
@@ -610,7 +610,7 @@ export default function AdminSettingsPage() {
                 </div>
               </Card>
 
-              <Card title="Manual payment methods" description="Manage the UPI and QR options shown to customers." icon={QrCode} action={<button type="button" onClick={() => setMethodDraft({ ...emptyDraft })} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white hover:bg-purple-700"><Plus className="h-4 w-4" /> Add method</button>}>
+              <Card title="Manual payment methods" description="Pick one QR/UPI pair to receive booking payments. Other saved methods stay available for switching later." icon={QrCode} action={<button type="button" onClick={() => setMethodDraft({ ...emptyDraft })} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-bold text-white hover:bg-purple-700"><Plus className="h-4 w-4" /> Add method</button>}>
                 {methods.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
                     <QrCode className="mx-auto h-8 w-8 text-slate-400" />
@@ -629,8 +629,7 @@ export default function AdminSettingsPage() {
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-bold text-slate-950">{method.nickname}</p>
-                                {method.is_default && <StatusPill status="ok" label="Default" />}
-                                <StatusPill status={method.is_enabled ? 'ok' : 'muted'} label={method.is_enabled ? 'Enabled' : 'Disabled'} />
+                                {method.is_default && <StatusPill status="ok" label="Receiving payments" />}
                               </div>
                               <p className="mt-1 break-all font-mono text-sm text-purple-700">{method.upi_id}</p>
                               <p className="text-xs text-slate-500">{method.payee_name}</p>
@@ -640,9 +639,8 @@ export default function AdminSettingsPage() {
                           <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => moveMethod(method, -1)} disabled={index === 0} className="h-10 rounded-lg border border-slate-200 px-3 text-slate-600 disabled:opacity-40" title="Move up"><ArrowUp className="h-4 w-4" /></button>
                             <button type="button" onClick={() => moveMethod(method, 1)} disabled={index === methods.length - 1} className="h-10 rounded-lg border border-slate-200 px-3 text-slate-600 disabled:opacity-40" title="Move down"><ArrowDown className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => quickUpdateMethod(method, { is_enabled: !method.is_enabled })} disabled={methodBusy === method.id} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">{method.is_enabled ? 'Disable' : 'Enable'}</button>
-                            <button type="button" onClick={() => quickUpdateMethod(method, { is_default: true, is_enabled: true })} disabled={method.is_default || methodBusy === method.id} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Set default</button>
-                            <button type="button" onClick={() => setMethodDraft({ id: method.id, nickname: method.nickname, upi_id: method.upi_id, payee_name: method.payee_name, instructions: method.instructions || '', is_enabled: method.is_enabled, is_default: method.is_default, qr_preview: method.qr_image_url || undefined })} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">Edit</button>
+                            <button type="button" onClick={() => quickUpdateMethod(method, { is_default: true })} disabled={method.is_default || methodBusy === method.id} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Use this QR</button>
+                            <button type="button" onClick={() => setMethodDraft({ id: method.id, nickname: method.nickname, upi_id: method.upi_id, payee_name: method.payee_name, instructions: method.instructions || '', is_enabled: true, is_default: method.is_default, qr_preview: method.qr_image_url || undefined })} className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">Edit</button>
                             <button type="button" onClick={() => deleteMethod(method)} disabled={methodBusy === method.id} className="h-10 rounded-lg border border-red-200 px-3 text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
                           </div>
                         </div>
@@ -832,8 +830,9 @@ export default function AdminSettingsPage() {
                   <textarea rows={3} value={methodDraft.instructions} onChange={(e) => setMethodDraft({ ...methodDraft, instructions: e.target.value })} className={textareaClass(methodDraft.instructions)} />
                 </Field>
               </div>
-              <Toggle checked={methodDraft.is_enabled} onChange={(v) => setMethodDraft({ ...methodDraft, is_enabled: v, is_default: v ? methodDraft.is_default : false })} label="Enabled" />
-              <Toggle checked={methodDraft.is_default} onChange={(v) => setMethodDraft({ ...methodDraft, is_default: v, is_enabled: v ? true : methodDraft.is_enabled })} label="Default method" />
+              <div className="sm:col-span-2 rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-purple-800">
+                Only the method marked “Receiving payments” appears on the booking page. Use “Use this QR” from the list to switch.
+              </div>
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-slate-100 p-5 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setMethodDraft(null)} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700">Cancel</button>

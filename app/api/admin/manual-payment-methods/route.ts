@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 const MAX_QR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_QR_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const UPI_RE = /^[a-z0-9._-]{2,256}@[a-z][a-z0-9._-]{2,64}$/i;
+const UPI_RE = /^[a-z0-9._-]{2,255}@[a-z][a-z0-9._-]{2,64}$/i;
 
 async function uploadQr(file: File) {
   if (!ALLOWED_QR_TYPES.has(file.type)) throw new Error('QR image must be PNG, JPG, JPEG, or WebP.');
@@ -73,24 +73,6 @@ function validateMethod(input: { nickname: string; upi_id: string; payee_name: s
   return null;
 }
 
-async function normalizeDefault(admin: ReturnType<typeof createAdminClient>, id?: string) {
-  if (id) {
-    await admin.from('manual_payment_methods').update({ is_default: false }).neq('id', id);
-    return;
-  }
-  const { data: firstEnabled } = await admin
-    .from('manual_payment_methods')
-    .select('id')
-    .eq('is_enabled', true)
-    .order('display_order', { ascending: true })
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .single();
-  if (firstEnabled?.id) {
-    await admin.from('manual_payment_methods').update({ is_default: true }).eq('id', firstEnabled.id);
-  }
-}
-
 export async function GET() {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
@@ -141,13 +123,19 @@ export async function POST(request: NextRequest) {
   }
 
   const wantsDefault = form.get('is_default') === 'true';
-  const isEnabled = form.get('is_enabled') !== 'false';
   const { data: maxOrder } = await admin
     .from('manual_payment_methods')
     .select('display_order')
     .order('display_order', { ascending: false })
     .limit(1)
     .single();
+  const { count: existingCount } = await admin
+    .from('manual_payment_methods')
+    .select('id', { count: 'exact', head: true });
+  const shouldBeDefault = wantsDefault || !existingCount;
+  if (shouldBeDefault) {
+    await admin.from('manual_payment_methods').update({ is_default: false }).eq('is_default', true);
+  }
   const { data, error } = await admin
     .from('manual_payment_methods')
     .insert([{
@@ -155,8 +143,8 @@ export async function POST(request: NextRequest) {
       instructions: cleanText(form.get('instructions'), 1000) || null,
       qr_image_url: qr?.url || null,
       qr_image_public_id: qr?.publicId || null,
-      is_enabled: isEnabled,
-      is_default: wantsDefault && isEnabled,
+      is_enabled: true,
+      is_default: shouldBeDefault,
       display_order: Number(maxOrder?.display_order || 0) + 1,
       created_by: auth.user.id,
       updated_by: auth.user.id,
@@ -168,6 +156,5 @@ export async function POST(request: NextRequest) {
     await deleteQr(qr?.publicId);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (data.is_default) await normalizeDefault(admin, data.id);
   return NextResponse.json({ success: true, method: data });
 }

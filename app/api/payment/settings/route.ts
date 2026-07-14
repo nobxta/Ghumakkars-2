@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
     const { data: methods, error: methodsError } = await adminClient
       .from('manual_payment_methods')
       .select('id, upi_id, qr_image_url')
-      .eq('is_enabled', true)
       .order('is_default', { ascending: false })
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: true })
