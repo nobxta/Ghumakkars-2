@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { moneyOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -35,10 +36,13 @@ export async function GET(request: NextRequest) {
           payment_type,
           payment_status,
           payment_mode,
+          payment_method,
           payment_reviewed_at,
           payment_reviewed_by,
           payment_review_notes,
           rejection_reason,
+          paid_at,
+          manual_payment_snapshot,
           created_at
         ),
         booking_addons (
@@ -77,7 +81,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ bookings: bookings || [] });
+    const rows = bookings || [];
+    const activeRows = rows.filter((booking: any) => !['cancelled', 'rejected', 'referred'].includes(String(booking.booking_status)));
+    const summary = rows.reduce((acc: any, booking: any) => {
+      const money = moneyOf(booking as any, (booking as any).trips);
+      const active = !['cancelled', 'rejected', 'referred'].includes(String(booking.booking_status));
+      if (active) {
+        acc.collected += money.paid;
+        acc.outstanding += money.remaining;
+      }
+      const status = String(booking.booking_status || 'pending');
+      acc.byBookingStatus[status] = (acc.byBookingStatus[status] || 0) + 1;
+      const needsReview =
+        (booking.payment_transactions || []).some((p: any) => p.payment_status === 'pending') ||
+        (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status)));
+      if (needsReview) acc.needsReview += 1;
+      return acc;
+    }, {
+      collected: 0,
+      outstanding: 0,
+      needsReview: 0,
+      totalBookings: rows.length,
+      activeBookings: activeRows.length,
+      byBookingStatus: {},
+    });
+
+    return NextResponse.json({ bookings: rows, summary });
   } catch (error: any) {
     console.error('Error in admin bookings API:', error);
     return NextResponse.json(
@@ -86,4 +115,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

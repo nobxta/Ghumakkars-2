@@ -1,1504 +1,770 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-import { Calendar, User, MapPin, IndianRupee, CheckCircle, Clock, XCircle, Filter, Eye, X, Check, Image as ImageIcon, Mail, Phone, Heart, GraduationCap, Users, AlertCircle, CreditCard, Search, TrendingUp, DollarSign, AlertTriangle, RefreshCw, Banknote, Smartphone, Lock, Wallet, MoreVertical, Gift } from 'lucide-react';
-import { effectiveBookingStatus, bookingStatusLabel } from '@/lib/booking-status-labels';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  AlertCircle,
+  Banknote,
+  Calendar,
+  CheckCircle,
+  ChevronDown,
+  CreditCard,
+  Eye,
+  Filter,
+  MoreVertical,
+  RefreshCw,
+  Search,
+  Smartphone,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react';
+import { bookingStatusLabel, effectiveBookingStatus } from '@/lib/booking-status-labels';
+import { moneyOf } from '@/lib/booking-money';
+
+type Booking = any;
+type FilterKey = 'all' | 'needs_review' | 'pending' | 'seat_locked' | 'confirmed' | 'cancelled' | 'upcoming' | 'today' | 'week';
+
+const bookingStatuses = ['pending', 'seat_locked', 'confirmed', 'cancelled', 'rejected', 'referred', 'on_trip', 'completed', 'remaining_submitted'];
+const paymentStates = ['paid', 'partial', 'unpaid', 'pending_verification', 'failed', 'rejected', 'refunded', 'partially_refunded', 'pending', 'cash_pending'];
+const paymentMethods = ['razorpay', 'manual', 'cash', 'wallet'];
+const paymentOptions = ['seat_lock', 'full'];
+const activeBookingStatuses = ['pending', 'seat_locked', 'confirmed', 'remaining_submitted'];
+
+const rejectionReasons = [
+  { value: 'fake_payment', label: 'Fake Payment / Invalid Transaction ID' },
+  { value: 'fake_details', label: 'Fake Details / Invalid Information' },
+  { value: 'seats_full', label: 'Seats Full' },
+  { value: 'other', label: 'Other (specify in notes)' },
+];
+
+const fmtMoney = (value: number) =>
+  `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}`;
+
+const fmtDate = (value?: string | null, includeTime = false) => {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  });
+};
+
+const titleCase = (value?: string | null) =>
+  String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+function customerName(booking: Booking) {
+  const profileName = `${booking.profiles?.first_name || ''} ${booking.profiles?.last_name || ''}`.trim();
+  return booking.primary_passenger_name || profileName || 'Unknown customer';
+}
+
+function customerContact(booking: Booking) {
+  return booking.primary_passenger_email || booking.profiles?.email || booking.primary_passenger_phone || booking.profiles?.phone || 'No contact';
+}
+
+function departureDate(booking: Booking) {
+  return booking.departure_date || booking.trips?.start_date || null;
+}
+
+function pickup(booking: Booking) {
+  return booking.pickup_point || booking.pickup_location || '';
+}
+
+function optionLabel(booking: Booking) {
+  if (booking.payment_mode === 'cash') return 'Pay in Person';
+  if (booking.payment_method === 'seat_lock' || booking.booking_status === 'seat_locked' || booking.booking_status === 'remaining_submitted') return 'Seat Lock';
+  if (booking.payment_method === 'full') return 'Full Payment';
+  return booking.payment_method ? titleCase(booking.payment_method) : 'Not selected';
+}
+
+function optionKey(booking: Booking) {
+  if (booking.payment_mode === 'cash') return 'cash';
+  if (booking.payment_method === 'seat_lock' || booking.booking_status === 'seat_locked' || booking.booking_status === 'remaining_submitted') return 'seat_lock';
+  if (booking.payment_method === 'full') return 'full';
+  return String(booking.payment_method || '').toLowerCase();
+}
+
+function methodKey(booking: Booking) {
+  return String(booking.payment_mode || booking.payment_transactions?.[0]?.payment_mode || '').toLowerCase();
+}
+
+function methodLabel(booking: Booking) {
+  const key = methodKey(booking);
+  if (key === 'razorpay') return 'Razorpay';
+  if (key === 'manual') return 'Manual UPI / QR';
+  if (key === 'cash') return 'Cash / Offline';
+  if (key === 'wallet') return 'Wallet';
+  return key ? titleCase(key) : 'Not recorded';
+}
+
+function latestTxn(booking: Booking) {
+  return [...(booking.payment_transactions || [])].sort(
+    (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+  )[0];
+}
+
+function hasPendingTransaction(booking: Booking) {
+  return (booking.payment_transactions || []).some((p: any) => p.payment_status === 'pending');
+}
+
+function needsReview(booking: Booking) {
+  return hasPendingTransaction(booking) || (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status)));
+}
+
+function paymentState(booking: Booking) {
+  const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
+  if (pendingTxn) return 'pending_verification';
+  const rejectedTxn = latestTxn(booking)?.payment_status === 'rejected';
+  if (rejectedTxn || booking.payment_status === 'rejected') return 'rejected';
+  if (['failed', 'cancelled'].includes(String(booking.payment_status))) return String(booking.payment_status);
+  if (['cash_pending', 'pending_cash'].includes(String(booking.payment_status))) return 'unpaid';
+  const money = moneyOf(booking);
+  if (money.refunded > 0 && money.paid <= 0.5) return 'refunded';
+  if (money.refunded > 0) return 'partially_refunded';
+  if (money.status === 'pending') return money.paid > 0 ? 'partial' : 'unpaid';
+  return money.status;
+}
+
+function badgeClasses(kind: 'booking' | 'payment', status: string) {
+  if (['paid', 'confirmed', 'verified'].includes(status)) return 'bg-green-50 text-green-700 border-green-200';
+  if (['partial', 'seat_locked', 'remaining_submitted', 'pending'].includes(status)) return 'bg-orange-50 text-orange-700 border-orange-200';
+  if (['pending_verification', 'referred', 'on_trip', 'completed'].includes(status)) return 'bg-purple-50 text-purple-700 border-purple-200';
+  if (['failed', 'rejected', 'cancelled'].includes(status)) return 'bg-red-50 text-red-700 border-red-200';
+  if (['refunded', 'partially_refunded'].includes(status)) return 'bg-rose-50 text-rose-700 border-rose-200';
+  return kind === 'payment' ? 'bg-gray-50 text-gray-700 border-gray-200' : 'bg-gray-100 text-gray-700 border-gray-200';
+}
+
+function statusLabel(status: string, kind: 'booking' | 'payment' = 'payment') {
+  if (kind === 'booking') return bookingStatusLabel(status);
+  if (status === 'pending_verification') return 'Pending Verification';
+  if (status === 'unpaid') return 'Not Collected';
+  if (status === 'partial') return 'Partial';
+  return titleCase(status || 'pending');
+}
+
+function bookingStatus(booking: Booking) {
+  return effectiveBookingStatus(booking.booking_status || 'pending', departureDate(booking), booking.trips?.end_date);
+}
+
+function actionLabel(booking: Booking) {
+  if (hasPendingTransaction(booking)) return 'Review Payment';
+  if (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status))) return 'Review Booking';
+  return 'View Booking';
+}
+
+function actionHref(booking: Booking) {
+  return `/admin/bookings/${booking.id}`;
+}
+
+function SortIcon() {
+  return <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />;
+}
 
 export default function AdminBookingsPage() {
-  const [bookings, setBookings] = useState<any[]>([]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending' | 'cancelled'>('all');
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCashPaymentModal, setShowCashPaymentModal] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
-  const [reviewing, setReviewing] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('fake_payment');
+  const [reviewing, setReviewing] = useState(false);
   const [cashAmountPaid, setCashAmountPaid] = useState('');
   const [cashNotes, setCashNotes] = useState('');
   const [approvingCash, setApprovingCash] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'status'>('date');
-  const [selectedTripId, setSelectedTripId] = useState<string>('all');
-  // Departure batch within the selected trip (recurring trips have many).
-  const [selectedBatch, setSelectedBatch] = useState<string>('all');
-  const [trips, setTrips] = useState<any[]>([]);
-  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
-  // The row menu renders in a portal with fixed coords so it escapes the table's
-  // overflow clipping. Position is measured from the trigger button on open.
-  const [rowMenuPos, setRowMenuPos] = useState<{ top: number; left: number } | null>(null);
 
-  // The fixed menu would drift if the page/table scrolled — close it instead.
-  useEffect(() => {
-    if (!openRowMenu) return;
-    const close = () => { setOpenRowMenu(null); setRowMenuPos(null); };
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
-  }, [openRowMenu]);
-
-  const openRowMenuAt = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (openRowMenu === id) { setOpenRowMenu(null); setRowMenuPos(null); return; }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const menuW = 176; // w-44
-    const estH = 188;
-    const top = (r.bottom + 4 + estH > window.innerHeight) ? Math.max(8, r.top - estH) : r.bottom + 4;
-    setRowMenuPos({ top, left: Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8)) });
-    setOpenRowMenu(id);
-  };
-  const [quickFilter, setQuickFilter] = useState<'none' | 'today' | 'week' | 'pending_payment' | 'upcoming'>('none');
-  const supabase = createClient();
-
-  const rejectionReasons = [
-    { value: 'fake_payment', label: 'Fake Payment / Invalid Transaction ID' },
-    { value: 'fake_details', label: 'Fake Details / Invalid Information' },
-    { value: 'seats_full', label: 'Seats Full' },
-    { value: 'other', label: 'Other (specify in notes)' },
-  ];
-
-  useEffect(() => {
-    fetchBookings();
-    fetchTrips();
-  }, []);
-
-  const fetchTrips = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('id, title, destination')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setTrips(data || []);
-    } catch (error) {
-      console.error('Error fetching trips:', error);
-    }
-  };
+  const initial = (key: string, fallback = '') => searchParams.get(key) || fallback;
+  const [search, setSearch] = useState(initial('q'));
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [tripId, setTripId] = useState(initial('trip', 'all'));
+  const [dateFrom, setDateFrom] = useState(initial('from'));
+  const [dateTo, setDateTo] = useState(initial('to'));
+  const [bookingFilter, setBookingFilter] = useState(initial('bookingStatus', 'all'));
+  const [paymentFilter, setPaymentFilter] = useState(initial('paymentStatus', 'all'));
+  const [methodFilter, setMethodFilter] = useState(initial('paymentMethod', 'all'));
+  const [optionFilter, setOptionFilter] = useState(initial('paymentOption', 'all'));
+  const [sortBy, setSortBy] = useState(initial('sort', 'created_desc'));
+  const [quick, setQuick] = useState<FilterKey>((initial('quick', 'all') as FilterKey) || 'all');
 
   const fetchBookings = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setError(null);
-      // Use API route that uses admin client
-      const response = await fetch('/api/admin/bookings');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch bookings');
-      }
-
-      const { bookings: data } = await response.json();
-      setBookings(data || []);
-      setError(null);
-    } catch (error: any) {
-      console.error('Error fetching bookings:', error);
-      setError(`Error loading bookings: ${error.message || 'Unknown error'}`);
+      const response = await fetch('/api/admin/bookings', { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Failed to fetch bookings');
+      setBookings(payload.bookings || []);
+      setSummary(payload.summary || null);
+    } catch (err: any) {
+      setError(err.message || 'Bookings could not be loaded');
       setBookings([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate stats
-  const stats = {
-    total: bookings.length,
-    confirmed: bookings.filter(b => b.booking_status === 'confirmed').length,
-    seatLocked: bookings.filter(b => b.booking_status === 'seat_locked').length,
-    pending: bookings.filter(b => b.booking_status === 'pending').length,
-    cancelled: bookings.filter(b => b.booking_status === 'cancelled').length,
-    pendingPayments: bookings.filter(b => 
-      (b.payment_status === 'pending' || b.payment_status === 'cash_pending') || 
-      (b.payment_transactions && b.payment_transactions.some((p: any) => p.payment_status === 'pending'))
-    ).length,
-    cashPending: bookings.filter(b => b.payment_mode === 'cash' && b.payment_status === 'cash_pending').length,
-    manualPending: bookings.filter(b => b.payment_mode === 'manual' && (b.payment_status === 'pending' || b.reference_id)).length,
-    razorpayPending: bookings.filter(b => 
-      b.payment_mode === 'razorpay' && 
-      (b.payment_status === 'pending' || 
-       (b.payment_transactions && b.payment_transactions.some((p: any) => p.payment_status === 'pending' && p.payment_mode === 'razorpay')))
-    ).length,
-  };
+  useEffect(() => {
+    fetchBookings();
+  }, []);
 
-  // Money actually received for a booking. Online bookings track it as
-  // verified payment transactions (UPI/manual you approved); offline bookings
-  // track it on amount_paid.
-  const paidOf = (b: any): number => {
-    if (b.is_offline_booking || !b.user_id) return parseFloat(b.amount_paid || 0);
-    const txnPaid = (b.payment_transactions || [])
-      .filter((p: any) => p.payment_status === 'verified')
-      .reduce((s: number, p: any) => s + parseFloat(p.amount || 0), 0);
-    return txnPaid || parseFloat(b.amount_paid || 0);
-  };
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
-  // Full amount owed after coupon + wallet discounts AND any written-off (waived) balance.
-  const fullOf = (b: any): number => {
-    const pax = Number(b.number_of_participants) || 1;
-    const coupon = parseFloat(b.coupon_discount || 0);
-    const wallet = parseFloat(b.wallet_amount_used || 0);
-    const waived = parseFloat(b.waived_amount || 0);
-    let net: number;
-    // Seat-lock: total_price / final_amount only hold the DEPOSIT, so the full
-    // trip cost must come from the list price x participants.
-    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
-      net = Math.max(0, (Number(b.trips?.discounted_price) || 0) * pax - coupon - wallet);
-    } else {
-      const fa = parseFloat(b.final_amount || 0);
-      net = fa > 0 ? fa : Math.max(0, (parseFloat(b.total_price || 0) || (Number(b.trips?.discounted_price) || 0) * pax) - coupon - wallet);
-    }
-    return Math.max(0, net + Math.max(0, parseFloat(b.addons_total || 0)) - waived);
-  };
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set('q', debouncedSearch);
+    if (tripId !== 'all') params.set('trip', tripId);
+    if (dateFrom) params.set('from', dateFrom);
+    if (dateTo) params.set('to', dateTo);
+    if (bookingFilter !== 'all') params.set('bookingStatus', bookingFilter);
+    if (paymentFilter !== 'all') params.set('paymentStatus', paymentFilter);
+    if (methodFilter !== 'all') params.set('paymentMethod', methodFilter);
+    if (optionFilter !== 'all') params.set('paymentOption', optionFilter);
+    if (sortBy !== 'created_desc') params.set('sort', sortBy);
+    if (quick !== 'all') params.set('quick', quick);
+    const next = params.toString() ? `/admin/bookings?${params.toString()}` : '/admin/bookings';
+    router.replace(next, { scroll: false });
+  }, [debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, sortBy, quick, router]);
 
-  // ── Scope: by trip, then by departure batch ──
-  const batchKey = (b: any): string => b.departure_date || b.trips?.start_date || '';
-  const tripScoped = selectedTripId !== 'all' ? bookings.filter(b => b.trip_id === selectedTripId) : bookings;
-  // Distinct departure dates for the selected trip (its batches), each with a count.
-  const batches: { date: string; count: number }[] = selectedTripId !== 'all'
-    ? Array.from(tripScoped.reduce((m: Map<string, number>, b) => {
-        const k = batchKey(b);
-        if (k) m.set(k, (m.get(k) || 0) + 1);
-        return m;
-      }, new Map<string, number>()))
-        .map(([date, count]) => ({ date, count }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-    : [];
-  // Bookings in the current scope (trip + batch) — drives the stat cards below.
-  const scopedBookings = (selectedTripId !== 'all' && selectedBatch !== 'all')
-    ? tripScoped.filter(b => batchKey(b) === selectedBatch)
-    : tripScoped;
+  const trips = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    bookings.forEach((b) => {
+      if (b.trip_id) map.set(b.trip_id, { id: b.trip_id, label: b.trips?.title || b.trips?.destination || b.trip_id });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [bookings]);
 
-  // Revenue = money actually collected on active (non-cancelled) bookings in scope,
-  // including the deposit on seat-locked bookings, and commission on referred ones.
-  const totalRevenue = scopedBookings
-    .filter(b => !['cancelled', 'rejected', 'pending'].includes(b.booking_status))
-    .reduce((sum, b) => sum + (b.booking_status === 'referred' ? (parseFloat(b.referral_commission || 0) || 0) : paidOf(b)), 0);
-
-  // Pending = balance still left to pay across active bookings in scope.
-  const pendingRevenue = scopedBookings
-    .filter(b => !['cancelled', 'rejected', 'referred'].includes(b.booking_status))
-    .reduce((sum, b) => sum + Math.max(0, fullOf(b) - paidOf(b)), 0);
-
-  const needsAttention = scopedBookings.filter(b =>
-    b.payment_transactions?.some((p: any) => p.payment_status === 'pending') ||
-    (b.booking_status === 'pending' && b.payment_mode !== 'razorpay')
-  ).length;
-
-  const conversionRate = stats.total > 0 ? Math.round((stats.confirmed / stats.total) * 100) : 0;
-
-  // Bookings scoped to the selected trip + batch (base for status filters/counts).
-  const tripFilteredBookings = scopedBookings;
-
-  // Calculate counts for selected trip
-  const tripStats = {
-    total: tripFilteredBookings.length,
-    confirmed: tripFilteredBookings.filter(b => b.booking_status === 'confirmed').length,
-    seatLocked: tripFilteredBookings.filter(b => b.booking_status === 'seat_locked').length,
-    pending: tripFilteredBookings.filter(b => b.booking_status === 'pending').length,
-    cancelled: tripFilteredBookings.filter(b => b.booking_status === 'cancelled').length,
-  };
-
-  // Filter and search bookings
-  let filteredBookings = tripFilteredBookings;
-
-  // Filter by status
-  if (filter !== 'all') {
-    filteredBookings = filteredBookings.filter(b => b.booking_status === filter);
-  }
-
-  // Quick filters (Today / This week / Pending payment / Upcoming)
-  if (quickFilter !== 'none') {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
-    filteredBookings = filteredBookings.filter(b => {
-      if (quickFilter === 'today') {
-        const c = new Date(b.created_at);
-        return c >= startOfToday;
-      }
-      if (quickFilter === 'week') {
-        const c = new Date(b.created_at);
-        return c >= startOfWeek;
-      }
-      if (quickFilter === 'pending_payment') {
-        return Math.max(0, fullOf(b) - paidOf(b)) > 0 && !['cancelled', 'rejected'].includes(b.booking_status);
-      }
-      if (quickFilter === 'upcoming') {
-        const dep = b.departure_date || b.trips?.start_date;
-        return dep ? new Date(dep) >= startOfToday : false;
+  const filteredBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() + 7);
+    let rows = bookings.filter((booking) => {
+      const haystack = [
+        booking.id,
+        customerName(booking),
+        customerContact(booking),
+        booking.primary_passenger_phone,
+        booking.profiles?.phone,
+        booking.trips?.title,
+        booking.trips?.destination,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (debouncedSearch && !haystack.includes(debouncedSearch.toLowerCase())) return false;
+      if (tripId !== 'all' && booking.trip_id !== tripId) return false;
+      const dep = departureDate(booking);
+      if (dateFrom && (!dep || dep < dateFrom)) return false;
+      if (dateTo && (!dep || dep > dateTo)) return false;
+      if (bookingFilter !== 'all' && bookingStatus(booking) !== bookingFilter && booking.booking_status !== bookingFilter) return false;
+      if (paymentFilter !== 'all' && paymentState(booking) !== paymentFilter) return false;
+      if (methodFilter !== 'all' && methodKey(booking) !== methodFilter) return false;
+      if (optionFilter !== 'all' && optionKey(booking) !== optionFilter) return false;
+      if (quick === 'needs_review' && !needsReview(booking)) return false;
+      if (['pending', 'seat_locked', 'confirmed', 'cancelled'].includes(quick) && booking.booking_status !== quick) return false;
+      if (quick === 'upcoming') return dep ? new Date(dep) >= today : false;
+      if (quick === 'today') return dep ? new Date(dep).toDateString() === today.toDateString() : false;
+      if (quick === 'week') {
+        if (!dep) return false;
+        const d = new Date(dep);
+        return d >= today && d <= weekEnd;
       }
       return true;
     });
-  }
 
-  // Apply search
-  if (searchTerm) {
-    filteredBookings = filteredBookings.filter(b => {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        b.trips?.title?.toLowerCase().includes(searchLower) ||
-        b.trips?.destination?.toLowerCase().includes(searchLower) ||
-        b.primary_passenger_name?.toLowerCase().includes(searchLower) ||
-        b.primary_passenger_email?.toLowerCase().includes(searchLower) ||
-        b.profiles?.email?.toLowerCase().includes(searchLower) ||
-        b.profiles?.first_name?.toLowerCase().includes(searchLower) ||
-        b.profiles?.last_name?.toLowerCase().includes(searchLower) ||
-        b.reference_id?.toLowerCase().includes(searchLower) ||
-        b.id.toLowerCase().includes(searchLower)
-      );
+    rows = [...rows].sort((a, b) => {
+      if (sortBy === 'departure_asc') return String(departureDate(a) || '').localeCompare(String(departureDate(b) || ''));
+      if (sortBy === 'amount_desc') return moneyOf(b).owed - moneyOf(a).owed;
+      if (sortBy === 'due_desc') return moneyOf(b).remaining - moneyOf(a).remaining;
+      if (sortBy === 'status') return bookingStatus(a).localeCompare(bookingStatus(b));
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
-  }
+    return rows;
+  }, [bookings, debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, quick, sortBy]);
 
-  // Sort bookings
-  filteredBookings = [...filteredBookings].sort((a, b) => {
-    switch (sortBy) {
-      case 'amount':
-        return parseFloat(b.final_amount || b.total_price || 0) - parseFloat(a.final_amount || a.total_price || 0);
-      case 'status':
-        const statusOrder = { 'pending': 0, 'seat_locked': 1, 'confirmed': 2, 'cancelled': 3 };
-        return (statusOrder[a.booking_status as keyof typeof statusOrder] || 99) - (statusOrder[b.booking_status as keyof typeof statusOrder] || 99);
-      case 'date':
-      default:
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    }
-  });
+  const visibleMethods = paymentMethods.filter((method) => bookings.some((b) => methodKey(b) === method));
+  const visibleOptions = paymentOptions.filter((option) => bookings.some((b) => optionKey(b) === option));
+  const activeFilters = [
+    debouncedSearch && `Search: ${debouncedSearch}`,
+    tripId !== 'all' && `Trip: ${trips.find((t) => t.id === tripId)?.label || tripId}`,
+    dateFrom && `From: ${fmtDate(dateFrom)}`,
+    dateTo && `To: ${fmtDate(dateTo)}`,
+    bookingFilter !== 'all' && `Booking: ${statusLabel(bookingFilter, 'booking')}`,
+    paymentFilter !== 'all' && `Payment: ${statusLabel(paymentFilter)}`,
+    methodFilter !== 'all' && `Method: ${titleCase(methodFilter)}`,
+    optionFilter !== 'all' && `Option: ${optionFilter === 'seat_lock' ? 'Seat Lock' : titleCase(optionFilter)}`,
+    quick !== 'all' && `Quick: ${titleCase(quick)}`,
+  ].filter(Boolean) as string[];
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'seat_locked':
-        return <Clock className="h-4 w-4 text-orange-600" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
-      case 'on_trip':
-        return <Clock className="h-4 w-4 text-blue-600" />;
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-purple-600" />;
-      case 'referred':
-        return <CheckCircle className="h-4 w-4 text-indigo-600" />;
-      case 'cancelled':
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />;
-    }
+  const clearFilters = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setTripId('all');
+    setDateFrom('');
+    setDateTo('');
+    setBookingFilter('all');
+    setPaymentFilter('all');
+    setMethodFilter('all');
+    setOptionFilter('all');
+    setQuick('all');
+    setSortBy('created_desc');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'seat_locked':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'on_trip':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'completed':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'referred':
-        return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-      case 'cancelled':
-      case 'rejected':
-        return 'bg-red-100 text-red-700 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
+  const openPaymentModal = (booking: Booking, transaction?: any) => {
+    setSelectedBooking(booking);
+    setSelectedTransaction(transaction || (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending') || null);
+    setReviewNotes('');
+    setRejectionReason('fake_payment');
+    setShowPaymentModal(true);
   };
 
+  const openCashPaymentModal = (booking: Booking) => {
+    const money = moneyOf(booking);
+    setSelectedBooking(booking);
+    setCashAmountPaid(money.remaining > 0 ? String(money.remaining) : '');
+    setCashNotes('');
+    setShowCashPaymentModal(true);
+  };
+
+  const handlePrimaryAction = (booking: Booking) => {
+    if (hasPendingTransaction(booking)) {
+      openPaymentModal(booking);
+      return;
+    }
+    if (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status))) {
+      openCashPaymentModal(booking);
+      return;
+    }
+    router.push(actionHref(booking));
+  };
 
   const handleReviewPayment = async (transaction: any, status: 'verified' | 'rejected') => {
-    if (status === 'rejected' && !rejectionReason) {
-      alert('Please select a rejection reason');
-      return;
-    }
-
-    if (!transaction || !transaction.id) {
-      alert('Invalid transaction data');
-      return;
-    }
-
-    console.log('Reviewing payment transaction:', { transactionId: transaction.id, status, rejectionReason });
-    
+    if (!transaction?.id) return alert('Invalid transaction data');
+    if (status === 'rejected' && !rejectionReason) return alert('Please select a rejection reason');
     setReviewing(true);
     try {
-      // Use API route for payment transaction review
-      const reviewResponse = await fetch('/api/admin/bookings/review-payment-transaction', {
+      const response = await fetch('/api/admin/bookings/review-payment-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactionId: transaction.id,
-          status: status,
+          status,
           reviewNotes: reviewNotes || null,
-          rejectionReason: status === 'rejected' 
-            ? (rejectionReasons.find(r => r.value === rejectionReason)?.label || rejectionReason)
+          rejectionReason: status === 'rejected'
+            ? (rejectionReasons.find((r) => r.value === rejectionReason)?.label || rejectionReason)
             : null,
         }),
       });
-
-      const reviewData = await reviewResponse.json();
-
-      if (!reviewResponse.ok) {
-        throw new Error(reviewData.error || 'Failed to review payment');
-      }
-
-      // Send email notification if needed
-      try {
-        const userEmail = selectedBooking?.primary_passenger_email || selectedBooking?.profiles?.email;
-        const userName = selectedBooking?.primary_passenger_name || 
-          (selectedBooking?.profiles 
-            ? `${selectedBooking.profiles.first_name || ''} ${selectedBooking.profiles.last_name || ''}`.trim()
-            : '') || 'User';
-        
-        if (userEmail && status === 'rejected') {
-          await fetch('/api/bookings/send-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: selectedBooking?.id,
-              status: 'rejected',
-              rejectionReason: rejectionReasons.find(r => r.value === rejectionReason)?.label || rejectionReason,
-              tripDetails: selectedBooking?.trips,
-              userEmail,
-              userName,
-            }),
-          });
-        }
-      } catch (emailError) {
-        console.error('Error sending notification email:', emailError);
-      }
-
-      // Refresh bookings
-      await fetchBookings();
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Failed to review payment');
       setShowPaymentModal(false);
       setSelectedBooking(null);
       setSelectedTransaction(null);
-      setReviewNotes('');
-      setRejectionReason('fake_payment');
-      
-      // Show success message
-      alert(`Payment transaction ${status === 'verified' ? 'verified' : 'rejected'} successfully!`);
-    } catch (error: any) {
-      console.error('Error reviewing payment:', error);
-      alert(error.message || 'Failed to update payment status');
+      await fetchBookings();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update payment');
     } finally {
       setReviewing(false);
     }
   };
 
-  const openPaymentModal = (booking: any) => {
-    setSelectedBooking(booking);
-    setSelectedTransaction(null);
-    setShowPaymentModal(true);
-    setReviewNotes('');
-    setRejectionReason('fake_payment'); // Reset to default
-    setReviewing(false); // Reset reviewing state
-  };
-
-  const handleDeleteBooking = async (booking: any) => {
-    const name = booking.primary_passenger_name || booking.profiles?.email || 'this booking';
-    const isCounted = ['confirmed', 'seat_locked'].includes(booking.booking_status);
-    const msg =
-      `Permanently delete the booking for "${name}"?\n\n` +
-      `• Trip: ${booking.trips?.title || '—'}\n` +
-      `• Status: ${booking.booking_status}\n` +
-      `• All payment records for this booking will also be deleted.\n` +
-      (isCounted ? `• ${booking.number_of_participants || 1} seat(s) will be freed on the trip.\n` : '') +
-      `\nThis cannot be undone. Use this only for spam or test bookings.`;
-    if (!confirm(msg)) return;
-
-    try {
-      const res = await fetch(`/api/admin/bookings/${booking.id}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data.error || 'Failed to delete booking');
-        return;
-      }
-      alert('Booking deleted');
-      fetchBookings();
-    } catch (e: any) {
-      alert('Error: ' + e.message);
-    }
-  };
-
-  const openTransactionModal = (booking: any, transaction: any) => {
-    setSelectedBooking(booking);
-    setSelectedTransaction(transaction);
-    setShowPaymentModal(true);
-    setReviewNotes('');
-    setRejectionReason('fake_payment');
-    setReviewing(false);
-  };
-
-  const openCashPaymentModal = (booking: any) => {
-    setSelectedBooking(booking);
-    const paid = paidOf(booking);
-    const due = Math.max(0, fullOf(booking) - paid);
-    const dueNow = booking.payment_method === 'seat_lock'
-      ? Math.min(parseFloat(String(booking.final_amount || booking.total_price || 0)) || due, due)
-      : due;
-    setCashAmountPaid(dueNow > 0 ? String(dueNow) : '');
-    setCashNotes('');
-    setShowCashPaymentModal(true);
-  };
-
   const handleApproveCashPayment = async () => {
-    if (!cashAmountPaid || parseFloat(cashAmountPaid) <= 0) {
-      alert('Please enter a valid amount');
-      return;
-    }
-
-    if (!selectedBooking) {
-      alert('No booking selected');
-      return;
-    }
-
+    if (!selectedBooking || !cashAmountPaid || parseFloat(cashAmountPaid) <= 0) return alert('Please enter a valid amount');
     setApprovingCash(true);
     try {
       const response = await fetch('/api/admin/bookings/approve-cash-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          amountPaid: parseFloat(cashAmountPaid),
-          notes: cashNotes,
-        }),
+        body: JSON.stringify({ bookingId: selectedBooking.id, amountPaid: parseFloat(cashAmountPaid), notes: cashNotes || null }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to approve cash payment');
-      }
-
-      alert('Cash payment approved successfully!');
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Failed to approve cash payment');
       setShowCashPaymentModal(false);
       setSelectedBooking(null);
-      setCashAmountPaid('');
-      setCashNotes('');
       await fetchBookings();
-    } catch (error: any) {
-      console.error('Error approving cash payment:', error);
-      alert(error.message || 'Failed to approve cash payment');
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve cash payment');
     } finally {
       setApprovingCash(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-lg text-purple-600 tracking-wide font-medium">Loading bookings...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleDeleteBooking = async (booking: Booking) => {
+    const name = customerName(booking);
+    if (!confirm(`Permanently delete the booking for "${name}"?\n\nThis cannot be undone.`)) return;
+    const response = await fetch(`/api/admin/bookings/${booking.id}`, { method: 'DELETE' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return alert(payload.error || 'Failed to delete booking');
+    await fetchBookings();
+  };
 
+  const summaryData = summary || {
+    collected: bookings.filter((b) => activeBookingStatuses.includes(String(b.booking_status))).reduce((sum, b) => sum + moneyOf(b).paid, 0),
+    outstanding: bookings.filter((b) => activeBookingStatuses.includes(String(b.booking_status))).reduce((sum, b) => sum + moneyOf(b).remaining, 0),
+    needsReview: bookings.filter(needsReview).length,
+    totalBookings: bookings.length,
+    byBookingStatus: {},
+  };
+
+  const FilterControls = (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
+      <label className="relative md:col-span-2 xl:col-span-2">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone or booking ID" className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
+      </label>
+      <div className="relative">
+        <select value={tripId} onChange={(e) => setTripId(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="all">All trips</option>
+          {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.label}</option>)}
+        </select>
+        <SortIcon />
+      </div>
+      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" aria-label="Departure from" />
+      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" aria-label="Departure to" />
+      <div className="relative">
+        <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="all">Booking status</option>
+          {bookingStatuses.map((s) => <option key={s} value={s}>{statusLabel(s, 'booking')}</option>)}
+        </select>
+        <SortIcon />
+      </div>
+      <div className="relative">
+        <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="all">Payment state</option>
+          {paymentStates.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+        </select>
+        <SortIcon />
+      </div>
+      <div className="relative">
+        <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="all">Payment method</option>
+          {visibleMethods.map((m) => <option key={m} value={m}>{m === 'manual' ? 'Manual UPI / QR' : m === 'cash' ? 'Cash / Offline' : titleCase(m)}</option>)}
+        </select>
+        <SortIcon />
+      </div>
+      <div className="relative">
+        <select value={optionFilter} onChange={(e) => setOptionFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="all">Payment option</option>
+          {visibleOptions.map((o) => <option key={o} value={o}>{o === 'seat_lock' ? 'Seat Lock' : 'Full Payment'}</option>)}
+          {bookings.some((b) => b.payment_mode === 'cash') && <option value="cash">Pay in Person</option>}
+        </select>
+        <SortIcon />
+      </div>
+      <div className="relative">
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+          <option value="created_desc">Newest booked</option>
+          <option value="departure_asc">Departure date</option>
+          <option value="amount_desc">Highest total</option>
+          <option value="due_desc">Highest due</option>
+          <option value="status">Booking status</option>
+        </select>
+        <SortIcon />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">All Bookings</h1>
-        <p className="text-[11px] sm:text-xs text-gray-500">Manage all trip bookings</p>
-      </div>
-
-      {/* Compact KPI strip */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
-        <div className="px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-gray-500"><DollarSign className="h-3.5 w-3.5 text-green-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Revenue</span></div>
-          <p className="text-lg font-bold text-gray-900 leading-tight">₹{totalRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-[11px] text-gray-400">collected</p>
-        </div>
-        <div className="px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-gray-500"><Clock className="h-3.5 w-3.5 text-amber-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Pending</span></div>
-          <p className="text-lg font-bold text-gray-900 leading-tight">₹{pendingRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-[11px] text-gray-400">balance to collect</p>
-        </div>
-        <div className="px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-gray-500"><AlertCircle className={`h-3.5 w-3.5 ${needsAttention > 0 ? 'text-orange-600' : 'text-gray-400'}`} /><span className="text-[10px] font-semibold uppercase tracking-wide">Attention</span></div>
-          <p className="text-lg font-bold text-gray-900 leading-tight">{needsAttention}</p>
-          <p className="text-[11px] text-gray-400">{needsAttention === 0 ? 'all caught up' : 'to verify'}</p>
-        </div>
-        <div className="px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-gray-500"><Calendar className="h-3.5 w-3.5 text-purple-600" /><span className="text-[10px] font-semibold uppercase tracking-wide">Bookings</span></div>
-          <p className="text-lg font-bold text-gray-900 leading-tight">{scopedBookings.length}</p>
-          <p className="text-[11px] text-gray-400">{selectedTripId !== 'all' ? (selectedBatch !== 'all' ? 'this batch' : 'this trip') : `${stats.confirmed} confirmed · ${conversionRate}%`}</p>
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="p-4 bg-red-50 border-2 border-red-200 rounded-xl">
-          <p className="text-red-700 font-medium">{error}</p>
-          <button
-            onClick={fetchBookings}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Toolbar: search + filters + actions in one row */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search customer, email or ID…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none text-sm text-gray-900"
-            />
+    <div className="min-h-screen bg-gray-50/60 p-4 sm:p-5 lg:p-6">
+      <div className="mx-auto max-w-[1680px] space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-950">All Bookings</h1>
+            <p className="mt-1 text-sm text-gray-600">Manage bookings, payments and pending actions.</p>
           </div>
-          <select
-            value={selectedTripId}
-            onChange={(e) => { setSelectedTripId(e.target.value); setSelectedBatch('all'); setFilter('all'); }}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white max-w-[220px]"
-          >
-            <option value="all">All trips</option>
-            {trips.map((trip) => (
-              <option key={trip.id} value={trip.id}>{trip.title} - {trip.destination}</option>
-            ))}
-          </select>
-          {/* Batch (departure) picker — appears once a trip with multiple departures is selected */}
-          {selectedTripId !== 'all' && batches.length > 0 && (
-            <select
-              value={selectedBatch}
-              onChange={(e) => { setSelectedBatch(e.target.value); setFilter('all'); }}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white max-w-[220px]"
-              title="Departure batch"
-            >
-              <option value="all">All batches ({tripScoped.length})</option>
-              {batches.map((bt) => {
-                const d = new Date(bt.date + (bt.date.length === 10 ? 'T00:00:00' : ''));
-                const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-                const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
-                const tag = d0.getTime() === today0.getTime() ? 'Today' : d0 < today0 ? 'Past' : 'Upcoming';
-                const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-                return <option key={bt.date} value={bt.date}>{label} · {tag} · {bt.count}</option>;
-              })}
-            </select>
-          )}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'date' | 'amount' | 'status')}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:border-purple-400 outline-none text-sm text-gray-900 font-medium bg-white"
-          >
-            <option value="date">Sort: Date</option>
-            <option value="amount">Sort: Amount</option>
-            <option value="status">Sort: Status</option>
-          </select>
-          <button
-            onClick={fetchBookings}
-            className="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4 text-gray-500" />
+          <button onClick={fetchBookings} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-4 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-200 disabled:opacity-60">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
 
-        {/* Status segmented control */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
-            {([
-              ['all', `All (${tripStats.total})`],
-              ['pending', `Pending (${tripStats.pending})`],
-              ['confirmed', `Confirmed (${tripStats.confirmed})`],
-              ['seat_locked', `Seat locked (${tripStats.seatLocked})`],
-              ['cancelled', `Cancelled (${tripStats.cancelled})`],
-            ] as const).map(([val, label], i) => (
-              <button
-                key={val}
-                onClick={() => setFilter(val)}
-                className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
-                  filter === val ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {label}
+        <div className="grid gap-3 md:grid-cols-4">
+          <button onClick={() => setPaymentFilter('paid')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Collected</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-green-700">{fmtMoney(summaryData.collected)}</p>
+            <p className="mt-1 text-xs text-gray-500">Successfully collected money</p>
+          </button>
+          <button onClick={() => setSortBy('due_desc')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Outstanding</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-orange-700">{fmtMoney(summaryData.outstanding)}</p>
+            <p className="mt-1 text-xs text-gray-500">Remaining across active bookings</p>
+          </button>
+          <button onClick={() => setQuick('needs_review')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Needs Review</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-purple-700">{summaryData.needsReview || 0}</p>
+            <p className="mt-1 text-xs text-gray-500">{summaryData.needsReview ? 'Manual payments or cash review' : 'No pending reviews'}</p>
+          </button>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Total Bookings</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-gray-950">{summaryData.totalBookings || 0}</p>
+            <p className="mt-1 truncate text-xs text-gray-500">
+              Confirmed {summaryData.byBookingStatus?.confirmed || 0} · Seat Locked {summaryData.byBookingStatus?.seat_locked || 0} · Pending {summaryData.byBookingStatus?.pending || 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="sticky top-0 z-20 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="hidden xl:block">{FilterControls}</div>
+          <div className="flex items-center gap-2 xl:hidden">
+            <label className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search bookings" className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
+            </label>
+            <button onClick={() => setMobileFiltersOpen(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700">
+              <Filter className="h-4 w-4" />
+              Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}
+            </button>
+          </div>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {(['all', 'needs_review', 'pending', 'seat_locked', 'confirmed', 'cancelled', 'upcoming', 'today', 'week'] as FilterKey[]).map((item) => (
+              <button key={item} onClick={() => setQuick(item)} className={`h-8 whitespace-nowrap rounded-full border px-3 text-xs font-semibold ${quick === item ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : titleCase(item)}
               </button>
             ))}
           </div>
-
-          {/* Quick filters */}
-          <span className="hidden sm:inline h-5 w-px bg-gray-200 mx-1" />
-          {([
-            ['today', 'Today'],
-            ['week', 'This week'],
-            ['pending_payment', 'Pending payment'],
-            ['upcoming', 'Upcoming'],
-          ] as const).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setQuickFilter(quickFilter === val ? 'none' : val)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                quickFilter === val ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          {activeFilters.length > 0 && (
+            <div className="mt-2 flex items-center gap-2 overflow-x-auto text-xs">
+              {activeFilters.map((item) => <span key={item} className="whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">{item}</span>)}
+              <button onClick={clearFilters} className="whitespace-nowrap font-semibold text-purple-700 hover:text-purple-900">Clear all</button>
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Bookings Table - Compact Design */}
-      <div className="bg-white rounded-xl sm:rounded-2xl border sm:border-2 border-purple-200 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gradient-to-r from-purple-50 via-purple-100 to-purple-50 border-b-2 border-purple-200">
-              <tr>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Booking</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Amount & Details</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Payment</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div className="flex items-center justify-between gap-4">
+              <span>{error}</span>
+              <button onClick={fetchBookings} className="rounded-lg bg-white px-3 py-2 font-semibold text-red-700">Retry</button>
+            </div>
+          </div>
+        )}
+
+        <div className="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm lg:block">
+          <table className="min-w-full table-fixed divide-y divide-gray-200">
+            <thead className="sticky top-[138px] z-10 bg-gray-50">
+              <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                <th className="w-[24%] px-4 py-3">Booking & Customer</th>
+                <th className="w-[22%] px-4 py-3">Trip</th>
+                <th className="w-[15%] px-4 py-3">Amount</th>
+                <th className="w-[15%] px-4 py-3">Payment</th>
+                <th className="w-[12%] px-4 py-3">Booking Status</th>
+                <th className="w-[12%] px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredBookings.map((booking, index) => {
-                const hasPendingPayment = (booking.payment_status === 'pending' || booking.payment_status === 'cash_pending') || 
-                  (booking.payment_transactions && booking.payment_transactions.some((p: any) => p.payment_status === 'pending'));
-                const isUrgent = hasPendingPayment && booking.booking_status !== 'cancelled';
-                
+              {loading && Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i}><td colSpan={6} className="px-4 py-4"><div className="h-16 animate-pulse rounded-lg bg-gray-100" /></td></tr>
+              ))}
+              {!loading && filteredBookings.map((booking) => {
+                const money = moneyOf(booking);
+                const payState = paymentState(booking);
+                const bookState = bookingStatus(booking);
+                const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
                 return (
-                <tr 
-                  key={booking.id} 
-                    className={`transition-all hover:bg-purple-50/50 ${
-                      isUrgent 
-                        ? 'bg-gradient-to-r from-yellow-50/50 to-orange-50/50 border-l-4 border-orange-400' 
-                        : ''
-                    }`}
-                  >
-                    {/* Booking Info - Compact */}
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <Link 
-                        href={`/admin/bookings/${booking.id}`}
-                        className="block group"
-                      >
-                        <div className="flex items-start space-x-2">
-                          <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm">
-                            <MapPin className="h-5 w-5 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-sm text-gray-900 group-hover:text-purple-600 transition-colors truncate">
-                              {booking.trips?.title || 'N/A'}
-                            </div>
-                            <div className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1">
-                              <MapPin className="h-3 w-3 flex-shrink-0" />{booking.trips?.destination || 'N/A'}
-                            </div>
-                            {booking.trips?.start_date && (
-                              <div className="text-[10px] text-purple-700 font-semibold truncate mt-0.5 flex items-center gap-1">
-                                <Calendar className="h-3 w-3 flex-shrink-0" />Departs {new Date(booking.trips.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                              </div>
-                            )}
-                            <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-start gap-1.5">
-                              <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-purple-700 mt-0.5">
-                                {((booking.primary_passenger_name || booking.profiles?.first_name || '?')[0] || '?').toUpperCase()}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-xs text-gray-900 truncate">
-                                  {booking.primary_passenger_name ||
-                                   (booking.profiles?.first_name && booking.profiles?.last_name
-                                     ? `${booking.profiles.first_name} ${booking.profiles.last_name}`
-                                     : booking.profiles?.full_name || 'N/A')}
-                                </div>
-                                <div className="text-[10px] text-gray-500 truncate">
-                                  {booking.primary_passenger_email || booking.profiles?.email || 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-between">
-                              <span className="font-mono">#{booking.id.slice(0, 8).toUpperCase()}</span>
-                              <span>{new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                            </div>
-                          </div>
+                  <tr key={booking.id} onClick={() => router.push(actionHref(booking))} className={`h-[88px] cursor-pointer align-top transition hover:bg-purple-50/35 ${needsReview(booking) ? 'bg-purple-50/40' : 'bg-white'}`}>
+                    <td className="px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-bold text-gray-950" title={customerName(booking)}>{customerName(booking)}</p>
+                          {booking.booking_status === 'referred' && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
                         </div>
-                      </Link>
+                        <p className="mt-1 font-mono text-xs text-gray-500" title={booking.id}>{booking.id.slice(0, 8)}...</p>
+                        <p className="mt-1 truncate text-xs text-gray-600" title={customerContact(booking)}>{customerContact(booking)}</p>
+                        <p className="mt-1 text-xs text-gray-500">Booked on {fmtDate(booking.created_at, true)}</p>
+                      </div>
                     </td>
-
-                    {/* Amount & Details — paid vs due, or commission for referred */}
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      {booking.booking_status === 'referred' ? (
-                        // Once referred, the trip money is settled with the partner — we only
-                        // book our commission. Don't show paid/due at all.
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-1">
-                            <Gift className="h-3.5 w-3.5 text-indigo-600" />
-                            <span className="text-base font-bold text-indigo-700">{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</span>
-                            <span className="text-[10px] text-gray-400 font-medium">commission</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-xs">
-                            <span className="flex items-center text-gray-500"><Users className="h-3 w-3 mr-1" />{booking.number_of_participants || 1}</span>
-                          </div>
-                        </div>
-                      ) : (() => {
-                        const paid = paidOf(booking);
-                        const due = Math.max(0, fullOf(booking) - paid);
-                        return (
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-1">
-                              <IndianRupee className="h-3.5 w-3.5 text-green-600" />
-                              <span className="text-base font-bold text-gray-900">{paid.toLocaleString('en-IN')}</span>
-                              <span className="text-[10px] text-gray-400 font-medium">paid</span>
-                            </div>
-                            {due > 0 && !['cancelled', 'rejected'].includes(booking.booking_status) && (
-                              <p className="text-xs text-orange-600 font-medium">₹{due.toLocaleString('en-IN')} due</p>
-                            )}
-                            <div className="flex items-center space-x-2 text-xs">
-                              <span className="flex items-center text-gray-500"><Users className="h-3 w-3 mr-1" />{booking.number_of_participants || 1}</span>
-                              {booking.wallet_amount_used > 0 && (
-                                <span className="text-green-600 flex items-center"><Wallet className="h-3 w-3 mr-0.5" />₹{parseFloat(String(booking.wallet_amount_used || 0)).toLocaleString()}</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                    <td className="px-4 py-3">
+                      <p className="truncate text-sm font-semibold text-gray-950" title={booking.trips?.title}>{booking.trips?.title || 'Trip not found'}</p>
+                      <p className="mt-1 text-sm font-bold text-purple-700">{fmtDate(departureDate(booking))}</p>
+                      <p className="mt-1 truncate text-xs text-gray-500" title={pickup(booking)}>{pickup(booking) || booking.trips?.destination || 'Pickup not recorded'}</p>
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-700"><Users className="h-3.5 w-3.5" />{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
                     </td>
-
-                    {/* Payment Info - Compact */}
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <div className="space-y-1.5">
-                        <div>
-                          {booking.booking_status === 'referred' ? (
-                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border bg-indigo-100 text-indigo-700 border-indigo-300">
-                              <Gift className="h-3 w-3 mr-1" />Settled
-                            </span>
-                          ) : (
-                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${
-                            booking.payment_status === 'paid' || booking.payment_status === 'verified'
-                              ? 'bg-green-100 text-green-700 border-green-300'
-                              : booking.payment_status === 'rejected'
-                              ? 'bg-red-100 text-red-700 border-red-300'
-                              : booking.payment_status === 'refunded'
-                              ? 'bg-rose-100 text-rose-700 border-rose-300'
-                              : booking.payment_status === 'cash_pending'
-                              ? 'bg-orange-100 text-orange-700 border-orange-300'
-                              : 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                          }`}>
-                            {booking.payment_status === 'paid' || booking.payment_status === 'verified' ? (
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                            ) : booking.payment_status === 'rejected' ? (
-                              <XCircle className="h-3 w-3 mr-1" />
-                            ) : (
-                              <Clock className="h-3 w-3 mr-1" />
-                            )}
-                            <span className="capitalize">{(booking.payment_status || 'pending').replace(/_/g, ' ')}</span>
-                          </span>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-1.5 text-xs">
-                          {booking.payment_mode === 'cash' ? (
-                            <span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded border border-green-200 font-semibold flex items-center">
-                              <Banknote className="h-3 w-3 mr-0.5" />
-                              <span>Cash</span>
-                            </span>
-                          ) : booking.payment_mode === 'razorpay' ? (
-                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 font-semibold flex items-center">
-                              <CreditCard className="h-3 w-3 mr-0.5" />
-                              <span>Razorpay</span>
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded border border-purple-200 font-semibold flex items-center">
-                              <Smartphone className="h-3 w-3 mr-0.5" />
-                              <span>Manual</span>
-                            </span>
-                          )}
-                        </div>
-                        {hasPendingPayment && (
-                          <div className="flex items-center space-x-1 text-xs text-orange-600 font-semibold">
-                            <AlertTriangle className="h-3 w-3" />
-                            <span>Action Required</span>
+                    <td className="px-4 py-3 text-sm tabular-nums">
+                      <div className="grid grid-cols-[42px_1fr] gap-y-1">
+                        <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
+                        <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{money.paid > 0 ? fmtMoney(money.paid) : '-'}</span>
+                        <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
+                        {money.refunded > 0 && <><span className="text-gray-500">Refund</span><span className="text-right font-semibold text-rose-700">{fmtMoney(money.refunded)}</span></>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-semibold text-gray-900">{optionLabel(booking)}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">{methodKey(booking) === 'razorpay' ? <CreditCard className="h-3.5 w-3.5" /> : methodKey(booking) === 'cash' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}{methodLabel(booking)}</p>
+                      <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
+                      {payState === 'rejected' && latestTxn(booking)?.rejection_reason && <p className="mt-1 truncate text-xs text-red-700" title={latestTxn(booking).rejection_reason}>{latestTxn(booking).rejection_reason}</p>}
+                      {pendingTxn?.amount && <p className="mt-1 text-xs text-purple-700">Submitted {fmtMoney(Number(pendingTxn.amount))}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
+                      {needsReview(booking) && <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-purple-700"><AlertCircle className="h-3.5 w-3.5" />Needs review</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => handlePrimaryAction(booking)} className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-200 ${needsReview(booking) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                        {actionLabel(booking)}
+                      </button>
+                      <div className="relative mt-2 inline-block">
+                        <button onClick={() => setRowMenu(rowMenu === booking.id ? null : booking.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="More actions"><MoreVertical className="h-4 w-4" /></button>
+                        {rowMenu === booking.id && (
+                          <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left text-sm shadow-lg">
+                            <Link href={actionHref(booking)} className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50"><Eye className="h-4 w-4" />View booking</Link>
+                            <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><XCircle className="h-4 w-4" />Delete</button>
                           </div>
                         )}
                       </div>
                     </td>
-
-                    {/* Booking Status — On Trip / Completed auto-derived from trip dates */}
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      {(() => {
-                        const trip = booking.trips;
-                        const start = (trip?.is_recurring && booking.departure_date) ? booking.departure_date : trip?.start_date;
-                        const end = trip?.end_date || start;
-                        const eff = effectiveBookingStatus(booking.booking_status || 'pending', start, end);
-                        return (
-                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-bold border ${getStatusColor(eff)}`}>
-                            {getStatusIcon(eff)}
-                            <span className="ml-1">{bookingStatusLabel(eff)}</span>
-                          </span>
-                        );
-                      })()}
-                    </td>
-
-                    {/* Actions - primary + overflow */}
-                    <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      {(() => {
-                        const needsManualReview = booking.payment_mode === 'manual' && (booking.payment_status === 'pending' || booking.reference_id);
-                        const needsCashApproval = booking.payment_mode === 'cash' && booking.payment_status === 'cash_pending';
-                        const hasTxns = booking.payment_transactions && booking.payment_transactions.length > 0;
-                        const phone = booking.primary_passenger_phone || booking.profiles?.phone;
-                        const pendingTxns = hasTxns ? booking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length : 0;
-                        return (
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Primary action: review if something needs it, else view */}
-                            {needsCashApproval ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openCashPaymentModal(booking); }}
-                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                              >
-                                <CheckCircle className="h-3.5 w-3.5" /> Approve cash
-                              </button>
-                            ) : needsManualReview ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openPaymentModal(booking); }}
-                                className="relative px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                              >
-                                <Eye className="h-3.5 w-3.5" /> Review
-                                {pendingTxns > 0 && <span className="ml-0.5 px-1 bg-white/25 rounded text-[10px] font-bold">{pendingTxns}</span>}
-                              </button>
-                            ) : (
-                              <Link
-                                href={`/admin/bookings/${booking.id}`}
-                                className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                              >
-                                <Eye className="h-3.5 w-3.5 text-gray-500" /> View
-                              </Link>
-                            )}
-
-                            {/* Overflow menu — rendered in a portal so it never gets clipped by the table */}
-                            <div className="relative">
-                              <button
-                                onClick={(e) => openRowMenuAt(e, booking.id)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                                title="More actions"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
-                              {openRowMenu === booking.id && rowMenuPos && typeof document !== 'undefined' && createPortal(
-                                <>
-                                  <div className="fixed inset-0 z-[80]" onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); }} />
-                                  <div className="fixed z-[81] w-44 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden py-1" style={{ top: rowMenuPos.top, left: rowMenuPos.left }}>
-                                    <Link href={`/admin/bookings/${booking.id}`} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                      <Eye className="h-3.5 w-3.5 text-gray-500" /> View booking
-                                    </Link>
-                                    {(needsManualReview || hasTxns) && (
-                                      <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); openPaymentModal(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
-                                        <CreditCard className="h-3.5 w-3.5 text-gray-500" /> Payments{pendingTxns > 0 ? ` (${pendingTxns})` : ''}
-                                      </button>
-                                    )}
-                                    {phone && (
-                                      <a href={`tel:${phone}`} onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                        <Phone className="h-3.5 w-3.5 text-gray-500" /> Call customer
-                                      </a>
-                                    )}
-                                    <button onClick={(e) => { e.stopPropagation(); setOpenRowMenu(null); setRowMenuPos(null); handleDeleteBooking(booking); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left border-t border-gray-100">
-                                      <XCircle className="h-3.5 w-3.5" /> Delete
-                                    </button>
-                                  </div>
-                                </>,
-                                document.body
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </td>
                   </tr>
                 );
               })}
+              {!loading && filteredBookings.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-600">{activeFilters.length ? 'No bookings match the active filters.' : 'No bookings found.'} {activeFilters.length > 0 && <button onClick={clearFilters} className="ml-2 font-semibold text-purple-700">Clear filters</button>}</td></tr>
+              )}
             </tbody>
           </table>
         </div>
-        {filteredBookings.length === 0 && (
-          <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-600 font-medium">No bookings found</p>
-            {searchTerm && (
-              <p className="text-sm text-gray-500 mt-1">Try adjusting your search or filters</p>
-            )}
-          </div>
-        )}
+
+        <div className="space-y-3 lg:hidden">
+          {loading && Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-56 animate-pulse rounded-lg border border-gray-200 bg-white" />)}
+          {!loading && filteredBookings.map((booking) => {
+            const money = moneyOf(booking);
+            const payState = paymentState(booking);
+            const bookState = bookingStatus(booking);
+            return (
+              <article key={booking.id} className={`rounded-lg border p-4 shadow-sm ${needsReview(booking) ? 'border-purple-200 bg-purple-50/50' : 'border-gray-200 bg-white'}`}>
+                <button onClick={() => router.push(actionHref(booking))} className="block w-full text-left">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-base font-bold text-gray-950">{customerName(booking)}</h2>
+                      <p className="mt-1 font-mono text-xs text-gray-500">{booking.id.slice(0, 8)}...</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
+                  </div>
+                  <div className="mt-4 border-t border-gray-100 pt-3">
+                    <p className="font-semibold text-gray-950">{booking.trips?.title || 'Trip not found'}</p>
+                    <p className="mt-1 flex items-center gap-1 text-sm font-bold text-purple-700"><Calendar className="h-4 w-4" />{fmtDate(departureDate(booking))}</p>
+                    <p className="mt-1 text-sm text-gray-600">{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}{pickup(booking) ? ` · ${pickup(booking)}` : ''}</p>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-3 text-sm tabular-nums">
+                    <div><p className="text-xs text-gray-500">Total</p><p className="font-bold text-gray-950">{fmtMoney(money.owed)}</p></div>
+                    <div><p className="text-xs text-gray-500">Paid</p><p className={money.paid > 0 ? 'font-bold text-green-700' : 'font-bold text-gray-500'}>{money.paid > 0 ? fmtMoney(money.paid) : '-'}</p></div>
+                    <div><p className="text-xs text-gray-500">Due</p><p className={money.remaining > 0 ? 'font-bold text-orange-700' : 'font-bold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</p></div>
+                  </div>
+                  {money.refunded > 0 && <p className="mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
+                  <div className="mt-3 grid grid-cols-1 gap-1 text-sm text-gray-700">
+                    <p><span className="font-semibold text-gray-500">Option:</span> {optionLabel(booking)}</p>
+                    <p><span className="font-semibold text-gray-500">Method:</span> {methodLabel(booking)}</p>
+                    <p><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span></p>
+                  </div>
+                </button>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                  <p className="text-xs text-gray-500">Booked on {fmtDate(booking.created_at, true)}</p>
+                  <button onClick={() => handlePrimaryAction(booking)} className={`h-10 rounded-lg px-3 text-sm font-bold ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-700'}`}>{actionLabel(booking)}</button>
+                </div>
+              </article>
+            );
+          })}
+          {!loading && filteredBookings.length === 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+              {activeFilters.length ? 'No bookings match the active filters.' : 'No bookings found.'}
+              {activeFilters.length > 0 && <button onClick={clearFilters} className="ml-2 font-semibold text-purple-700">Clear filters</button>}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Payment Review Modal */}
-      {showPaymentModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-purple-200 shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
-            {/* Enhanced Header */}
-            <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-600 p-3 sm:p-4 md:p-6 flex items-center justify-between sticky top-0 z-10">
-              <div className="flex items-center space-x-4">
-                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30">
-                  <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Review Payment</h2>
-                  <p className="text-sm text-purple-100">Booking ID: {selectedBooking.id.substring(0, 8)}...</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setSelectedBooking(null);
-                  setSelectedTransaction(null);
-                  setReviewNotes('');
-                  setRejectionReason('fake_payment');
-                  setReviewing(false);
-                }}
-                className="p-2 hover:bg-white/20 rounded-xl transition-colors border-2 border-white/30"
-              >
-                <X className="h-5 w-5 text-white" />
-              </button>
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-50 bg-black/30 xl:hidden">
+          <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-950">Filters</h2>
+              <button onClick={() => setMobileFiltersOpen(false)} className="rounded-lg p-2 hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
+            {FilterControls}
+            <div className="mt-4 flex gap-2">
+              <button onClick={clearFilters} className="h-10 flex-1 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700">Clear all</button>
+              <button onClick={() => setMobileFiltersOpen(false)} className="h-10 flex-1 rounded-lg bg-purple-600 text-sm font-bold text-white">Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <div className="overflow-y-auto flex-1 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
-              {/* Booking Overview Card */}
-              <div className="bg-gradient-to-br from-purple-50 via-purple-50 to-indigo-50 rounded-xl sm:rounded-2xl border border-purple-200 p-3 sm:p-4 md:p-6 shadow-md">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Calendar className="h-5 w-5 text-purple-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Booking Overview</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl p-4 border-2 border-purple-100">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <MapPin className="h-4 w-4 text-purple-600" />
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Trip</p>
-                    </div>
-                    <p className="font-bold text-gray-900 text-lg">{selectedBooking.trips?.title || 'N/A'}</p>
-                    <p className="text-sm text-gray-600 mt-1">{selectedBooking.trips?.destination || 'N/A'}</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 border-2 border-purple-100">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <User className="h-4 w-4 text-purple-600" />
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</p>
-                    </div>
-                    <p className="font-bold text-gray-900 text-lg">
-                      {selectedBooking.primary_passenger_name || 
-                       `${selectedBooking.profiles?.first_name || ''} ${selectedBooking.profiles?.last_name || ''}`.trim() || 
-                       'N/A'}
-                    </p>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs text-gray-600 flex items-center">
-                        <Mail className="h-3 w-3 mr-1" />
-                        {selectedBooking.primary_passenger_email || selectedBooking.profiles?.email || 'N/A'}
-                  </p>
-                      {selectedBooking.primary_passenger_phone && (
-                        <p className="text-xs text-gray-600 flex items-center">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {selectedBooking.primary_passenger_phone}
-                        </p>
-                      )}
-                </div>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 border-2 border-purple-100">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <IndianRupee className="h-4 w-4 text-purple-600" />
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</p>
-                    </div>
-                    <p className="font-bold text-gray-900 text-2xl flex items-center">
-                      <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-                      {parseFloat(selectedBooking.final_amount || selectedBooking.total_price || 0).toLocaleString()}
-                  </p>
-                    {selectedBooking.wallet_amount_used > 0 && (
-                      <p className="text-xs text-green-600 mt-1 flex items-center space-x-1">
-                        <Wallet className="h-3 w-3" />
-                        <span>Wallet used: ₹{parseFloat(String(selectedBooking.wallet_amount_used || 0)).toLocaleString()}</span>
-                      </p>
-                    )}
-                </div>
-                  <div className="bg-white rounded-xl p-4 border-2 border-purple-100">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Users className="h-4 w-4 text-purple-600" />
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Participants</p>
-                    </div>
-                    <p className="font-bold text-gray-900 text-2xl">{selectedBooking.number_of_participants || 1}</p>
-                    <p className="text-xs text-gray-600 mt-1 flex items-center space-x-1">
-                      {selectedBooking.payment_method === 'seat_lock' ? (
-                        <>
-                          <Lock className="h-3 w-3" />
-                          <span>Seat Lock</span>
-                        </>
-                      ) : (
-                        <>
-                          <DollarSign className="h-3 w-3" />
-                          <span>Full Payment</span>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </div>
+      {showPaymentModal && selectedBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-950">Review Payment</h2>
+                <p className="text-sm text-gray-500">{customerName(selectedBooking)} · {selectedBooking.id.slice(0, 8)}...</p>
               </div>
-
-              {/* Payment Transactions Section */}
-              {selectedBooking.payment_transactions && selectedBooking.payment_transactions.length > 0 ? (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <CreditCard className="h-5 w-5 text-purple-600" />
-                      <h3 className="text-lg font-bold text-gray-900">Payment Transactions</h3>
-                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold border border-purple-200">
-                        {selectedBooking.payment_transactions.length} {selectedBooking.payment_transactions.length === 1 ? 'transaction' : 'transactions'}
-                      </span>
+              <button onClick={() => setShowPaymentModal(false)} className="rounded-lg p-2 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4 p-4">
+              {(selectedBooking.payment_transactions || []).map((transaction: any) => (
+                <button key={transaction.id} onClick={() => setSelectedTransaction(transaction)} className={`w-full rounded-lg border p-3 text-left ${selectedTransaction?.id === transaction.id ? 'border-purple-300 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-gray-950">{transaction.transaction_id || 'No transaction ID'}</p>
+                      <p className="mt-1 text-sm text-gray-600">{methodLabel({ payment_mode: transaction.payment_mode })} · {titleCase(transaction.payment_type || 'payment')}</p>
+                      {transaction.rejection_reason && <p className="mt-1 text-sm text-red-700">{transaction.rejection_reason}</p>}
                     </div>
-                    {selectedBooking.payment_transactions.some((p: any) => p.payment_status === 'pending') && (
-                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold border border-orange-200 flex items-center space-x-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        <span>{selectedBooking.payment_transactions.filter((p: any) => p.payment_status === 'pending').length} Pending</span>
-                      </span>
-                    )}
+                    <div className="text-right">
+                      <p className="font-bold tabular-nums text-gray-950">{fmtMoney(Number(transaction.amount || 0))}</p>
+                      <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', transaction.payment_status)}`}>{statusLabel(transaction.payment_status)}</span>
+                    </div>
                   </div>
-                  <div className="space-y-4">
-                    {selectedBooking.payment_transactions.map((transaction: any, index: number) => {
-                      const isPending = transaction.payment_status === 'pending';
-                      const isVerified = transaction.payment_status === 'verified';
-                      const isRejected = transaction.payment_status === 'rejected';
-                      
-                      return (
-                      <div 
-                        key={transaction.id} 
-                          className={`rounded-2xl border-2 shadow-lg overflow-hidden transition-all ${
-                            isVerified
-                              ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300' 
-                              : isRejected
-                              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300'
-                              : 'bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-300'
-                        }`}
-                      >
-                          <div className="p-5">
-                            <div className="flex items-start justify-between mb-4">
-                          <div className="flex-1">
-                                <div className="flex items-center space-x-2 mb-3">
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center space-x-1 ${
-                                    transaction.payment_type === 'seat_lock' 
-                                      ? 'bg-purple-100 text-purple-700 border-purple-300'
-                                      : transaction.payment_type === 'remaining'
-                                      ? 'bg-blue-100 text-blue-700 border-blue-300'
-                                      : 'bg-indigo-100 text-indigo-700 border-indigo-300'
-                                  }`}>
-                                    {transaction.payment_type === 'seat_lock' ? (
-                                      <>
-                                        <Lock className="h-3 w-3" />
-                                        <span>Seat Lock</span>
-                                      </>
-                                    ) : transaction.payment_type === 'remaining' ? (
-                                      <>
-                                        <DollarSign className="h-3 w-3" />
-                                        <span>Remaining Payment</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CreditCard className="h-3 w-3" />
-                                        <span>Full Payment</span>
-                                      </>
-                                    )}
-                              </span>
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
-                                    isVerified
-                                      ? 'bg-green-100 text-green-700 border-green-300' 
-                                      : isRejected
-                                      ? 'bg-red-100 text-red-700 border-red-300'
-                                      : 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                              }`}>
-                                    {isVerified ? (
-                                      <span className="flex items-center">
-                                        <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                        Verified
-                              </span>
-                                    ) : isRejected ? (
-                                      <span className="flex items-center">
-                                        <XCircle className="h-3.5 w-3.5 mr-1" />
-                                        Rejected
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center">
-                                        <Clock className="h-3.5 w-3.5 mr-1" />
-                                        Pending Review
-                                      </span>
-                                    )}
-                                  </span>
-                                  {transaction.payment_mode && (
-                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center space-x-1 ${
-                                      transaction.payment_mode === 'cash'
-                                        ? 'bg-green-100 text-green-700 border-green-300'
-                                        : transaction.payment_mode === 'razorpay'
-                                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                                        : 'bg-purple-100 text-purple-700 border-purple-300'
-                                    }`}>
-                                      {transaction.payment_mode === 'cash' ? (
-                                        <>
-                                          <Banknote className="h-3 w-3" />
-                                          <span>Cash</span>
-                                        </>
-                                      ) : transaction.payment_mode === 'razorpay' ? (
-                                        <>
-                                          <CreditCard className="h-3 w-3" />
-                                          <span>Razorpay</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Smartphone className="h-3 w-3" />
-                                          <span>Manual</span>
-                                        </>
-                                      )}
-                                    </span>
-                                  )}
-                            </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border-2 border-white/50">
-                                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Transaction ID</p>
-                                    <div className="flex items-center space-x-2">
-                                      <p className="font-mono text-sm font-bold text-gray-900 break-all flex-1">
-                                        {transaction.transaction_id || 'N/A'}
-                                      </p>
-                                      {transaction.transaction_id && (
-                                        <button
-                                          onClick={() => {
-                                            navigator.clipboard.writeText(transaction.transaction_id);
-                                            alert('Transaction ID copied!');
-                                          }}
-                                          className="p-2 hover:bg-purple-100 rounded-lg transition-colors border-2 border-purple-200"
-                                          title="Copy Transaction ID"
-                                        >
-                                          <Eye className="h-4 w-4 text-purple-600" />
-                                        </button>
-                                      )}
-                              </div>
-                              </div>
-                                  <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border-2 border-white/50">
-                                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Amount</p>
-                                    <p className="text-2xl font-bold text-gray-900 flex items-center">
-                                      <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-                                      {parseFloat(String(transaction.amount || 0)).toLocaleString()}
-                                    </p>
-                                  </div>
-                                  <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border-2 border-white/50">
-                                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Payment Date</p>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {new Date(transaction.created_at).toLocaleDateString('en-IN', {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      })}
-                                    </p>
-                                    <p className="text-xs text-gray-600 mt-1">
-                                      {new Date(transaction.created_at).toLocaleTimeString('en-IN', {
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </p>
-                              </div>
-                              {transaction.payment_reviewed_at && (
-                                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border-2 border-white/50">
-                                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Reviewed At</p>
-                                      <p className="text-sm font-semibold text-gray-900">
-                                        {new Date(transaction.payment_reviewed_at).toLocaleDateString('en-IN', {
-                                          day: 'numeric',
-                                          month: 'short',
-                                          year: 'numeric'
-                                        })}
-                                      </p>
-                                      <p className="text-xs text-gray-600 mt-1">
-                                        {new Date(transaction.payment_reviewed_at).toLocaleTimeString('en-IN', {
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })}
-                                      </p>
-                                </div>
-                              )}
-                                </div>
-                                
-                              {transaction.rejection_reason && (
-                                  <div className="mt-4 bg-red-50 rounded-xl p-4 border-2 border-red-200">
-                                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2">Rejection Reason</p>
-                                    <p className="text-sm font-semibold text-red-900">{transaction.rejection_reason}</p>
-                                </div>
-                              )}
-                            </div>
-                              {isPending && (
-                            <button
-                              onClick={() => openTransactionModal(selectedBooking, transaction)}
-                                  className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl text-sm font-bold hover:from-purple-700 hover:to-purple-800 transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
-                            >
-                                  <Eye className="h-4 w-4" />
-                                  <span>Review Now</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : selectedBooking.transaction_id ? (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <CreditCard className="h-5 w-5 text-gray-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Transaction ID</h3>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 border-2 border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <p className="font-mono text-lg font-bold text-gray-900 break-all pr-4">
-                      {selectedBooking.transaction_id}
-                    </p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedBooking.transaction_id);
-                      alert('Transaction ID copied to clipboard!');
-                    }}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors flex items-center space-x-2 flex-shrink-0"
-                  >
-                        <Eye className="h-4 w-4" />
-                        <span>Copy</span>
-                  </button>
-                </div>
+                </button>
+              ))}
+              {selectedTransaction?.payment_status === 'pending' ? (
+                <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+                  <label className="block text-sm font-semibold text-gray-700">Review notes</label>
+                  <textarea value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-gray-200 bg-white p-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" placeholder="Optional admin note" />
+                  <label className="mt-3 block text-sm font-semibold text-gray-700">Rejection reason</label>
+                  <select value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-purple-500">
+                    {rejectionReasons.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
+                  </select>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button disabled={reviewing} onClick={() => handleReviewPayment(selectedTransaction, 'verified')} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 text-sm font-bold text-white disabled:opacity-60"><CheckCircle className="h-4 w-4" />Verify Payment</button>
+                    <button disabled={reviewing} onClick={() => handleReviewPayment(selectedTransaction, 'rejected')} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 text-sm font-bold text-white disabled:opacity-60"><XCircle className="h-4 w-4" />Reject Payment</button>
                   </div>
                 </div>
               ) : (
-                <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border-2 border-yellow-200 p-6 text-center">
-                  <AlertTriangle className="h-12 w-12 text-yellow-600 mx-auto mb-3" />
-                  <p className="text-gray-700 font-semibold">No payment transactions found</p>
-                  <p className="text-sm text-gray-600 mt-1">This booking may not have any payment records yet.</p>
-                </div>
-              )}
-
-              {/* Review Form - Only show when a transaction is selected */}
-              {selectedTransaction && selectedTransaction.payment_status === 'pending' && (
-                <div className="bg-gradient-to-br from-purple-50 via-indigo-50 to-purple-50 rounded-2xl border-2 border-purple-200 p-6 shadow-lg">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <AlertCircle className="h-5 w-5 text-purple-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Review This Payment</h3>
-                  </div>
-
-              {/* Review Notes */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Review Notes <span className="text-gray-500 font-normal">(Optional)</span>
-                </label>
-                <textarea
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                      rows={4}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 bg-white"
-                      placeholder="Add any notes about this payment review (e.g., verified with bank statement, screenshot received, etc.)..."
-                />
-                    <p className="text-xs text-gray-500 mt-2">These notes will be saved for your records.</p>
-              </div>
-
-                  {/* Rejection Reason */}
-              <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Rejection Reason <span className="text-red-500">*</span>
-                      <span className="text-gray-500 font-normal ml-2">(Required only if rejecting)</span>
-                </label>
-                <select
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900 bg-white font-medium"
-                >
-                  {rejectionReasons.map((reason) => (
-                    <option key={reason.value} value={reason.value}>
-                      {reason.label}
-                    </option>
-                  ))}
-                </select>
-                    <p className="text-xs text-gray-600 mt-2 flex items-start space-x-1">
-                      <Mail className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                      <span>This reason will be sent to the user via email if you reject the payment.</span>
-                    </p>
-              </div>
-                </div>
-              )}
-
-              {/* Action Buttons Section */}
-              {selectedTransaction && selectedTransaction.payment_status === 'pending' && (
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 p-6">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                  <button
-                    onClick={() => handleReviewPayment(selectedTransaction, 'verified')}
-                    disabled={reviewing}
-                      className="flex-1 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base hover:from-green-700 hover:to-emerald-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                  >
-                      <CheckCircle className="h-6 w-6" />
-                      <span>✓ Verify Payment</span>
-                  </button>
-                  <button
-                    onClick={() => handleReviewPayment(selectedTransaction, 'rejected')}
-                    disabled={reviewing || !rejectionReason}
-                      className="flex-1 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base hover:from-red-700 hover:to-rose-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                  >
-                      <XCircle className="h-6 w-6" />
-                      <span>✗ Reject Payment</span>
-                  </button>
-                  </div>
-                  {reviewing && (
-                    <div className="mt-4 text-center">
-                      <div className="inline-flex items-center space-x-3 px-4 py-2 bg-purple-100 rounded-lg border-2 border-purple-200">
-                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-600 border-t-transparent"></div>
-                        <p className="text-sm font-semibold text-purple-700">Processing your review...</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {selectedTransaction && selectedTransaction.payment_status !== 'pending' && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 p-6 text-center">
-                  <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg ${
-                    selectedTransaction.payment_status === 'verified'
-                      ? 'bg-green-100 text-green-700 border-2 border-green-200'
-                      : 'bg-red-100 text-red-700 border-2 border-red-200'
-                  }`}>
-                    {selectedTransaction.payment_status === 'verified' ? (
-                      <CheckCircle className="h-5 w-5" />
-                    ) : (
-                      <XCircle className="h-5 w-5" />
-                    )}
-                    <p className="font-semibold">
-                    This payment transaction has already been {selectedTransaction.payment_status === 'verified' ? 'verified' : 'rejected'}.
-                  </p>
-                  </div>
-                  {selectedTransaction.payment_reviewed_at && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      Reviewed on {new Date(selectedTransaction.payment_reviewed_at).toLocaleString('en-IN')}
-                    </p>
-                  )}
-                </div>
-              )}
-              
-              {!selectedTransaction && selectedBooking.payment_transactions && selectedBooking.payment_transactions.some((p: any) => p.payment_status === 'pending') && (
-                <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border-2 border-yellow-200 p-6 text-center">
-                  <AlertTriangle className="h-12 w-12 text-yellow-600 mx-auto mb-3" />
-                  <p className="font-semibold text-gray-900 mb-2">Select a Transaction to Review</p>
-                  <p className="text-sm text-gray-600">
-                    Click <span className="font-bold text-purple-600">&quot;Review Now&quot;</span> on a pending payment transaction above to verify or reject it.
-                  </p>
-                </div>
-              )}
-
-              {!selectedTransaction && (!selectedBooking.payment_transactions || selectedBooking.payment_transactions.length === 0) && !selectedBooking.transaction_id && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 p-6 text-center">
-                  <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="font-semibold text-gray-700">No payment information available</p>
-                  <p className="text-sm text-gray-600 mt-1">This booking may not have any payment records yet.</p>
-                </div>
+                <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">{selectedTransaction ? 'This transaction is not pending review.' : 'Select a pending transaction to review.'}</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Cash Payment Approval Modal */}
       {showCashPaymentModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-purple-200 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-xl font-bold text-gray-900">Approve Cash Payment</h2>
-              <button
-                onClick={() => {
-                  setShowCashPaymentModal(false);
-                  setSelectedBooking(null);
-                  setCashAmountPaid('');
-                  setCashNotes('');
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 p-4">
+              <h2 className="text-lg font-bold text-gray-950">Review Cash Payment</h2>
+              <button onClick={() => setShowCashPaymentModal(false)} className="rounded-lg p-2 hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Booking ID</p>
-                <p className="font-semibold text-gray-900">{selectedBooking.id.substring(0, 8)}...</p>
+            <div className="space-y-4 p-4">
+              <div className="rounded-lg bg-gray-50 p-3 text-sm">
+                <p className="font-semibold text-gray-950">{customerName(selectedBooking)}</p>
+                <p className="mt-1 text-gray-600">Outstanding {fmtMoney(moneyOf(selectedBooking).remaining)}</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Customer</p>
-                <p className="font-semibold text-gray-900">
-                  {selectedBooking.profiles?.first_name && selectedBooking.profiles?.last_name
-                    ? `${selectedBooking.profiles.first_name} ${selectedBooking.profiles.last_name}`
-                    : selectedBooking.primary_passenger_name || 'N/A'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Total Amount</p>
-                <p className="font-semibold text-purple-600 text-lg flex items-center">
-                  <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5" />
-                  {parseFloat(selectedBooking.final_amount || selectedBooking.total_price || 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Amount Received <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={cashAmountPaid}
-                  onChange={(e) => setCashAmountPaid(e.target.value)}
-                  placeholder="Enter amount paid"
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter the cash amount received from the customer
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Notes (Optional)
-                </label>
-                <textarea
-                  value={cashNotes}
-                  onChange={(e) => setCashNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Add any notes about this payment..."
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-gray-900"
-                />
-              </div>
-              <div className="flex space-x-3 pt-3 border-t border-gray-200">
-                <button
-                  onClick={handleApproveCashPayment}
-                  disabled={approvingCash || !cashAmountPaid || parseFloat(cashAmountPaid) <= 0}
-                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                >
-                  {approvingCash ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-5 w-5" />
-                      <span>Approve Payment</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCashPaymentModal(false);
-                    setSelectedBooking(null);
-                    setCashAmountPaid('');
-                    setCashNotes('');
-                  }}
-                  disabled={approvingCash}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
+              <label className="block text-sm font-semibold text-gray-700">Amount received</label>
+              <input type="number" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
+              <label className="block text-sm font-semibold text-gray-700">Notes</label>
+              <textarea value={cashNotes} onChange={(e) => setCashNotes(e.target.value)} rows={3} className="w-full rounded-lg border border-gray-200 p-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
+              <button disabled={approvingCash} onClick={handleApproveCashPayment} className="h-10 w-full rounded-lg bg-green-600 text-sm font-bold text-white disabled:opacity-60">Approve Payment</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
