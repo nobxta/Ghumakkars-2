@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Search,
   Smartphone,
+  Trash2,
   Users,
   X,
   XCircle,
@@ -153,7 +154,11 @@ function bookingStatus(booking: Booking) {
 function actionLabel(booking: Booking) {
   if (hasPendingTransaction(booking)) return 'Review Payment';
   if (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status))) return 'Review Booking';
-  return 'View Booking';
+  return 'View';
+}
+
+function compactActionLabel(booking: Booking) {
+  return actionLabel(booking).startsWith('Review') ? 'Review' : 'View';
 }
 
 function actionHref(booking: Booking) {
@@ -161,7 +166,18 @@ function actionHref(booking: Booking) {
 }
 
 function SortIcon() {
-  return <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />;
+  return <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />;
+}
+
+const controlClass = 'h-[42px] w-full rounded-[10px] border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 shadow-none outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400';
+
+function Field({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <label className={`block min-w-0 ${className}`}>
+      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</span>
+      {children}
+    </label>
+  );
 }
 
 export default function AdminBookingsPage() {
@@ -418,58 +434,104 @@ export default function AdminBookingsPage() {
   };
 
   const FilterControls = (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-      <label className="relative md:col-span-2 xl:col-span-2">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone or booking ID" className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
-      </label>
-      <div className="relative">
-        <select value={tripId} onChange={(e) => setTripId(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="all">All trips</option>
-          {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.label}</option>)}
-        </select>
-        <SortIcon />
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+        <Field label="Search" className="md:col-span-2 xl:col-span-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Name, email, phone or booking ID"
+              className={`${controlClass} pl-9 ${search ? 'pr-9' : 'pr-3'}`}
+              aria-label="Search by customer name, email, phone or booking ID"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Trip" className="xl:col-span-2">
+          <div className="relative">
+            <select value={tripId} onChange={(e) => setTripId(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Trip">
+              <option value="all">All trips</option>
+              {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.label}</option>)}
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
+        <Field label="Departure from" className="xl:col-span-2">
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={controlClass} aria-label="Departure from" />
+        </Field>
+        <Field label="Departure to" className="xl:col-span-2">
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={controlClass} aria-label="Departure to" />
+        </Field>
+        <Field label="Booking status" className="xl:col-span-1">
+          <div className="relative">
+            <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Booking status">
+              <option value="all">All statuses</option>
+              {bookingStatuses.map((s) => <option key={s} value={s}>{statusLabel(s, 'booking')}</option>)}
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
+        <Field label="Payment status" className="xl:col-span-2">
+          <div className="relative">
+            <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Payment status">
+              <option value="all">All payment statuses</option>
+              {paymentStates.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
       </div>
-      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" aria-label="Departure from" />
-      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" aria-label="Departure to" />
-      <div className="relative">
-        <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="all">Booking status</option>
-          {bookingStatuses.map((s) => <option key={s} value={s}>{statusLabel(s, 'booking')}</option>)}
-        </select>
-        <SortIcon />
-      </div>
-      <div className="relative">
-        <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="all">Payment state</option>
-          {paymentStates.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-        </select>
-        <SortIcon />
-      </div>
-      <div className="relative">
-        <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="all">Payment method</option>
-          {visibleMethods.map((m) => <option key={m} value={m}>{m === 'manual' ? 'Manual UPI / QR' : m === 'cash' ? 'Cash / Offline' : titleCase(m)}</option>)}
-        </select>
-        <SortIcon />
-      </div>
-      <div className="relative">
-        <select value={optionFilter} onChange={(e) => setOptionFilter(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="all">Payment option</option>
-          {visibleOptions.map((o) => <option key={o} value={o}>{o === 'seat_lock' ? 'Seat Lock' : 'Full Payment'}</option>)}
-          {bookings.some((b) => b.payment_mode === 'cash') && <option value="cash">Pay in Person</option>}
-        </select>
-        <SortIcon />
-      </div>
-      <div className="relative">
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
-          <option value="created_desc">Newest booked</option>
-          <option value="departure_asc">Departure date</option>
-          <option value="amount_desc">Highest total</option>
-          <option value="due_desc">Highest due</option>
-          <option value="status">Booking status</option>
-        </select>
-        <SortIcon />
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+        <Field label="Payment method" className="xl:col-span-2">
+          <div className="relative">
+            <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Payment method">
+              <option value="all">All methods</option>
+              {visibleMethods.map((m) => <option key={m} value={m}>{m === 'manual' ? 'Manual UPI / QR' : m === 'cash' ? 'Cash / Offline' : titleCase(m)}</option>)}
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
+        <Field label="Payment option" className="xl:col-span-2">
+          <div className="relative">
+            <select value={optionFilter} onChange={(e) => setOptionFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Payment option">
+              <option value="all">All options</option>
+              {visibleOptions.map((o) => <option key={o} value={o}>{o === 'seat_lock' ? 'Seat Lock' : 'Full Payment'}</option>)}
+              {bookings.some((b) => b.payment_mode === 'cash') && <option value="cash">Pay in Person</option>}
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
+        <Field label="Sort" className="xl:col-span-2">
+          <div className="relative">
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Sort bookings">
+              <option value="created_desc">Newest booked</option>
+              <option value="departure_asc">Departure date</option>
+              <option value="amount_desc">Highest total</option>
+              <option value="due_desc">Highest due</option>
+              <option value="status">Booking status</option>
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
+        {activeFilters.length > 0 && (
+          <div className="flex items-end xl:col-span-2">
+            <button onClick={clearFilters} className="h-[42px] rounded-[10px] border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-100">
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -489,22 +551,22 @@ export default function AdminBookingsPage() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          <button onClick={() => setPaymentFilter('paid')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+          <button onClick={() => setPaymentFilter('paid')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Collected</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-green-700">{fmtMoney(summaryData.collected)}</p>
             <p className="mt-1 text-xs text-gray-500">Successfully collected money</p>
           </button>
-          <button onClick={() => setSortBy('due_desc')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+          <button onClick={() => setSortBy('due_desc')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Outstanding</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-orange-700">{fmtMoney(summaryData.outstanding)}</p>
             <p className="mt-1 text-xs text-gray-500">Remaining across active bookings</p>
           </button>
-          <button onClick={() => setQuick('needs_review')} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+          <button onClick={() => setQuick('needs_review')} className={`min-h-[92px] rounded-xl border bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100 ${summaryData.needsReview ? 'border-purple-200' : 'border-gray-200'}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Needs Review</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-purple-700">{summaryData.needsReview || 0}</p>
             <p className="mt-1 text-xs text-gray-500">{summaryData.needsReview ? 'Manual payments or cash review' : 'No pending reviews'}</p>
           </button>
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Total Bookings</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-gray-950">{summaryData.totalBookings || 0}</p>
             <p className="mt-1 truncate text-xs text-gray-500">
@@ -513,14 +575,14 @@ export default function AdminBookingsPage() {
           </div>
         </div>
 
-        <div className="sticky top-0 z-20 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-          <div className="hidden xl:block">{FilterControls}</div>
-          <div className="flex items-center gap-2 xl:hidden">
+        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="hidden md:block">{FilterControls}</div>
+          <div className="flex items-center gap-2 md:hidden">
             <label className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search bookings" className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search bookings" className={`${controlClass} pl-9 pr-3`} />
             </label>
-            <button onClick={() => setMobileFiltersOpen(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700">
+            <button onClick={() => setMobileFiltersOpen(true)} className="inline-flex h-[42px] items-center gap-2 rounded-[10px] border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700">
               <Filter className="h-4 w-4" />
               Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}
             </button>
@@ -549,16 +611,16 @@ export default function AdminBookingsPage() {
           </div>
         )}
 
-        <div className="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm lg:block">
+        <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
           <table className="min-w-full table-fixed divide-y divide-gray-200">
-            <thead className="sticky top-[138px] z-10 bg-gray-50">
+            <thead className="bg-gray-50">
               <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                <th className="w-[24%] px-4 py-3">Booking & Customer</th>
-                <th className="w-[22%] px-4 py-3">Trip</th>
+                <th className="w-[25%] px-4 py-3">Booking & Customer</th>
+                <th className="w-[23%] px-4 py-3">Trip</th>
                 <th className="w-[15%] px-4 py-3">Amount</th>
-                <th className="w-[15%] px-4 py-3">Payment</th>
-                <th className="w-[12%] px-4 py-3">Booking Status</th>
-                <th className="w-[12%] px-4 py-3 text-right">Action</th>
+                <th className="w-[18%] px-4 py-3">Payment</th>
+                <th className="w-[11%] px-4 py-3">Booking Status</th>
+                <th className="w-[8%] px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -571,16 +633,16 @@ export default function AdminBookingsPage() {
                 const bookState = bookingStatus(booking);
                 const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
                 return (
-                  <tr key={booking.id} onClick={() => router.push(actionHref(booking))} className={`h-[88px] cursor-pointer align-top transition hover:bg-purple-50/35 ${needsReview(booking) ? 'bg-purple-50/40' : 'bg-white'}`}>
+                  <tr key={booking.id} onClick={() => router.push(actionHref(booking))} className="h-[100px] cursor-pointer bg-white align-top transition hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-bold text-gray-950" title={customerName(booking)}>{customerName(booking)}</p>
                           {booking.booking_status === 'referred' && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
                         </div>
-                        <p className="mt-1 font-mono text-xs text-gray-500" title={booking.id}>{booking.id.slice(0, 8)}...</p>
+                        <p className="mt-1 font-mono text-xs uppercase text-gray-500" title={booking.id}>#{booking.id.slice(0, 8)}</p>
                         <p className="mt-1 truncate text-xs text-gray-600" title={customerContact(booking)}>{customerContact(booking)}</p>
-                        <p className="mt-1 text-xs text-gray-500">Booked on {fmtDate(booking.created_at, true)}</p>
+                        <p className="mt-1 text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -592,7 +654,7 @@ export default function AdminBookingsPage() {
                     <td className="px-4 py-3 text-sm tabular-nums">
                       <div className="grid grid-cols-[42px_1fr] gap-y-1">
                         <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
-                        <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{money.paid > 0 ? fmtMoney(money.paid) : '-'}</span>
+                        <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{fmtMoney(money.paid)}</span>
                         <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
                         {money.refunded > 0 && <><span className="text-gray-500">Refund</span><span className="text-right font-semibold text-rose-700">{fmtMoney(money.refunded)}</span></>}
                       </div>
@@ -610,14 +672,14 @@ export default function AdminBookingsPage() {
                     </td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => handlePrimaryAction(booking)} className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-200 ${needsReview(booking) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                        {actionLabel(booking)}
+                        {compactActionLabel(booking)}
                       </button>
                       <div className="relative mt-2 inline-block">
                         <button onClick={() => setRowMenu(rowMenu === booking.id ? null : booking.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="More actions"><MoreVertical className="h-4 w-4" /></button>
                         {rowMenu === booking.id && (
                           <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left text-sm shadow-lg">
                             <Link href={actionHref(booking)} className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50"><Eye className="h-4 w-4" />View booking</Link>
-                            <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><XCircle className="h-4 w-4" />Delete</button>
+                            <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />Delete</button>
                           </div>
                         )}
                       </div>
@@ -639,12 +701,12 @@ export default function AdminBookingsPage() {
             const payState = paymentState(booking);
             const bookState = bookingStatus(booking);
             return (
-              <article key={booking.id} className={`rounded-lg border p-4 shadow-sm ${needsReview(booking) ? 'border-purple-200 bg-purple-50/50' : 'border-gray-200 bg-white'}`}>
+              <article key={booking.id} className={`rounded-xl border bg-white p-4 shadow-sm ${needsReview(booking) ? 'border-purple-200' : 'border-gray-200'}`}>
                 <button onClick={() => router.push(actionHref(booking))} className="block w-full text-left">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="truncate text-base font-bold text-gray-950">{customerName(booking)}</h2>
-                      <p className="mt-1 font-mono text-xs text-gray-500">{booking.id.slice(0, 8)}...</p>
+                      <p className="mt-1 font-mono text-xs uppercase text-gray-500">#{booking.id.slice(0, 8)}</p>
                     </div>
                     <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
                   </div>
@@ -655,7 +717,7 @@ export default function AdminBookingsPage() {
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-3 text-sm tabular-nums">
                     <div><p className="text-xs text-gray-500">Total</p><p className="font-bold text-gray-950">{fmtMoney(money.owed)}</p></div>
-                    <div><p className="text-xs text-gray-500">Paid</p><p className={money.paid > 0 ? 'font-bold text-green-700' : 'font-bold text-gray-500'}>{money.paid > 0 ? fmtMoney(money.paid) : '-'}</p></div>
+                    <div><p className="text-xs text-gray-500">Paid</p><p className={money.paid > 0 ? 'font-bold text-green-700' : 'font-bold text-gray-500'}>{fmtMoney(money.paid)}</p></div>
                     <div><p className="text-xs text-gray-500">Due</p><p className={money.remaining > 0 ? 'font-bold text-orange-700' : 'font-bold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</p></div>
                   </div>
                   {money.refunded > 0 && <p className="mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
@@ -665,9 +727,9 @@ export default function AdminBookingsPage() {
                     <p><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span></p>
                   </div>
                 </button>
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-                  <p className="text-xs text-gray-500">Booked on {fmtDate(booking.created_at, true)}</p>
-                  <button onClick={() => handlePrimaryAction(booking)} className={`h-10 rounded-lg px-3 text-sm font-bold ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-700'}`}>{actionLabel(booking)}</button>
+                <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
+                  <p className="text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
+                  <button onClick={() => handlePrimaryAction(booking)} className={`h-10 w-full rounded-lg px-3 text-sm font-bold ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-700'}`}>{actionLabel(booking)}</button>
                 </div>
               </article>
             );
@@ -682,7 +744,7 @@ export default function AdminBookingsPage() {
       </div>
 
       {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/30 xl:hidden">
+        <div className="fixed inset-0 z-50 bg-black/30 md:hidden">
           <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-950">Filters</h2>
