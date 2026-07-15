@@ -438,7 +438,7 @@ export async function sendAdminComposedEmail(options: {
   const safeName = sanitizeHeaderValue(options.fromName || FROM_NAME).slice(0, 80);
   const safeSubject = sanitizeHeaderValue(options.subject).slice(0, 160);
   const text = String(options.text || '').slice(0, 12000);
-  const html = textToHtmlEmail(text);
+  const html = textToHtmlEmail(text, safeSubject);
 
   return send({
     from: `"${safeName}" <${options.fromEmail}>`,
@@ -465,19 +465,19 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#039;');
 }
 
-function textToHtmlEmail(text: string) {
+function textToHtmlEmail(text: string, subject: string) {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => `<p style="margin:0 0 16px;line-height:1.6;">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .map((paragraph) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#334155;">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
   return renderEmail({
     theme: 'brand',
     preheader: text.slice(0, 120),
-    title: 'A message from Ghumakkars',
-    intro: paragraphs || '<p style="margin:0;line-height:1.6;">Message body was empty.</p>',
+    title: subject || 'A message from Ghumakkars',
+    bodyHtml: paragraphs || '<p style="margin:0;font-size:15px;line-height:1.65;color:#334155;">Message body was empty.</p>',
   });
 }
 
