@@ -12,6 +12,7 @@ import {
   CreditCard,
   Eye,
   Filter,
+  Gift,
   MoreVertical,
   RefreshCw,
   Search,
@@ -25,7 +26,7 @@ import { bookingStatusLabel, effectiveBookingStatus } from '@/lib/booking-status
 import { moneyOf } from '@/lib/booking-money';
 
 type Booking = any;
-type FilterKey = 'all' | 'needs_review' | 'pending' | 'seat_locked' | 'confirmed' | 'cancelled' | 'upcoming' | 'today' | 'week';
+type FilterKey = 'all' | 'needs_review' | 'pending' | 'seat_locked' | 'confirmed' | 'cancelled' | 'upcoming' | 'today' | 'week' | 'referrals';
 
 const bookingStatuses = ['pending', 'seat_locked', 'confirmed', 'cancelled', 'rejected', 'referred', 'on_trip', 'completed', 'remaining_submitted'];
 const paymentStates = ['paid', 'partial', 'unpaid', 'pending_verification', 'failed', 'rejected', 'refunded', 'partially_refunded', 'pending', 'cash_pending'];
@@ -114,6 +115,43 @@ function hasPendingTransaction(booking: Booking) {
 
 function needsReview(booking: Booking) {
   return hasPendingTransaction(booking) || (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status)));
+}
+
+function isReferralBooking(booking: Booking) {
+  return Boolean(booking.referral || booking.booking_status === 'referred' || booking.referral_partner || Number(booking.referral_commission || 0) > 0);
+}
+
+function referrerLabel(booking: Booking) {
+  const referral = booking.referral;
+  const profile = referral?.referrer_profile;
+  const profileName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim();
+  return (
+    referral?.referrer_name ||
+    profileName ||
+    referral?.referrer_email ||
+    profile?.email ||
+    booking.referral_partner ||
+    referral?.referral_code ||
+    'Referrer unavailable'
+  );
+}
+
+function commissionAmount(booking: Booking) {
+  if (booking.referral && booking.referral.reward_amount != null) return Number(booking.referral.reward_amount);
+  if (booking.referral_commission != null && booking.referral_commission !== '') return Number(booking.referral_commission);
+  return null;
+}
+
+function commissionStatus(booking: Booking) {
+  return booking.referral?.reward_status || null;
+}
+
+function commissionStatusClasses(status?: string | null) {
+  const key = String(status || '').toLowerCase();
+  if (['credited', 'paid', 'settled', 'approved'].includes(key)) return 'text-green-700 bg-green-50 border-green-200';
+  if (['pending', 'earned'].includes(key)) return 'text-amber-700 bg-amber-50 border-amber-200';
+  if (['cancelled', 'reversed'].includes(key)) return 'text-red-700 bg-red-50 border-red-200';
+  return 'text-gray-600 bg-gray-50 border-gray-200';
 }
 
 function paymentState(booking: Booking) {
@@ -210,6 +248,7 @@ export default function AdminBookingsPage() {
   const [paymentFilter, setPaymentFilter] = useState(initial('paymentStatus', 'all'));
   const [methodFilter, setMethodFilter] = useState(initial('paymentMethod', 'all'));
   const [optionFilter, setOptionFilter] = useState(initial('paymentOption', 'all'));
+  const [sourceFilter, setSourceFilter] = useState(initial('source', 'all'));
   const [sortBy, setSortBy] = useState(initial('sort', 'created_desc'));
   const [quick, setQuick] = useState<FilterKey>((initial('quick', 'all') as FilterKey) || 'all');
 
@@ -249,11 +288,12 @@ export default function AdminBookingsPage() {
     if (paymentFilter !== 'all') params.set('paymentStatus', paymentFilter);
     if (methodFilter !== 'all') params.set('paymentMethod', methodFilter);
     if (optionFilter !== 'all') params.set('paymentOption', optionFilter);
+    if (sourceFilter !== 'all') params.set('source', sourceFilter);
     if (sortBy !== 'created_desc') params.set('sort', sortBy);
     if (quick !== 'all') params.set('quick', quick);
     const next = params.toString() ? `/admin/bookings?${params.toString()}` : '/admin/bookings';
     router.replace(next, { scroll: false });
-  }, [debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, sortBy, quick, router]);
+  }, [debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, sourceFilter, sortBy, quick, router]);
 
   const trips = useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
@@ -287,7 +327,10 @@ export default function AdminBookingsPage() {
       if (paymentFilter !== 'all' && paymentState(booking) !== paymentFilter) return false;
       if (methodFilter !== 'all' && methodKey(booking) !== methodFilter) return false;
       if (optionFilter !== 'all' && optionKey(booking) !== optionFilter) return false;
+      if (sourceFilter === 'direct' && isReferralBooking(booking)) return false;
+      if (sourceFilter === 'referral' && !isReferralBooking(booking)) return false;
       if (quick === 'needs_review' && !needsReview(booking)) return false;
+      if (quick === 'referrals' && !isReferralBooking(booking)) return false;
       if (['pending', 'seat_locked', 'confirmed', 'cancelled'].includes(quick) && booking.booking_status !== quick) return false;
       if (quick === 'upcoming') return dep ? new Date(dep) >= today : false;
       if (quick === 'today') return dep ? new Date(dep).toDateString() === today.toDateString() : false;
@@ -307,7 +350,7 @@ export default function AdminBookingsPage() {
       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
     return rows;
-  }, [bookings, debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, quick, sortBy]);
+  }, [bookings, debouncedSearch, tripId, dateFrom, dateTo, bookingFilter, paymentFilter, methodFilter, optionFilter, sourceFilter, quick, sortBy]);
 
   const visibleMethods = paymentMethods.filter((method) => bookings.some((b) => methodKey(b) === method));
   const visibleOptions = paymentOptions.filter((option) => bookings.some((b) => optionKey(b) === option));
@@ -320,6 +363,7 @@ export default function AdminBookingsPage() {
     paymentFilter !== 'all' && `Payment: ${statusLabel(paymentFilter)}`,
     methodFilter !== 'all' && `Method: ${titleCase(methodFilter)}`,
     optionFilter !== 'all' && `Option: ${optionFilter === 'seat_lock' ? 'Seat Lock' : titleCase(optionFilter)}`,
+    sourceFilter !== 'all' && `Source: ${sourceFilter === 'referral' ? 'Referral' : 'Direct'}`,
     quick !== 'all' && `Quick: ${titleCase(quick)}`,
   ].filter(Boolean) as string[];
 
@@ -333,6 +377,7 @@ export default function AdminBookingsPage() {
     setPaymentFilter('all');
     setMethodFilter('all');
     setOptionFilter('all');
+    setSourceFilter('all');
     setQuick('all');
     setSortBy('created_desc');
   };
@@ -431,6 +476,21 @@ export default function AdminBookingsPage() {
     needsReview: bookings.filter(needsReview).length,
     totalBookings: bookings.length,
     byBookingStatus: {},
+    referralCommission: {
+      total: bookings.reduce((sum, booking) => {
+        const amount = commissionAmount(booking);
+        const status = String(commissionStatus(booking) || '').toLowerCase();
+        return amount != null && status !== 'cancelled' ? sum + amount : sum;
+      }, 0),
+      settled: bookings.reduce((sum, booking) => {
+        const amount = commissionAmount(booking);
+        return amount != null && commissionStatus(booking) === 'credited' ? sum + amount : sum;
+      }, 0),
+      pending: bookings.reduce((sum, booking) => {
+        const amount = commissionAmount(booking);
+        return amount != null && commissionStatus(booking) === 'pending' ? sum + amount : sum;
+      }, 0),
+    },
   };
 
   const FilterControls = (
@@ -525,6 +585,16 @@ export default function AdminBookingsPage() {
             <SortIcon />
           </div>
         </Field>
+        <Field label="Booking source" className="xl:col-span-2">
+          <div className="relative">
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Booking source">
+              <option value="all">All sources</option>
+              <option value="direct">Direct</option>
+              <option value="referral">Referral</option>
+            </select>
+            <SortIcon />
+          </div>
+        </Field>
         {activeFilters.length > 0 && (
           <div className="flex items-end xl:col-span-2">
             <button onClick={clearFilters} className="h-[42px] rounded-[10px] border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-100">
@@ -550,7 +620,7 @@ export default function AdminBookingsPage() {
           </button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <button onClick={() => setPaymentFilter('paid')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Collected</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-green-700">{fmtMoney(summaryData.collected)}</p>
@@ -573,6 +643,13 @@ export default function AdminBookingsPage() {
               Confirmed {summaryData.byBookingStatus?.confirmed || 0} · Seat Locked {summaryData.byBookingStatus?.seat_locked || 0} · Pending {summaryData.byBookingStatus?.pending || 0}
             </p>
           </div>
+          <button onClick={() => setQuick('referrals')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Referral Commission</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-purple-700">{fmtMoney(summaryData.referralCommission?.total || 0)}</p>
+            <p className="mt-1 truncate text-xs text-gray-500">
+              {fmtMoney(summaryData.referralCommission?.settled || 0)} credited - {fmtMoney(summaryData.referralCommission?.pending || 0)} pending
+            </p>
+          </button>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -588,9 +665,9 @@ export default function AdminBookingsPage() {
             </button>
           </div>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {(['all', 'needs_review', 'pending', 'seat_locked', 'confirmed', 'cancelled', 'upcoming', 'today', 'week'] as FilterKey[]).map((item) => (
+            {(['all', 'needs_review', 'pending', 'seat_locked', 'confirmed', 'cancelled', 'referrals', 'upcoming', 'today', 'week'] as FilterKey[]).map((item) => (
               <button key={item} onClick={() => setQuick(item)} className={`h-8 whitespace-nowrap rounded-full border px-3 text-xs font-semibold ${quick === item ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
-                {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : titleCase(item)}
+                {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : item === 'referrals' ? 'Referrals' : titleCase(item)}
               </button>
             ))}
           </div>
@@ -611,87 +688,110 @@ export default function AdminBookingsPage() {
           </div>
         )}
 
-        <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
-          <table className="min-w-full table-fixed divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                <th className="w-[25%] px-4 py-3">Booking & Customer</th>
-                <th className="w-[23%] px-4 py-3">Trip</th>
-                <th className="w-[15%] px-4 py-3">Amount</th>
-                <th className="w-[18%] px-4 py-3">Payment</th>
-                <th className="w-[11%] px-4 py-3">Booking Status</th>
-                <th className="w-[8%] px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}><td colSpan={6} className="px-4 py-4"><div className="h-16 animate-pulse rounded-lg bg-gray-100" /></td></tr>
-              ))}
-              {!loading && filteredBookings.map((booking) => {
-                const money = moneyOf(booking);
-                const payState = paymentState(booking);
-                const bookState = bookingStatus(booking);
-                const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
-                return (
-                  <tr key={booking.id} onClick={() => router.push(actionHref(booking))} className="h-[100px] cursor-pointer bg-white align-top transition hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-bold text-gray-950" title={customerName(booking)}>{customerName(booking)}</p>
-                          {booking.booking_status === 'referred' && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
-                        </div>
-                        <p className="mt-1 font-mono text-xs uppercase text-gray-500" title={booking.id}>#{booking.id.slice(0, 8)}</p>
-                        <p className="mt-1 truncate text-xs text-gray-600" title={customerContact(booking)}>{customerContact(booking)}</p>
-                        <p className="mt-1 text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="truncate text-sm font-semibold text-gray-950" title={booking.trips?.title}>{booking.trips?.title || 'Trip not found'}</p>
-                      <p className="mt-1 text-sm font-bold text-purple-700">{fmtDate(departureDate(booking))}</p>
-                      <p className="mt-1 truncate text-xs text-gray-500" title={pickup(booking)}>{pickup(booking) || booking.trips?.destination || 'Pickup not recorded'}</p>
-                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-700"><Users className="h-3.5 w-3.5" />{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm tabular-nums">
-                      <div className="grid grid-cols-[42px_1fr] gap-y-1">
-                        <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
-                        <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{fmtMoney(money.paid)}</span>
-                        <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
-                        {money.refunded > 0 && <><span className="text-gray-500">Refund</span><span className="text-right font-semibold text-rose-700">{fmtMoney(money.refunded)}</span></>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-900">{optionLabel(booking)}</p>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">{methodKey(booking) === 'razorpay' ? <CreditCard className="h-3.5 w-3.5" /> : methodKey(booking) === 'cash' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}{methodLabel(booking)}</p>
-                      <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
-                      {payState === 'rejected' && latestTxn(booking)?.rejection_reason && <p className="mt-1 truncate text-xs text-red-700" title={latestTxn(booking).rejection_reason}>{latestTxn(booking).rejection_reason}</p>}
-                      {pendingTxn?.amount && <p className="mt-1 text-xs text-purple-700">Submitted {fmtMoney(Number(pendingTxn.amount))}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
-                      {needsReview(booking) && <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-purple-700"><AlertCircle className="h-3.5 w-3.5" />Needs review</p>}
-                    </td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => handlePrimaryAction(booking)} className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-200 ${needsReview(booking) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                        {compactActionLabel(booking)}
-                      </button>
-                      <div className="relative mt-2 inline-block">
-                        <button onClick={() => setRowMenu(rowMenu === booking.id ? null : booking.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="More actions"><MoreVertical className="h-4 w-4" /></button>
-                        {rowMenu === booking.id && (
-                          <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left text-sm shadow-lg">
-                            <Link href={actionHref(booking)} className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50"><Eye className="h-4 w-4" />View booking</Link>
-                            <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />Delete</button>
-                          </div>
+        <div className="hidden lg:block">
+          <div className="grid grid-cols-[21%_18%_13%_14%_17%_9%_8%] gap-3 px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+            <div>Booking & Customer</div>
+            <div>Trip</div>
+            <div>Booking Amount</div>
+            <div>Payment</div>
+            <div>Referral / Source</div>
+            <div>Booking Status</div>
+            <div className="text-right">Action</div>
+          </div>
+          <div className="mt-2 flex flex-col gap-3">
+            {loading && Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-[112px] animate-pulse rounded-xl border border-gray-200 bg-white" />
+            ))}
+            {!loading && filteredBookings.map((booking) => {
+              const money = moneyOf(booking);
+              const payState = paymentState(booking);
+              const bookState = bookingStatus(booking);
+              const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
+              const referral = isReferralBooking(booking);
+              const amount = commissionAmount(booking);
+              const status = commissionStatus(booking);
+              return (
+                <div
+                  key={booking.id}
+                  onClick={() => router.push(actionHref(booking))}
+                  className={`grid min-h-[108px] cursor-pointer grid-cols-[21%_18%_13%_14%_17%_9%_8%] gap-3 rounded-xl border bg-white px-4 py-4 transition hover:border-purple-200 hover:shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-gray-950" title={customerName(booking)}>{customerName(booking)}</p>
+                      {referral && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
+                    </div>
+                    <p className="mt-1 font-mono text-xs uppercase text-gray-500" title={booking.id}>#{booking.id.slice(0, 8)}</p>
+                    <p className="mt-1 truncate text-xs text-gray-600" title={customerContact(booking)}>{customerContact(booking)}</p>
+                    <p className="mt-1 text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-950" title={booking.trips?.title}>{booking.trips?.title || 'Trip not found'}</p>
+                    <p className="mt-1 text-sm font-semibold text-purple-700">{fmtDate(departureDate(booking))}</p>
+                    <p className="mt-1 truncate text-xs text-gray-500" title={pickup(booking)}>{pickup(booking) || booking.trips?.destination || 'Pickup not recorded'}</p>
+                    <p className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-700"><Users className="h-3.5 w-3.5" />{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="text-sm tabular-nums">
+                    <div className="grid grid-cols-[42px_1fr] gap-y-1">
+                      <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
+                      <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{fmtMoney(money.paid)}</span>
+                      <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{optionLabel(booking)}</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">{methodKey(booking) === 'razorpay' ? <CreditCard className="h-3.5 w-3.5" /> : methodKey(booking) === 'cash' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}{methodLabel(booking)}</p>
+                    <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
+                    {pendingTxn?.amount && <p className="mt-1 text-xs text-purple-700">Submitted {fmtMoney(Number(pendingTxn.amount))}</p>}
+                  </div>
+                  <div className="min-w-0">
+                    {referral ? (
+                      <>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Referred by</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-gray-950" title={referrerLabel(booking)}>{referrerLabel(booking)}</p>
+                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Commission</p>
+                        {amount == null ? (
+                          <p className="mt-1 text-xs text-gray-500">Commission unavailable</p>
+                        ) : (
+                          <p className="mt-1 text-sm font-bold tabular-nums text-purple-700">{fmtMoney(amount)}</p>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!loading && filteredBookings.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-600">{activeFilters.length ? 'No bookings match the active filters.' : 'No bookings found.'} {activeFilters.length > 0 && <button onClick={clearFilters} className="ml-2 font-semibold text-purple-700">Clear filters</button>}</td></tr>
-              )}
-            </tbody>
-          </table>
+                        {status ? <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${commissionStatusClasses(status)}`}>{titleCase(status)}</span> : <p className="mt-1 text-xs text-gray-500">Status unavailable</p>}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-gray-700">Direct Booking</p>
+                        <p className="mt-1 text-xs text-gray-500">No referral commission</p>
+                      </>
+                    )}
+                  </div>
+                  <div>
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
+                    {needsReview(booking) && <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-amber-700"><AlertCircle className="h-3.5 w-3.5" />Review</p>}
+                  </div>
+                  <div className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => handlePrimaryAction(booking)} className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-200 ${needsReview(booking) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-purple-50 hover:text-purple-700'}`}>
+                      {compactActionLabel(booking)}
+                    </button>
+                    <div className="relative mt-2 inline-block">
+                      <button onClick={() => setRowMenu(rowMenu === booking.id ? null : booking.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="More actions"><MoreVertical className="h-4 w-4" /></button>
+                      {rowMenu === booking.id && (
+                        <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left text-sm shadow-lg">
+                          <Link href={actionHref(booking)} className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50"><Eye className="h-4 w-4" />View booking</Link>
+                          <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {!loading && filteredBookings.length === 0 && (
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-600">
+                {activeFilters.length ? 'No bookings match the active filters.' : 'No bookings found.'}
+                {activeFilters.length > 0 && <button onClick={clearFilters} className="ml-2 font-semibold text-purple-700">Clear filters</button>}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-3 lg:hidden">
@@ -700,12 +800,18 @@ export default function AdminBookingsPage() {
             const money = moneyOf(booking);
             const payState = paymentState(booking);
             const bookState = bookingStatus(booking);
+            const referral = isReferralBooking(booking);
+            const amount = commissionAmount(booking);
+            const status = commissionStatus(booking);
             return (
-              <article key={booking.id} className={`rounded-xl border bg-white p-4 shadow-sm ${needsReview(booking) ? 'border-purple-200' : 'border-gray-200'}`}>
+              <article key={booking.id} className={`rounded-xl border bg-white p-4 shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}>
                 <button onClick={() => router.push(actionHref(booking))} className="block w-full text-left">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="truncate text-base font-bold text-gray-950">{customerName(booking)}</h2>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h2 className="truncate text-base font-bold text-gray-950">{customerName(booking)}</h2>
+                        {referral && <span className="shrink-0 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
+                      </div>
                       <p className="mt-1 font-mono text-xs uppercase text-gray-500">#{booking.id.slice(0, 8)}</p>
                     </div>
                     <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
@@ -725,6 +831,25 @@ export default function AdminBookingsPage() {
                     <p><span className="font-semibold text-gray-500">Option:</span> {optionLabel(booking)}</p>
                     <p><span className="font-semibold text-gray-500">Method:</span> {methodLabel(booking)}</p>
                     <p><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span></p>
+                  </div>
+                  <div className="mt-4 border-t border-gray-100 pt-3 text-sm">
+                    {referral ? (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-gray-950">Referral</p>
+                        <p className="text-gray-600">Referred by {referrerLabel(booking)}</p>
+                        {amount == null ? (
+                          <p className="text-gray-500">Commission unavailable</p>
+                        ) : (
+                          <p className="font-semibold text-purple-700">Commission {fmtMoney(amount)}</p>
+                        )}
+                        {status ? <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${commissionStatusClasses(status)}`}>{titleCase(status)}</span> : <p className="text-xs text-gray-500">Status unavailable</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-semibold text-gray-700">Direct Booking</p>
+                        <p className="text-xs text-gray-500">No referral commission</p>
+                      </div>
+                    )}
                   </div>
                 </button>
                 <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">

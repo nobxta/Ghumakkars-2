@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       if (userIds.length > 0) {
         const { data: profiles } = await adminClient
           .from('profiles')
-          .select('id, first_name, last_name, email, phone')
+          .select('id, first_name, last_name, email, phone, referral_code, referred_by')
           .in('id', userIds);
 
         // Map profiles to bookings
@@ -68,6 +68,33 @@ export async function GET(request: NextRequest) {
           const profileMap = new Map(profiles.map(p => [p.id, p]));
           bookings.forEach((booking: any) => {
             booking.profiles = profileMap.get(booking.user_id) || null;
+          });
+        }
+
+        const { data: referrals } = await adminClient
+          .from('referrals')
+          .select('id, referrer_id, referred_user_id, referral_code, reward_amount, reward_status, first_booking_id, credited_at, created_at, referrer_name, referrer_email, referred_user_name, referred_user_email')
+          .in('referred_user_id', userIds);
+
+        if (referrals && referrals.length > 0) {
+          const referrerIds = Array.from(new Set(referrals.map((r: any) => r.referrer_id).filter(Boolean)));
+          let referrerMap = new Map<string, any>();
+          if (referrerIds.length > 0) {
+            const { data: referrerProfiles } = await adminClient
+              .from('profiles')
+              .select('id, first_name, last_name, email, phone, referral_code')
+              .in('id', referrerIds);
+            referrerMap = new Map((referrerProfiles || []).map((p: any) => [p.id, p]));
+          }
+
+          const referralMap = new Map<string, any>();
+          referrals.forEach((referral: any) => {
+            referral.referrer_profile = referrerMap.get(referral.referrer_id) || null;
+            referralMap.set(referral.referred_user_id, referral);
+          });
+
+          bookings.forEach((booking: any) => {
+            booking.referral = referralMap.get(booking.user_id) || null;
           });
         }
       }
@@ -96,6 +123,15 @@ export async function GET(request: NextRequest) {
         (booking.payment_transactions || []).some((p: any) => p.payment_status === 'pending') ||
         (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status)));
       if (needsReview) acc.needsReview += 1;
+      const referralAmount = parseFloat(String((booking.referral?.reward_amount ?? booking.referral_commission) || 0));
+      if ((booking.referral || booking.booking_status === 'referred' || booking.referral_partner) && Number.isFinite(referralAmount)) {
+        const status = String(booking.referral?.reward_status || '').toLowerCase();
+        if (status !== 'cancelled') {
+          acc.referralCommission.total += referralAmount;
+          if (status === 'credited') acc.referralCommission.settled += referralAmount;
+          if (status === 'pending') acc.referralCommission.pending += referralAmount;
+        }
+      }
       return acc;
     }, {
       collected: 0,
@@ -104,6 +140,11 @@ export async function GET(request: NextRequest) {
       totalBookings: rows.length,
       activeBookings: activeRows.length,
       byBookingStatus: {},
+      referralCommission: {
+        total: 0,
+        settled: 0,
+        pending: 0,
+      },
     });
 
     return NextResponse.json({ bookings: rows, summary });
