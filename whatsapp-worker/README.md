@@ -157,6 +157,8 @@ WA_AUTH_DIR=/home/container/whatsapp-worker/data/whatsapp-session
 WA_MAX_RECONNECT_DELAY_MS=60000
 WA_MAX_QUEUE_SIZE=100
 WA_QUEUE_RETRY_MS=15000
+WA_BAD_SESSION_RECOVERY_ATTEMPTS=3
+WA_LOG_MAX_BYTES=5000000
 ```
 
 The worker creates a single-process lock at:
@@ -185,8 +187,15 @@ Operational notes:
 - Do not keep WhatsApp Web open in a browser for the same number while this worker is active.
 - Ordinary disconnects do not delete auth files and do not call logout.
 - Temporary disconnects reconnect with capped exponential backoff.
+- A transient Baileys `badSession` is recovered with the saved session a few
+  times before the admin panel is told to relink.
+- Worker logs are saved as JSON lines in
+  `/home/container/whatsapp-worker/data/logs/whatsapp-worker.jsonl`.
+- Fetch recent logs with `GET /logs?limit=200` using the same `x-api-key`.
 - `/send` queues notifications in memory while temporarily disconnected and retries when connected.
-- If WhatsApp reports a genuine logged-out/bad-session state, the worker stops reconnecting and the admin panel must relink once.
+- The worker only calls WhatsApp logout and deletes auth files from the manual
+  `POST /logout` endpoint. Remote `loggedOut`, `badSession`, and
+  `connectionReplaced` events are logged and retried with the saved session.
 
 Restart verification checklist:
 
