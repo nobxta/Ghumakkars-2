@@ -12,7 +12,6 @@ import {
   CreditCard,
   Eye,
   Filter,
-  Gift,
   MoreVertical,
   RefreshCw,
   Search,
@@ -42,7 +41,7 @@ const rejectionReasons = [
 ];
 
 const fmtMoney = (value: number) =>
-  `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}`;
+  `\u20B9${Math.round(Number(value) || 0).toLocaleString('en-IN')}`;
 
 const fmtDate = (value?: string | null, includeTime = false) => {
   if (!value) return 'Not set';
@@ -207,7 +206,7 @@ function SortIcon() {
   return <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />;
 }
 
-const controlClass = 'h-[42px] w-full rounded-[10px] border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 shadow-none outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400';
+const controlClass = 'h-11 w-full min-w-0 rounded-[12px] border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 shadow-none outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400';
 
 function Field({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
   return (
@@ -277,6 +276,15 @@ export default function AdminBookingsPage() {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => window.clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileFiltersOpen]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -493,31 +501,33 @@ export default function AdminBookingsPage() {
     },
   };
 
-  const FilterControls = (
+  const renderFilterControls = (includeSearch = true) => (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-        <Field label="Search" className="md:col-span-2 xl:col-span-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name, email, phone or booking ID"
-              className={`${controlClass} pl-9 ${search ? 'pr-9' : 'pr-3'}`}
-              aria-label="Search by customer name, email, phone or booking ID"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </Field>
+        {includeSearch && (
+          <Field label="Search" className="md:col-span-2 xl:col-span-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name, email, phone or booking ID"
+                className={`${controlClass} pl-9 ${search ? 'pr-9' : 'pr-3'}`}
+                aria-label="Search by customer name, email, phone or booking ID"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </Field>
+        )}
         <Field label="Trip" className="xl:col-span-2">
           <div className="relative">
             <select value={tripId} onChange={(e) => setTripId(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Trip">
@@ -607,72 +617,77 @@ export default function AdminBookingsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50/60 p-4 sm:p-5 lg:p-6">
-      <div className="mx-auto max-w-[1680px] space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-950">All Bookings</h1>
-            <p className="mt-1 text-sm text-gray-600">Manage bookings, payments and pending actions.</p>
+    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50/70 px-3.5 pb-[calc(96px+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-8 lg:p-6">
+      <div className="mx-auto w-full max-w-[1680px] space-y-4 overflow-x-hidden">
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="min-w-0">
+            <h1 className="text-[21px] font-bold leading-tight tracking-tight text-gray-950 sm:text-2xl">All Bookings</h1>
+            <p className="mt-1 text-sm leading-5 text-gray-600">Manage bookings, payments and pending actions.</p>
           </div>
-          <button onClick={fetchBookings} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-4 text-sm font-semibold text-purple-700 shadow-sm hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-200 disabled:opacity-60">
+          <button onClick={fetchBookings} disabled={loading} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-purple-200 bg-white px-4 text-sm font-semibold text-purple-700 hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-200 disabled:opacity-60 sm:w-auto">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <button onClick={() => setPaymentFilter('paid')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Collected</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-green-700">{fmtMoney(summaryData.collected)}</p>
-            <p className="mt-1 text-xs text-gray-500">Successfully collected money</p>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+          <button onClick={() => setPaymentFilter('paid')} className="min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Collected</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-green-700 sm:text-xl">{fmtMoney(summaryData.collected)}</p>
+            <p className="mt-1 text-xs leading-4 text-gray-500">Successfully collected</p>
           </button>
-          <button onClick={() => setSortBy('due_desc')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Outstanding</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-orange-700">{fmtMoney(summaryData.outstanding)}</p>
-            <p className="mt-1 text-xs text-gray-500">Remaining across active bookings</p>
+          <button onClick={() => setSortBy('due_desc')} className="min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Outstanding</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-orange-700 sm:text-xl">{fmtMoney(summaryData.outstanding)}</p>
+            <p className="mt-1 text-xs leading-4 text-gray-500">Across active bookings</p>
           </button>
-          <button onClick={() => setQuick('needs_review')} className={`min-h-[92px] rounded-xl border bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100 ${summaryData.needsReview ? 'border-purple-200' : 'border-gray-200'}`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Needs Review</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-purple-700">{summaryData.needsReview || 0}</p>
-            <p className="mt-1 text-xs text-gray-500">{summaryData.needsReview ? 'Manual payments or cash review' : 'No pending reviews'}</p>
+          <button onClick={() => setQuick('needs_review')} className={`min-h-[94px] rounded-2xl border bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 ${summaryData.needsReview ? 'border-purple-200' : 'border-gray-200'}`}>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Needs Review</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{summaryData.needsReview || 0}</p>
+            <p className="mt-1 text-xs leading-4 text-gray-500">{summaryData.needsReview ? 'Manual or cash review' : 'No pending reviews'}</p>
           </button>
-          <div className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Total Bookings</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-gray-950">{summaryData.totalBookings || 0}</p>
-            <p className="mt-1 truncate text-xs text-gray-500">
-              Confirmed {summaryData.byBookingStatus?.confirmed || 0} · Seat Locked {summaryData.byBookingStatus?.seat_locked || 0} · Pending {summaryData.byBookingStatus?.pending || 0}
+          <div className="min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 sm:p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Total Bookings</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-gray-950 sm:text-xl">{summaryData.totalBookings || 0}</p>
+            <p className="mt-1 truncate text-xs leading-4 text-gray-500">
+              Confirmed {summaryData.byBookingStatus?.confirmed || 0} - Seat Locked {summaryData.byBookingStatus?.seat_locked || 0} - Pending {summaryData.byBookingStatus?.pending || 0}
             </p>
           </div>
-          <button onClick={() => setQuick('referrals')} className="min-h-[92px] rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-100">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Referral Commission</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-purple-700">{fmtMoney(summaryData.referralCommission?.total || 0)}</p>
-            <p className="mt-1 truncate text-xs text-gray-500">
+          <button onClick={() => setQuick('referrals')} className="col-span-2 min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 xl:col-span-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Referral Commission</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{fmtMoney(summaryData.referralCommission?.total || 0)}</p>
+            <p className="mt-1 truncate text-xs leading-4 text-gray-500">
               {fmtMoney(summaryData.referralCommission?.settled || 0)} credited - {fmtMoney(summaryData.referralCommission?.pending || 0)} pending
             </p>
           </button>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-          <div className="hidden md:block">{FilterControls}</div>
-          <div className="flex items-center gap-2 md:hidden">
-            <label className="relative flex-1">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm shadow-gray-100/60">
+          <div className="hidden md:block">{renderFilterControls(true)}</div>
+          <div className="flex min-w-0 items-center gap-2 md:hidden">
+            <label className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search bookings" className={`${controlClass} pl-9 pr-3`} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search bookings" className={`${controlClass} pl-9 ${search ? 'pr-9' : 'pr-3'}`} aria-label="Search bookings" />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Clear search">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </label>
-            <button onClick={() => setMobileFiltersOpen(true)} className="inline-flex h-[42px] items-center gap-2 rounded-[10px] border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700">
+            <button onClick={() => setMobileFiltersOpen(true)} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-100">
               <Filter className="h-4 w-4" />
               Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}
             </button>
           </div>
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
             {(['all', 'needs_review', 'pending', 'seat_locked', 'confirmed', 'cancelled', 'referrals', 'upcoming', 'today', 'week'] as FilterKey[]).map((item) => (
-              <button key={item} onClick={() => setQuick(item)} className={`h-8 whitespace-nowrap rounded-full border px-3 text-xs font-semibold ${quick === item ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              <button key={item} onClick={() => setQuick(item)} className={`h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-100 ${quick === item ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
                 {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : item === 'referrals' ? 'Referrals' : titleCase(item)}
               </button>
             ))}
           </div>
           {activeFilters.length > 0 && (
-            <div className="mt-2 flex items-center gap-2 overflow-x-auto text-xs">
+            <div className="-mx-1 mt-2 flex items-center gap-2 overflow-x-auto px-1 text-xs [scrollbar-width:none]">
               {activeFilters.map((item) => <span key={item} className="whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">{item}</span>)}
               <button onClick={clearFilters} className="whitespace-nowrap font-semibold text-purple-700 hover:text-purple-900">Clear all</button>
             </div>
@@ -689,7 +704,7 @@ export default function AdminBookingsPage() {
         )}
 
         <div className="hidden lg:block">
-          <div className="grid grid-cols-[21%_18%_13%_14%_17%_9%_8%] gap-3 px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+          <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.15fr)_minmax(0,.82fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,.72fr)_minmax(84px,.55fr)] gap-3 px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">
             <div>Booking & Customer</div>
             <div>Trip</div>
             <div>Booking Amount</div>
@@ -714,7 +729,7 @@ export default function AdminBookingsPage() {
                 <div
                   key={booking.id}
                   onClick={() => router.push(actionHref(booking))}
-                  className={`grid min-h-[108px] cursor-pointer grid-cols-[21%_18%_13%_14%_17%_9%_8%] gap-3 rounded-xl border bg-white px-4 py-4 transition hover:border-purple-200 hover:shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}
+                  className={`grid min-h-[108px] cursor-pointer grid-cols-[minmax(0,1.35fr)_minmax(0,1.15fr)_minmax(0,.82fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,.72fr)_minmax(84px,.55fr)] gap-3 rounded-xl border bg-white px-4 py-4 transition hover:border-purple-200 hover:shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -795,7 +810,7 @@ export default function AdminBookingsPage() {
         </div>
 
         <div className="space-y-3 lg:hidden">
-          {loading && Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-56 animate-pulse rounded-lg border border-gray-200 bg-white" />)}
+          {loading && Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-72 animate-pulse rounded-2xl border border-gray-200 bg-white" />)}
           {!loading && filteredBookings.map((booking) => {
             const money = moneyOf(booking);
             const payState = paymentState(booking);
@@ -804,38 +819,46 @@ export default function AdminBookingsPage() {
             const amount = commissionAmount(booking);
             const status = commissionStatus(booking);
             return (
-              <article key={booking.id} className={`rounded-xl border bg-white p-4 shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}>
+              <article key={booking.id} className={`overflow-hidden rounded-2xl border bg-white shadow-sm shadow-gray-100/50 ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}>
                 <button onClick={() => router.push(actionHref(booking))} className="block w-full text-left">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-3 p-4 pb-3">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <h2 className="truncate text-base font-bold text-gray-950">{customerName(booking)}</h2>
+                        <h2 className="truncate text-[15px] font-bold leading-5 text-gray-950">{customerName(booking)}</h2>
+                      </div>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                        <p className="font-mono text-xs uppercase text-gray-500">#{booking.id.slice(0, 8)}</p>
                         {referral && <span className="shrink-0 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
                       </div>
-                      <p className="mt-1 font-mono text-xs uppercase text-gray-500">#{booking.id.slice(0, 8)}</p>
                     </div>
                     <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
                   </div>
-                  <div className="mt-4 border-t border-gray-100 pt-3">
-                    <p className="font-semibold text-gray-950">{booking.trips?.title || 'Trip not found'}</p>
+                  <div className="border-t border-gray-100 px-4 py-3">
+                    <p className="truncate text-[15px] font-semibold text-gray-950" title={booking.trips?.title}>{booking.trips?.title || 'Trip not found'}</p>
                     <p className="mt-1 flex items-center gap-1 text-sm font-bold text-purple-700"><Calendar className="h-4 w-4" />{fmtDate(departureDate(booking))}</p>
-                    <p className="mt-1 text-sm text-gray-600">{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}{pickup(booking) ? ` · ${pickup(booking)}` : ''}</p>
+                    <p className="mt-1 truncate text-sm text-gray-600" title={pickup(booking) || booking.trips?.destination || ''}>{pickup(booking) || booking.trips?.destination || 'Pickup not recorded'} - {booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-3 text-sm tabular-nums">
-                    <div><p className="text-xs text-gray-500">Total</p><p className="font-bold text-gray-950">{fmtMoney(money.owed)}</p></div>
-                    <div><p className="text-xs text-gray-500">Paid</p><p className={money.paid > 0 ? 'font-bold text-green-700' : 'font-bold text-gray-500'}>{fmtMoney(money.paid)}</p></div>
-                    <div><p className="text-xs text-gray-500">Due</p><p className={money.remaining > 0 ? 'font-bold text-orange-700' : 'font-bold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</p></div>
+                  <div className="mx-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-sm tabular-nums">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">Booking Amount</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-950">{fmtMoney(money.owed)}</span></div>
+                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Paid</span><span className={money.paid > 0 ? 'font-semibold text-green-700' : 'font-semibold text-gray-500'}>{fmtMoney(money.paid)}</span></div>
+                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Due</span><span className={money.remaining > 0 ? 'font-semibold text-orange-700' : 'font-semibold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</span></div>
+                    </div>
                   </div>
-                  {money.refunded > 0 && <p className="mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
-                  <div className="mt-3 grid grid-cols-1 gap-1 text-sm text-gray-700">
-                    <p><span className="font-semibold text-gray-500">Option:</span> {optionLabel(booking)}</p>
-                    <p><span className="font-semibold text-gray-500">Method:</span> {methodLabel(booking)}</p>
-                    <p><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span></p>
+                  {money.refunded > 0 && <p className="mx-4 mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
+                  <div className="mx-4 mt-3 rounded-xl border border-gray-100 p-3 text-sm text-gray-700">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Payment</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-semibold text-gray-950">{optionLabel(booking)}</span>
+                      <span className="text-gray-500">{methodLabel(booking)}</span>
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
+                    </div>
                   </div>
-                  <div className="mt-4 border-t border-gray-100 pt-3 text-sm">
+                  <div className="mx-4 mt-3 rounded-xl border border-gray-100 p-3 text-sm">
                     {referral ? (
                       <div className="space-y-1">
-                        <p className="font-semibold text-gray-950">Referral</p>
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Referral</p>
                         <p className="text-gray-600">Referred by {referrerLabel(booking)}</p>
                         {amount == null ? (
                           <p className="text-gray-500">Commission unavailable</p>
@@ -846,15 +869,16 @@ export default function AdminBookingsPage() {
                       </div>
                     ) : (
                       <div>
-                        <p className="font-semibold text-gray-700">Direct Booking</p>
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Source</p>
+                        <p className="mt-1 font-semibold text-gray-700">Direct Booking</p>
                         <p className="text-xs text-gray-500">No referral commission</p>
                       </div>
                     )}
                   </div>
                 </button>
-                <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
+                <div className="mt-3 space-y-3 border-t border-gray-100 p-4 pt-3">
                   <p className="text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
-                  <button onClick={() => handlePrimaryAction(booking)} className={`h-10 w-full rounded-lg px-3 text-sm font-bold ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-700'}`}>{actionLabel(booking)}</button>
+                  <button onClick={() => handlePrimaryAction(booking)} className={`h-11 w-full rounded-xl px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-100 ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-800'}`}>{actionLabel(booking)}</button>
                 </div>
               </article>
             );
@@ -869,16 +893,21 @@ export default function AdminBookingsPage() {
       </div>
 
       {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/30 md:hidden">
-          <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-950">Filters</h2>
-              <button onClick={() => setMobileFiltersOpen(false)} className="rounded-lg p-2 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black/30 md:hidden" role="dialog" aria-modal="true" aria-label="Booking filters">
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[22px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 p-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-950">Filters</h2>
+                <p className="text-sm text-gray-500">Refine the bookings list</p>
+              </div>
+              <button onClick={() => setMobileFiltersOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-100" aria-label="Close filters"><X className="h-5 w-5" /></button>
             </div>
-            {FilterControls}
-            <div className="mt-4 flex gap-2">
-              <button onClick={clearFilters} className="h-10 flex-1 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700">Clear all</button>
-              <button onClick={() => setMobileFiltersOpen(false)} className="h-10 flex-1 rounded-lg bg-purple-600 text-sm font-bold text-white">Apply</button>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {renderFilterControls(false)}
+            </div>
+            <div className="sticky bottom-0 flex gap-2 border-t border-gray-100 bg-white p-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
+              <button onClick={clearFilters} className="h-11 flex-1 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-100">Clear all</button>
+              <button onClick={() => setMobileFiltersOpen(false)} className="h-11 flex-1 rounded-xl bg-purple-600 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-200">Apply filters</button>
             </div>
           </div>
         </div>
@@ -890,7 +919,7 @@ export default function AdminBookingsPage() {
             <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
               <div>
                 <h2 className="text-lg font-bold text-gray-950">Review Payment</h2>
-                <p className="text-sm text-gray-500">{customerName(selectedBooking)} · {selectedBooking.id.slice(0, 8)}...</p>
+                <p className="text-sm text-gray-500">{customerName(selectedBooking)} - {selectedBooking.id.slice(0, 8)}...</p>
               </div>
               <button onClick={() => setShowPaymentModal(false)} className="rounded-lg p-2 hover:bg-gray-100"><X className="h-5 w-5" /></button>
             </div>
@@ -900,7 +929,7 @@ export default function AdminBookingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-gray-950">{transaction.transaction_id || 'No transaction ID'}</p>
-                      <p className="mt-1 text-sm text-gray-600">{methodLabel({ payment_mode: transaction.payment_mode })} · {titleCase(transaction.payment_type || 'payment')}</p>
+                      <p className="mt-1 text-sm text-gray-600">{methodLabel({ payment_mode: transaction.payment_mode })} - {titleCase(transaction.payment_type || 'payment')}</p>
                       {transaction.rejection_reason && <p className="mt-1 text-sm text-red-700">{transaction.rejection_reason}</p>}
                     </div>
                     <div className="text-right">
