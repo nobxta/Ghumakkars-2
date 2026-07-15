@@ -14,13 +14,6 @@ export async function POST(request: NextRequest) {
 
     const email = await getResetTokenEmail(token);
 
-    // #region agent log
-    const fs = await import('fs').catch(() => null);
-    const logPath = 'debug-7d8f21.log';
-    const payload = JSON.stringify({ sessionId: '7d8f21', location: 'verify-reset-token/route.ts', message: 'token lookup', data: { tokenLen: typeof token === 'string' ? token.length : 0, found: !!email }, timestamp: Date.now(), hypothesisId: 'H1' }) + '\n';
-    if (fs) fs.promises.appendFile(logPath, payload).catch(() => {});
-    // #endregion
-
     if (!email) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
@@ -40,4 +33,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

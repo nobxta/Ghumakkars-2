@@ -23,6 +23,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
+
+# generated design/export artifacts
+/stitch-assets/
 
 # local env files
 .env*.local

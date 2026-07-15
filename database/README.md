@@ -43,5 +43,4 @@ The following files contain incremental schema updates and should be run after t
 
 - Most migrations use `IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` to be idempotent
 - Some migrations may need to be adapted if you're starting fresh
-- Refer to `DOCUMENTATION.md` in the root directory for complete database schema documentation
-
+- Refer to `../docs/DOCUMENTATION.md` for complete database schema documentation
