@@ -26,6 +26,7 @@ import { moneyOf } from '@/lib/booking-money';
 
 type Booking = any;
 type FilterKey = 'all' | 'needs_review' | 'pending' | 'seat_locked' | 'confirmed' | 'cancelled' | 'upcoming' | 'today' | 'week' | 'referrals';
+type Toast = { type: 'success' | 'error'; message: string } | null;
 
 const bookingStatuses = ['pending', 'seat_locked', 'confirmed', 'cancelled', 'rejected', 'referred', 'on_trip', 'completed', 'remaining_submitted'];
 const paymentStates = ['paid', 'partial', 'unpaid', 'pending_verification', 'failed', 'rejected', 'refunded', 'partially_refunded', 'pending', 'cash_pending'];
@@ -117,40 +118,16 @@ function needsReview(booking: Booking) {
 }
 
 function isReferralBooking(booking: Booking) {
-  return Boolean(booking.referral || booking.booking_status === 'referred' || booking.referral_partner || Number(booking.referral_commission || 0) > 0);
+  return Boolean(booking.booking_status === 'referred' || booking.referral_partner || Number(booking.referral_commission || 0) > 0);
 }
 
-function referrerLabel(booking: Booking) {
-  const referral = booking.referral;
-  const profile = referral?.referrer_profile;
-  const profileName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim();
-  return (
-    referral?.referrer_name ||
-    profileName ||
-    referral?.referrer_email ||
-    profile?.email ||
-    booking.referral_partner ||
-    referral?.referral_code ||
-    'Referrer unavailable'
-  );
+function partnerLabel(booking: Booking) {
+  return booking.referral_partner || 'Partner not set';
 }
 
 function commissionAmount(booking: Booking) {
-  if (booking.referral && booking.referral.reward_amount != null) return Number(booking.referral.reward_amount);
   if (booking.referral_commission != null && booking.referral_commission !== '') return Number(booking.referral_commission);
   return null;
-}
-
-function commissionStatus(booking: Booking) {
-  return booking.referral?.reward_status || null;
-}
-
-function commissionStatusClasses(status?: string | null) {
-  const key = String(status || '').toLowerCase();
-  if (['credited', 'paid', 'settled', 'approved'].includes(key)) return 'text-green-700 bg-green-50 border-green-200';
-  if (['pending', 'earned'].includes(key)) return 'text-amber-700 bg-amber-50 border-amber-200';
-  if (['cancelled', 'reversed'].includes(key)) return 'text-red-700 bg-red-50 border-red-200';
-  return 'text-gray-600 bg-gray-50 border-gray-200';
 }
 
 function paymentState(booking: Booking) {
@@ -177,7 +154,7 @@ function badgeClasses(kind: 'booking' | 'payment', status: string) {
 }
 
 function statusLabel(status: string, kind: 'booking' | 'payment' = 'payment') {
-  if (kind === 'booking') return bookingStatusLabel(status);
+  if (kind === 'booking') return status === 'referred' ? 'Partner Booking' : bookingStatusLabel(status);
   if (status === 'pending_verification') return 'Pending Verification';
   if (status === 'unpaid') return 'Not Collected';
   if (status === 'partial') return 'Partial';
@@ -185,6 +162,7 @@ function statusLabel(status: string, kind: 'booking' | 'payment' = 'payment') {
 }
 
 function bookingStatus(booking: Booking) {
+  if (isReferralBooking(booking) && booking.booking_status === 'referred') return 'confirmed';
   return effectiveBookingStatus(booking.booking_status || 'pending', departureDate(booking), booking.trips?.end_date);
 }
 
@@ -226,6 +204,9 @@ export default function AdminBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const [deleteBooking, setDeleteBooking] = useState<Booking | null>(null);
+  const [deletingBookingId, setDeletingBookingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -278,6 +259,12 @@ export default function AdminBookingsPage() {
   }, [search]);
 
   useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
     if (!mobileFiltersOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -285,6 +272,34 @@ export default function AdminBookingsPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileFiltersOpen]);
+
+  useEffect(() => {
+    if (!deleteBooking) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !deletingBookingId) setDeleteBooking(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [deleteBooking, deletingBookingId]);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [rowMenu]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -371,8 +386,8 @@ export default function AdminBookingsPage() {
     paymentFilter !== 'all' && `Payment: ${statusLabel(paymentFilter)}`,
     methodFilter !== 'all' && `Method: ${titleCase(methodFilter)}`,
     optionFilter !== 'all' && `Option: ${optionFilter === 'seat_lock' ? 'Seat Lock' : titleCase(optionFilter)}`,
-    sourceFilter !== 'all' && `Source: ${sourceFilter === 'referral' ? 'Referral' : 'Direct'}`,
-    quick !== 'all' && `Quick: ${titleCase(quick)}`,
+    sourceFilter !== 'all' && `Source: ${sourceFilter === 'referral' ? 'Partner Bookings' : 'Direct'}`,
+    quick !== 'all' && `Quick: ${quick === 'referrals' ? 'Partner Bookings' : titleCase(quick)}`,
   ].filter(Boolean) as string[];
 
   const clearFilters = () => {
@@ -469,35 +484,50 @@ export default function AdminBookingsPage() {
     }
   };
 
-  const handleDeleteBooking = async (booking: Booking) => {
-    const name = customerName(booking);
-    if (!confirm(`Permanently delete the booking for "${name}"?\n\nThis cannot be undone.`)) return;
-    const response = await fetch(`/api/admin/bookings/${booking.id}`, { method: 'DELETE' });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return alert(payload.error || 'Failed to delete booking');
-    await fetchBookings();
+  const requestDeleteBooking = (booking: Booking) => {
+    setRowMenu(null);
+    setDeleteBooking(booking);
   };
 
-  const summaryData = summary || {
+  const confirmDeleteBooking = async () => {
+    if (!deleteBooking || deletingBookingId) return;
+    setDeletingBookingId(deleteBooking.id);
+    try {
+      const response = await fetch(`/api/admin/bookings/${deleteBooking.id}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Failed to delete booking');
+      setToast({ type: 'success', message: 'Booking deleted.' });
+      setDeleteBooking(null);
+      await fetchBookings();
+    } catch (err: any) {
+      setToast({ type: 'error', message: err.message || 'Failed to delete booking' });
+    } finally {
+      setDeletingBookingId(null);
+    }
+  };
+
+  const localPartnerCommission = bookings.reduce((sum, booking) => {
+    const amount = commissionAmount(booking);
+    return isReferralBooking(booking) && amount != null && Number.isFinite(amount) ? sum + amount : sum;
+  }, 0);
+  const localPartnerBookings = bookings.filter(isReferralBooking).length;
+
+  const summaryData = summary ? {
+    ...summary,
+    referralCommission: {
+      total: localPartnerCommission,
+      count: localPartnerBookings,
+    },
+  } : {
     collected: bookings.filter((b) => activeBookingStatuses.includes(String(b.booking_status))).reduce((sum, b) => sum + moneyOf(b).paid, 0),
     outstanding: bookings.filter((b) => activeBookingStatuses.includes(String(b.booking_status))).reduce((sum, b) => sum + moneyOf(b).remaining, 0),
     needsReview: bookings.filter(needsReview).length,
     totalBookings: bookings.length,
+    activeBookings: bookings.filter((b) => activeBookingStatuses.includes(String(b.booking_status))).length,
     byBookingStatus: {},
     referralCommission: {
-      total: bookings.reduce((sum, booking) => {
-        const amount = commissionAmount(booking);
-        const status = String(commissionStatus(booking) || '').toLowerCase();
-        return amount != null && status !== 'cancelled' ? sum + amount : sum;
-      }, 0),
-      settled: bookings.reduce((sum, booking) => {
-        const amount = commissionAmount(booking);
-        return amount != null && commissionStatus(booking) === 'credited' ? sum + amount : sum;
-      }, 0),
-      pending: bookings.reduce((sum, booking) => {
-        const amount = commissionAmount(booking);
-        return amount != null && commissionStatus(booking) === 'pending' ? sum + amount : sum;
-      }, 0),
+      total: localPartnerCommission,
+      count: localPartnerBookings,
     },
   };
 
@@ -543,9 +573,9 @@ export default function AdminBookingsPage() {
         <Field label="Departure to" className="xl:col-span-2">
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={controlClass} aria-label="Departure to" />
         </Field>
-        <Field label="Booking status" className="xl:col-span-1">
+        <Field label="Booking status/type" className="xl:col-span-1">
           <div className="relative">
-            <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Booking status">
+            <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Booking status or type">
               <option value="all">All statuses</option>
               {bookingStatuses.map((s) => <option key={s} value={s}>{statusLabel(s, 'booking')}</option>)}
             </select>
@@ -600,7 +630,7 @@ export default function AdminBookingsPage() {
             <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className={`${controlClass} appearance-none pr-9`} aria-label="Booking source">
               <option value="all">All sources</option>
               <option value="direct">Direct</option>
-              <option value="referral">Referral</option>
+              <option value="referral">Partner Bookings</option>
             </select>
             <SortIcon />
           </div>
@@ -613,6 +643,45 @@ export default function AdminBookingsPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+
+  const renderActionMenu = (booking: Booking, align: 'right' | 'left' = 'right') => (
+    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setRowMenu(rowMenu === booking.id ? null : booking.id);
+        }}
+        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-100"
+        aria-label={`Booking actions for ${customerName(booking)}`}
+        aria-haspopup="menu"
+        aria-expanded={rowMenu === booking.id}
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {rowMenu === booking.id && (
+        <div
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-40 mt-2 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white py-1 text-left text-sm shadow-xl`}
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Link href={actionHref(booking)} className="flex min-h-11 items-center gap-2 px-3 py-2 font-medium text-gray-700 hover:bg-gray-50" role="menuitem">
+            <Eye className="h-4 w-4" />View Booking
+          </Link>
+          <div className="my-1 border-t border-gray-100" />
+          <button
+            type="button"
+            onClick={() => requestDeleteBooking(booking)}
+            className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left font-semibold text-red-700 hover:bg-red-50"
+            role="menuitem"
+            aria-label={`Delete booking for ${customerName(booking)}`}
+          >
+            <Trash2 className="h-4 w-4" />Delete Booking
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -641,24 +710,22 @@ export default function AdminBookingsPage() {
             <p className="mt-1 text-lg font-bold tabular-nums text-orange-700 sm:text-xl">{fmtMoney(summaryData.outstanding)}</p>
             <p className="mt-1 text-xs leading-4 text-gray-500">Across active bookings</p>
           </button>
-          <button onClick={() => setQuick('needs_review')} className={`min-h-[94px] rounded-2xl border bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 ${summaryData.needsReview ? 'border-purple-200' : 'border-gray-200'}`}>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Needs Review</p>
-            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{summaryData.needsReview || 0}</p>
-            <p className="mt-1 text-xs leading-4 text-gray-500">{summaryData.needsReview ? 'Manual or cash review' : 'No pending reviews'}</p>
+          <button onClick={() => setQuick('referrals')} className="col-span-2 min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 xl:col-span-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Partner Commission</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{fmtMoney(summaryData.referralCommission?.total || 0)}</p>
+            <p className="mt-1 text-xs leading-4 text-gray-500">{summaryData.referralCommission?.count || 0} partner booking{Number(summaryData.referralCommission?.count || 0) === 1 ? '' : 's'}</p>
           </button>
           <div className="min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 sm:p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Total Bookings</p>
-            <p className="mt-1 text-lg font-bold tabular-nums text-gray-950 sm:text-xl">{summaryData.totalBookings || 0}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Active / Total Bookings</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-gray-950 sm:text-xl">{summaryData.activeBookings || 0} / {summaryData.totalBookings || 0}</p>
             <p className="mt-1 truncate text-xs leading-4 text-gray-500">
               Confirmed {summaryData.byBookingStatus?.confirmed || 0} - Seat Locked {summaryData.byBookingStatus?.seat_locked || 0} - Pending {summaryData.byBookingStatus?.pending || 0}
             </p>
           </div>
-          <button onClick={() => setQuick('referrals')} className="col-span-2 min-h-[94px] rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 xl:col-span-1">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Referral Commission</p>
-            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{fmtMoney(summaryData.referralCommission?.total || 0)}</p>
-            <p className="mt-1 truncate text-xs leading-4 text-gray-500">
-              {fmtMoney(summaryData.referralCommission?.settled || 0)} credited - {fmtMoney(summaryData.referralCommission?.pending || 0)} pending
-            </p>
+          <button onClick={() => setQuick('needs_review')} className={`min-h-[94px] rounded-2xl border bg-white p-3.5 text-left transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 sm:p-4 ${summaryData.needsReview ? 'border-purple-200' : 'border-gray-200'}`}>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Needs Review</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-purple-700 sm:text-xl">{summaryData.needsReview || 0}</p>
+            <p className="mt-1 text-xs leading-4 text-gray-500">{summaryData.needsReview ? 'Manual or cash review' : 'No pending reviews'}</p>
           </button>
         </div>
 
@@ -682,7 +749,7 @@ export default function AdminBookingsPage() {
           <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
             {(['all', 'needs_review', 'pending', 'seat_locked', 'confirmed', 'cancelled', 'referrals', 'upcoming', 'today', 'week'] as FilterKey[]).map((item) => (
               <button key={item} onClick={() => setQuick(item)} className={`h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-100 ${quick === item ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
-                {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : item === 'referrals' ? 'Referrals' : titleCase(item)}
+                {item === 'all' ? 'All' : item === 'needs_review' ? 'Needs Review' : item === 'week' ? 'This Week' : item === 'referrals' ? 'Partner Bookings' : titleCase(item)}
               </button>
             ))}
           </div>
@@ -707,9 +774,9 @@ export default function AdminBookingsPage() {
           <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.15fr)_minmax(0,.82fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,.72fr)_minmax(84px,.55fr)] gap-3 px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">
             <div>Booking & Customer</div>
             <div>Trip</div>
-            <div>Booking Amount</div>
-            <div>Payment</div>
-            <div>Referral / Source</div>
+            <div>Amount / Commission</div>
+            <div>Payment / Operator</div>
+            <div>Partner / Source</div>
             <div>Booking Status</div>
             <div className="text-right">Action</div>
           </div>
@@ -724,17 +791,16 @@ export default function AdminBookingsPage() {
               const pendingTxn = (booking.payment_transactions || []).find((p: any) => p.payment_status === 'pending');
               const referral = isReferralBooking(booking);
               const amount = commissionAmount(booking);
-              const status = commissionStatus(booking);
               return (
                 <div
                   key={booking.id}
                   onClick={() => router.push(actionHref(booking))}
-                  className={`grid min-h-[108px] cursor-pointer grid-cols-[minmax(0,1.35fr)_minmax(0,1.15fr)_minmax(0,.82fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,.72fr)_minmax(84px,.55fr)] gap-3 rounded-xl border bg-white px-4 py-4 transition hover:border-purple-200 hover:shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}
+                  className={`grid min-h-[108px] cursor-pointer grid-cols-[minmax(0,1.35fr)_minmax(0,1.15fr)_minmax(0,.82fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,.72fr)_minmax(84px,.55fr)] gap-3 rounded-xl border px-4 py-4 transition hover:border-purple-200 hover:shadow-sm ${needsReview(booking) ? 'border-l-4 border-l-amber-400 bg-white' : referral ? 'border-l-4 border-l-purple-500 bg-purple-50/35' : 'border-gray-200 bg-white'}`}
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-semibold text-gray-950" title={customerName(booking)}>{customerName(booking)}</p>
-                      {referral && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
+                      {referral && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Partner Booking</span>}
                     </div>
                     <p className="mt-1 font-mono text-xs uppercase text-gray-500" title={booking.id}>#{booking.id.slice(0, 8)}</p>
                     <p className="mt-1 truncate text-xs text-gray-600" title={customerContact(booking)}>{customerContact(booking)}</p>
@@ -747,30 +813,51 @@ export default function AdminBookingsPage() {
                     <p className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-700"><Users className="h-3.5 w-3.5" />{booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
                   </div>
                   <div className="text-sm tabular-nums">
-                    <div className="grid grid-cols-[42px_1fr] gap-y-1">
-                      <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
-                      <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{fmtMoney(money.paid)}</span>
-                      <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{optionLabel(booking)}</p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">{methodKey(booking) === 'razorpay' ? <CreditCard className="h-3.5 w-3.5" /> : methodKey(booking) === 'cash' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}{methodLabel(booking)}</p>
-                    <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
-                    {pendingTxn?.amount && <p className="mt-1 text-xs text-purple-700">Submitted {fmtMoney(Number(pendingTxn.amount))}</p>}
+                    {referral ? (
+                      <div className="rounded-xl bg-purple-50/70 p-3">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-purple-700">Our Commission</p>
+                        {amount == null ? (
+                          <p className="mt-1 text-xs font-semibold text-gray-600">Commission not set</p>
+                        ) : (
+                          <p className="mt-1 text-base font-bold text-purple-700">{fmtMoney(amount)}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-[42px_1fr] gap-y-1">
+                        <span className="text-gray-500">Total</span><span className="text-right font-semibold text-gray-950">{fmtMoney(money.owed)}</span>
+                        <span className="text-gray-500">Paid</span><span className={`text-right font-semibold ${money.paid > 0 ? 'text-green-700' : 'text-gray-500'}`}>{fmtMoney(money.paid)}</span>
+                        <span className="text-gray-500">Due</span><span className={`text-right font-semibold ${money.remaining > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Fully paid'}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0">
                     {referral ? (
                       <>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Referred by</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-gray-950" title={referrerLabel(booking)}>{referrerLabel(booking)}</p>
-                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Commission</p>
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Referred to Partner</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-gray-950" title={partnerLabel(booking)}>{partnerLabel(booking)}</p>
+                        <p className="mt-1 text-xs text-gray-600">Partner-operated booking</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-gray-900">{optionLabel(booking)}</p>
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">{methodKey(booking) === 'razorpay' ? <CreditCard className="h-3.5 w-3.5" /> : methodKey(booking) === 'cash' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}{methodLabel(booking)}</p>
+                        <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
+                        {pendingTxn?.amount && <p className="mt-1 text-xs text-purple-700">Submitted {fmtMoney(Number(pendingTxn.amount))}</p>}
+                      </>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    {referral ? (
+                      <>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Operated by</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-gray-950" title={partnerLabel(booking)}>{partnerLabel(booking)}</p>
+                        <p className="mt-1 text-xs text-gray-500">Partner-operated booking</p>
+                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Our Commission</p>
                         {amount == null ? (
-                          <p className="mt-1 text-xs text-gray-500">Commission unavailable</p>
+                          <p className="mt-1 text-xs font-semibold text-gray-500">Commission not set</p>
                         ) : (
                           <p className="mt-1 text-sm font-bold tabular-nums text-purple-700">{fmtMoney(amount)}</p>
                         )}
-                        {status ? <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${commissionStatusClasses(status)}`}>{titleCase(status)}</span> : <p className="mt-1 text-xs text-gray-500">Status unavailable</p>}
                       </>
                     ) : (
                       <>
@@ -787,15 +874,7 @@ export default function AdminBookingsPage() {
                     <button onClick={() => handlePrimaryAction(booking)} className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-200 ${needsReview(booking) ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-purple-50 hover:text-purple-700'}`}>
                       {compactActionLabel(booking)}
                     </button>
-                    <div className="relative mt-2 inline-block">
-                      <button onClick={() => setRowMenu(rowMenu === booking.id ? null : booking.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" aria-label="More actions"><MoreVertical className="h-4 w-4" /></button>
-                      {rowMenu === booking.id && (
-                        <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left text-sm shadow-lg">
-                          <Link href={actionHref(booking)} className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50"><Eye className="h-4 w-4" />View booking</Link>
-                          <button onClick={() => handleDeleteBooking(booking)} className="flex w-full items-center gap-2 px-3 py-2 text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />Delete</button>
-                        </div>
-                      )}
-                    </div>
+                    <div className="mt-2">{renderActionMenu(booking)}</div>
                   </div>
                 </div>
               );
@@ -817,9 +896,8 @@ export default function AdminBookingsPage() {
             const bookState = bookingStatus(booking);
             const referral = isReferralBooking(booking);
             const amount = commissionAmount(booking);
-            const status = commissionStatus(booking);
             return (
-              <article key={booking.id} className={`overflow-hidden rounded-2xl border bg-white shadow-sm shadow-gray-100/50 ${needsReview(booking) ? 'border-l-4 border-l-amber-400' : referral ? 'border-l-4 border-l-purple-500' : 'border-gray-200'}`}>
+              <article key={booking.id} className={`overflow-visible rounded-2xl border shadow-sm shadow-gray-100/50 ${needsReview(booking) ? 'border-l-4 border-l-amber-400 bg-white' : referral ? 'border-l-4 border-l-purple-500 bg-purple-50/35' : 'border-gray-200 bg-white'}`}>
                 <button onClick={() => router.push(actionHref(booking))} className="block w-full text-left">
                   <div className="flex items-start justify-between gap-3 p-4 pb-3">
                     <div className="min-w-0">
@@ -828,7 +906,7 @@ export default function AdminBookingsPage() {
                       </div>
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                         <p className="font-mono text-xs uppercase text-gray-500">#{booking.id.slice(0, 8)}</p>
-                        {referral && <span className="shrink-0 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">Referral</span>}
+                        {referral && <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">Partner Booking</span>}
                       </div>
                     </div>
                     <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${badgeClasses('booking', bookState)}`}>{statusLabel(bookState, 'booking')}</span>
@@ -838,47 +916,61 @@ export default function AdminBookingsPage() {
                     <p className="mt-1 flex items-center gap-1 text-sm font-bold text-purple-700"><Calendar className="h-4 w-4" />{fmtDate(departureDate(booking))}</p>
                     <p className="mt-1 truncate text-sm text-gray-600" title={pickup(booking) || booking.trips?.destination || ''}>{pickup(booking) || booking.trips?.destination || 'Pickup not recorded'} - {booking.number_of_participants || 1} traveller{Number(booking.number_of_participants || 1) > 1 ? 's' : ''}</p>
                   </div>
-                  <div className="mx-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-sm tabular-nums">
-                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">Booking Amount</p>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-950">{fmtMoney(money.owed)}</span></div>
-                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Paid</span><span className={money.paid > 0 ? 'font-semibold text-green-700' : 'font-semibold text-gray-500'}>{fmtMoney(money.paid)}</span></div>
-                      <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Due</span><span className={money.remaining > 0 ? 'font-semibold text-orange-700' : 'font-semibold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</span></div>
-                    </div>
-                  </div>
-                  {money.refunded > 0 && <p className="mx-4 mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
-                  <div className="mx-4 mt-3 rounded-xl border border-gray-100 p-3 text-sm text-gray-700">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Payment</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-semibold text-gray-950">{optionLabel(booking)}</span>
-                      <span className="text-gray-500">{methodLabel(booking)}</span>
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
-                    </div>
-                  </div>
-                  <div className="mx-4 mt-3 rounded-xl border border-gray-100 p-3 text-sm">
-                    {referral ? (
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Referral</p>
-                        <p className="text-gray-600">Referred by {referrerLabel(booking)}</p>
+                  {referral ? (
+                    <div className="mx-4 rounded-xl border border-purple-100 bg-white/80 p-3 text-sm">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Operated by</p>
+                      <p className="mt-1 font-semibold text-gray-950" title={partnerLabel(booking)}>{partnerLabel(booking)}</p>
+                      <p className="mt-1 text-xs text-gray-600">Partner-operated booking</p>
+                      <div className="mt-3 rounded-lg bg-purple-50 p-3">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-purple-700">Our Commission</p>
                         {amount == null ? (
-                          <p className="text-gray-500">Commission unavailable</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-600">Commission not set</p>
                         ) : (
-                          <p className="font-semibold text-purple-700">Commission {fmtMoney(amount)}</p>
+                          <p className="mt-1 text-lg font-bold tabular-nums text-purple-700">{fmtMoney(amount)}</p>
                         )}
-                        {status ? <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${commissionStatusClasses(status)}`}>{titleCase(status)}</span> : <p className="text-xs text-gray-500">Status unavailable</p>}
                       </div>
-                    ) : (
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Source</p>
-                        <p className="mt-1 font-semibold text-gray-700">Direct Booking</p>
-                        <p className="text-xs text-gray-500">No referral commission</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mx-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-sm tabular-nums">
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">Booking Amount</p>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Total</span><span className="font-semibold text-gray-950">{fmtMoney(money.owed)}</span></div>
+                          <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Paid</span><span className={money.paid > 0 ? 'font-semibold text-green-700' : 'font-semibold text-gray-500'}>{fmtMoney(money.paid)}</span></div>
+                          <div className="flex items-center justify-between gap-4"><span className="text-gray-500">Due</span><span className={money.remaining > 0 ? 'font-semibold text-orange-700' : 'font-semibold text-green-700'}>{money.remaining > 0 ? fmtMoney(money.remaining) : 'Paid'}</span></div>
+                        </div>
                       </div>
-                    )}
+                      {money.refunded > 0 && <p className="mx-4 mt-2 text-sm font-semibold text-rose-700">Refunded {fmtMoney(money.refunded)}</p>}
+                      <div className="mx-4 mt-3 rounded-xl border border-gray-100 p-3 text-sm text-gray-700">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Payment</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="font-semibold text-gray-950">{optionLabel(booking)}</span>
+                          <span className="text-gray-500">{methodLabel(booking)}</span>
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClasses('payment', payState)}`}>{statusLabel(payState)}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <div className="mx-4 mt-3 rounded-xl border border-gray-100 bg-white/80 p-3 text-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Source</p>
+                    <div className="mt-1">
+                      {referral ? (
+                        <p className="font-semibold text-purple-700">Partner Booking</p>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-gray-700">Direct Booking</p>
+                          <p className="text-xs text-gray-500">Managed by Ghumakkars</p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </button>
-                <div className="mt-3 space-y-3 border-t border-gray-100 p-4 pt-3">
+                <div className="mt-3 space-y-3 border-t border-gray-100 bg-white/80 p-4 pt-3">
                   <p className="text-xs text-gray-500">Booked {fmtDate(booking.created_at, true)}</p>
-                  <button onClick={() => handlePrimaryAction(booking)} className={`h-11 w-full rounded-xl px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-100 ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-800'}`}>{actionLabel(booking)}</button>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button onClick={() => handlePrimaryAction(booking)} className={`h-11 min-w-0 flex-1 rounded-xl px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-100 ${needsReview(booking) ? 'bg-purple-600 text-white' : 'border border-gray-200 bg-white text-gray-800'}`}>{actionLabel(booking)}</button>
+                    {renderActionMenu(booking)}
+                  </div>
                 </div>
               </article>
             );
@@ -908,6 +1000,46 @@ export default function AdminBookingsPage() {
             <div className="sticky bottom-0 flex gap-2 border-t border-gray-100 bg-white p-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
               <button onClick={clearFilters} className="h-11 flex-1 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-100">Clear all</button>
               <button onClick={() => setMobileFiltersOpen(false)} className="h-11 flex-1 rounded-xl bg-purple-600 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-200">Apply filters</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteBooking && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/45 p-3" role="dialog" aria-modal="true" aria-labelledby="delete-booking-title">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="p-4 sm:p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 id="delete-booking-title" className="text-lg font-bold text-gray-950">Delete booking?</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">
+                    This will permanently delete the booking for {customerName(deleteBooking)}. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  autoFocus
+                  disabled={Boolean(deletingBookingId)}
+                  onClick={() => setDeleteBooking(null)}
+                  className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-100 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(deletingBookingId)}
+                  onClick={confirmDeleteBooking}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deletingBookingId ? 'Deleting...' : 'Delete Booking'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -979,6 +1111,12 @@ export default function AdminBookingsPage() {
               <button disabled={approvingCash} onClick={handleApproveCashPayment} className="h-10 w-full rounded-lg bg-green-600 text-sm font-bold text-white disabled:opacity-60">Approve Payment</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`fixed right-3 top-20 z-[70] w-[calc(100%-1.5rem)] max-w-sm rounded-xl border bg-white p-4 text-sm font-semibold shadow-xl ${toast.type === 'success' ? 'border-green-200 text-green-800' : 'border-red-200 text-red-800'}`}>
+          {toast.message}
         </div>
       )}
     </div>
