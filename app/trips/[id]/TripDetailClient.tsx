@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { IMG } from '@/lib/image';
+import { getSiteUrl } from '@/lib/site-url';
 import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon, Phone } from 'lucide-react';
 
 interface ItineraryDay {
@@ -115,7 +116,7 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
   const isPostponed = trip.status === 'postponed';
   const isPastTrip = isCompleted || isCancelled || isPostponed;
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
+  const siteUrl = getSiteUrl();
   const handleShare = async () => {
     const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/trips/${trip.id}`;
     const text = `Check out this trip: ${trip.title} (${trip.destination}) — ₹${trip.discounted_price.toLocaleString()}`;

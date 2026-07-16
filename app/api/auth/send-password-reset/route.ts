@@ -3,6 +3,7 @@ import { sendPasswordResetEmail } from '@/lib/email';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { storeResetToken } from '@/lib/reset-token-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
+import { getSiteUrl } from '@/lib/site-url';
 import crypto from 'crypto';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     await storeResetToken(resetToken, normalizedEmail, 60); // 1 hour expiry
 
     // Create reset link
-    const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin}/auth/reset-password?token=${resetToken}`;
+    const resetLink = `${getSiteUrl() || request.nextUrl.origin}/auth/reset-password?token=${resetToken}`;
 
     // Send email only after confirming account exists
     await sendPasswordResetEmail(normalizedEmail, resetLink);
@@ -97,4 +98,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

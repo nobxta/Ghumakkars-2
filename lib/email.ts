@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { renderEmail, renderPlainText, BRAND } from './email-templates';
+import { getSiteUrl } from './site-url';
 
 const smtpPort = parseInt(process.env.SMTP_PORT || '465');
 const transporter = nodemailer.createTransport({
@@ -46,7 +47,7 @@ export function isAllowedAdminSender(email: string) {
   return ADMIN_EMAIL_SENDERS.some((sender) => sender.email === email);
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
+const SITE_URL = getSiteUrl();
 
 const fmtDate = (d?: string) => {
   if (!d) return '—';

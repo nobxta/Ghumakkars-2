@@ -19,6 +19,7 @@ import {
   UserCog,
 } from 'lucide-react';
 import { CONTACT } from '@/lib/contact';
+import { getSiteUrl } from '@/lib/site-url';
 
 export const LEGAL_LAST_UPDATED = '16 July 2026';
 export const LEGAL_LAST_UPDATED_ISO = '2026-07-16';
@@ -412,7 +413,7 @@ const policyContent: Record<PolicyKey, {
 
 export function LegalPolicyPage({ type }: { type: PolicyKey }) {
   const content = policyContent[type];
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || CONTACT.siteUrl;
+  const siteUrl = getSiteUrl();
   const url = `${siteUrl}${content.canonicalPath}`;
   const jsonLd = {
     '@context': 'https://schema.org',

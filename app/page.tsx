@@ -8,6 +8,7 @@ import Testimonials from '@/components/Testimonials';
 import About from '@/components/About';
 import Newsletter from '@/components/Newsletter';
 import CTA from '@/components/CTA';
+import { getSiteUrl } from '@/lib/site-url';
 
 export const metadata: Metadata = {
   title: 'Ghumakkars — Group Trips Across India | From ₹2,999',
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ghumakkars.in';
+  const siteUrl = getSiteUrl();
 
   const faqJsonLd = {
     '@context': 'https://schema.org',

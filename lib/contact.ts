@@ -28,5 +28,5 @@ export const CONTACT = {
   /** Brand */
   brandName: 'Ghumakkars',
   domain: 'ghumakkars.in',
-  siteUrl: 'https://ghumakkars.in',
+  siteUrl: 'https://www.ghumakkars.in',
 } as const;

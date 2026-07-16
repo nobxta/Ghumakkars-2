@@ -8,7 +8,7 @@
 const BRAND = {
   name: 'Ghumakkars',
   domain: 'ghumakkars.in',
-  url: 'https://ghumakkars.in',
+  url: 'https://www.ghumakkars.in',
   supportEmail: 'support@ghumakkars.in',
   whatsapp: '+91 82180 20972',
   whatsappLink: 'https://wa.me/918218020972',
