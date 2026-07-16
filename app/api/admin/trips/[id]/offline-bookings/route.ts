@@ -22,8 +22,8 @@ export async function POST(
       name,
       mobile,
       participants = 1,
+      package_price,
       amount_paid,
-      payment_option = 'full',
       payment_state = 'partial',
       booking_date,
       departure_date,
@@ -122,11 +122,14 @@ export async function POST(
       }];
     })();
 
-    const baseTotal = Math.max(0, (Number(trip.discounted_price) || 0) * numParticipants);
-    const option = payment_option === 'seat_lock' && Number(trip.seat_lock_price) > 0 ? 'seat_lock' : 'full';
-    const baseDueNow = option === 'seat_lock'
-      ? Math.min(Math.max(0, Number(trip.seat_lock_price) || 0) * numParticipants, baseTotal)
-      : baseTotal;
+    const publicBaseTotal = Math.max(0, (Number(trip.discounted_price) || 0) * numParticipants);
+    const baseTotal = package_price != null
+      ? Math.max(0, parseFloat(String(package_price)) || 0)
+      : publicBaseTotal;
+
+    if (baseTotal <= 0) {
+      return NextResponse.json({ error: 'Package price is required for offline bookings.' }, { status: 400 });
+    }
 
     let pricedAddons: Awaited<ReturnType<typeof validateAndPriceAddons>> | null = null;
     let addonsTotal = 0;
@@ -147,7 +150,7 @@ export async function POST(
     const requestedState = String(payment_state || '').toLowerCase();
     const normalizedPaid = requestedState === 'paid' ? grandTotal : requestedState === 'unpaid' ? 0 : Math.min(amount, grandTotal);
     const paid = Math.max(0, Math.min(normalizedPaid, grandTotal));
-    const bookingStatus = option === 'seat_lock' && paid < grandTotal ? 'seat_locked' : (paid > 0 ? 'confirmed' : 'pending');
+    const bookingStatus = paid > 0 ? 'confirmed' : 'pending';
     const paymentStatus = paid >= grandTotal - 0.5 ? 'paid' : paid > 0 ? 'partial' : 'pending';
 
     const bookingPayload: Record<string, unknown> = {
@@ -155,10 +158,10 @@ export async function POST(
       user_id: null,
       number_of_participants: numParticipants,
       total_price: baseTotal,
-      final_amount: baseDueNow,
+      final_amount: baseTotal,
       departure_date: validatedDeparture,
       booking_status: bookingStatus,
-      payment_method: option,
+      payment_method: 'full',
       payment_mode: 'cash',
       payment_status: paymentStatus,
       amount_paid: paid,
@@ -207,7 +210,7 @@ export async function POST(
         user_id: null,
         transaction_id: `OFFLINE_CASH_${Date.now()}`,
         amount: paid,
-        payment_type: option === 'seat_lock' && paid < grandTotal ? 'seat_lock' : 'offline',
+        payment_type: 'offline',
         payment_status: 'verified',
         payment_mode: 'cash',
         payment_reviewed_at: new Date().toISOString(),
@@ -222,7 +225,7 @@ export async function POST(
       await adminClient.from('bookings').update({
         amount_paid: money.paid,
         payment_status: money.status,
-        booking_status: option === 'seat_lock' && money.remaining > 0 ? 'seat_locked' : 'confirmed',
+        booking_status: 'confirmed',
       }).eq('id', booking.id);
       if (money.status === 'paid') {
         await markBookingAddonsPaid(adminClient, booking.id).catch(() => {});

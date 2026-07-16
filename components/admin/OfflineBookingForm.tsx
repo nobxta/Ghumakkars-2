@@ -66,8 +66,9 @@ export default function OfflineBookingForm({
   const [passengers, setPassengers] = useState<PassengerDraft[]>([makePassenger(0)]);
   const [departureDate, setDepartureDate] = useState('');
   const [pickupPoint, setPickupPoint] = useState('');
-  const [paymentOption, setPaymentOption] = useState<'full' | 'seat_lock'>('full');
   const [paymentState, setPaymentState] = useState<'paid' | 'partial' | 'unpaid'>('partial');
+  const [packagePrice, setPackagePrice] = useState('');
+  const [packagePriceEdited, setPackagePriceEdited] = useState(false);
   const [amountPaid, setAmountPaid] = useState('');
   const [emergencyName, setEmergencyName] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
@@ -108,7 +109,8 @@ export default function OfflineBookingForm({
     { paxCount: participants, tripDurationDays: Number(selectedTrip?.duration_days) || 1 },
   ), [addons, finalSelections, participants, selectedTrip?.duration_days]);
 
-  const baseTotal = Math.max(0, (Number(selectedTrip?.discounted_price) || 0) * participants);
+  const suggestedBaseTotal = Math.max(0, (Number(selectedTrip?.discounted_price) || 0) * participants);
+  const baseTotal = Math.max(0, parseFloat(packagePrice) || 0);
   const addonsTotal = addonEstimate.errors.length ? 0 : addonEstimate.total;
   const grandTotal = baseTotal + addonsTotal;
   const paid = paymentState === 'paid' ? grandTotal : paymentState === 'unpaid' ? 0 : Math.min(Math.max(0, Number(amountPaid) || 0), grandTotal);
@@ -119,11 +121,16 @@ export default function OfflineBookingForm({
     setAddonSelections([]);
     setPickupPoint('');
     setDepartureDate('');
+    setPackagePriceEdited(false);
     fetch(`/api/admin/trips/${tripId}/addons`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((payload) => setAddons((payload.addons || []) as TripAddon[]))
       .catch(() => setAddons([]));
   }, [tripId]);
+
+  useEffect(() => {
+    if (!packagePriceEdited) setPackagePrice(String(Math.round(suggestedBaseTotal)));
+  }, [suggestedBaseTotal, packagePriceEdited]);
 
   useEffect(() => {
     if (paymentState === 'paid') setAmountPaid(String(Math.round(grandTotal)));
@@ -162,8 +169,9 @@ export default function OfflineBookingForm({
     setPassengers([makePassenger(0)]);
     setDepartureDate('');
     setPickupPoint('');
-    setPaymentOption('full');
     setPaymentState('partial');
+    setPackagePriceEdited(false);
+    setPackagePrice(String(Math.round(suggestedBaseTotal)));
     setAmountPaid('');
     setEmergencyName('');
     setEmergencyPhone('');
@@ -178,6 +186,7 @@ export default function OfflineBookingForm({
     if (!lead.name.trim() || !lead.phone.trim()) return alert('Lead passenger name and mobile are required.');
     if (selectedTrip.is_recurring && !departureDate) return alert('Choose a departure batch.');
     if (addonEstimate.errors.length) return alert(addonEstimate.errors[0]);
+    if (baseTotal <= 0) return alert('Enter the package price for this offline booking.');
     if (paymentState === 'partial' && paid <= 0) return alert('Enter the amount collected, or choose Not paid yet.');
 
     setSubmitting(true);
@@ -189,8 +198,8 @@ export default function OfflineBookingForm({
           name: lead.name,
           mobile: lead.phone,
           participants,
+          package_price: baseTotal,
           amount_paid: paid,
-          payment_option: paymentOption,
           payment_state: paymentState,
           departure_date: selectedTrip.is_recurring ? departureDate : null,
           pickup_point: pickupPoint || null,
@@ -318,11 +327,28 @@ export default function OfflineBookingForm({
 
       <div className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 md:grid-cols-3">
         <label className="block">
-          <span className={labelClass}>Payment option</span>
-          <select value={paymentOption} onChange={(e) => setPaymentOption(e.target.value as any)} className={inputClass}>
-            <option value="full">Full booking</option>
-            {Number(selectedTrip?.seat_lock_price) > 0 && <option value="seat_lock">Seat lock</option>}
-          </select>
+          <span className={labelClass}>Package price</span>
+          <input
+            type="number"
+            min={0}
+            value={packagePrice}
+            onChange={(e) => {
+              setPackagePriceEdited(true);
+              setPackagePrice(e.target.value);
+            }}
+            placeholder="Actual amount customer owes"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setPackagePriceEdited(false);
+              setPackagePrice(String(Math.round(suggestedBaseTotal)));
+            }}
+            className="mt-1 text-xs font-semibold text-purple-700 hover:text-purple-900"
+          >
+            Use trip price {formatINR(suggestedBaseTotal)}
+          </button>
         </label>
         <label className="block">
           <span className={labelClass}>Payment state</span>
