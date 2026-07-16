@@ -4,12 +4,12 @@ import { LegalPolicyPage, LEGAL_LAST_UPDATED_ISO } from '@/components/LegalPolic
 export const metadata: Metadata = {
   title: 'Refund & Cancellation Policy',
   description:
-    'Refund and Cancellation Policy for Ghumakkars travel bookings covering seat-lock amounts, timing-based cancellation charges, no-shows, partial usage, company cancellations and payment gateway timelines.',
+    'Refund and Cancellation Policy for Ghumakkars travel bookings covering seat-lock amounts, cancellation charges, PhonePe/UPI refund timelines, no-shows, partial usage and company cancellations.',
   alternates: { canonical: '/refund-policy' },
   robots: { index: true, follow: true },
   openGraph: {
     title: 'Refund & Cancellation Policy | Ghumakkars',
-    description: 'Cancellation charges, non-refundable seat-lock terms and refund timelines for Ghumakkars trips.',
+    description: 'Cancellation charges, non-refundable seat-lock terms and PhonePe/UPI refund timelines for Ghumakkars trips.',
     url: '/refund-policy',
     type: 'article',
     modifiedTime: LEGAL_LAST_UPDATED_ISO,

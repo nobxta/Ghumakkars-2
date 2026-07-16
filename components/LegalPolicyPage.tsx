@@ -302,7 +302,7 @@ const policyContent: Record<PolicyKey, {
     title: 'Refund & Cancellation Policy',
     eyebrow: 'Travel booking cancellations and refunds',
     canonicalPath: '/refund-policy',
-    jsonLdType: 'RefundPolicy',
+    jsonLdType: 'WebPage',
     description:
       'This Refund & Cancellation Policy applies to Ghumakkars travel bookings, seat-lock payments, full payments, no-shows, partial usage and company cancellations.',
     sections: [
@@ -310,7 +310,7 @@ const policyContent: Record<PolicyKey, {
         title: '1. Scope',
         icon: <FileText className={iconClass} />,
         body: (
-          <p className={paragraph}>This policy applies to all travel bookings made with Ghumakkars through www.ghumakkars.in, WhatsApp, phone, manual UPI, Razorpay or any other payment method accepted by Ghumakkars. Trip-specific terms shown on the trip page or booking confirmation may add stricter conditions for special departures, permits, long weekends, festivals or limited-capacity trips.</p>
+          <p className={paragraph}>This policy applies to all travel bookings made with Ghumakkars through www.ghumakkars.in, WhatsApp, phone, manual UPI, PhonePe, Razorpay or any other payment method accepted by Ghumakkars. Ghumakkars sells travel booking services, group trip packages and related trip add-ons. No physical product is shipped; booking confirmations and trip details are delivered digitally by email, WhatsApp, website dashboard or phone support.</p>
         ),
       },
       {
@@ -357,54 +357,76 @@ const policyContent: Record<PolicyKey, {
         title: '5. Refund processing timeline',
         icon: <RefreshCw className={iconClass} />,
         body: (
-          <ul className={list}>
-            <li>Approved refunds are normally initiated by Ghumakkars within 7 to 15 business days after approval and verification of payment records.</li>
-            <li>Once initiated, payment gateway, bank, card network, UPI or wallet timelines may take additional time before the amount appears in the traveller's account.</li>
-            <li>Razorpay refunds, where applicable, are processed to the original payment method according to Razorpay and banking partner timelines.</li>
-            <li>Manual UPI or offline refunds may require account verification and may be processed only to the original payer or verified account holder.</li>
-          </ul>
+          <>
+            <p className={paragraph}>Eligible refunds are initiated by Ghumakkars within <strong>5 to 7 working days</strong> after the cancellation request is accepted and payment records are verified. Refunds are made to the original payment source wherever supported by the payment gateway.</p>
+            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                <thead className="bg-purple-50 text-slate-900">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">Payment mode</th>
+                    <th className="px-4 py-3 font-bold">Expected credit timeline after initiation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white text-slate-700">
+                  <tr><td className="px-4 py-3">PhonePe UPI / UPI</td><td className="px-4 py-3">Same day or next working day in most cases</td></tr>
+                  <tr><td className="px-4 py-3">PhonePe wallet / wallet</td><td className="px-4 py-3">Usually immediate after gateway processing</td></tr>
+                  <tr><td className="px-4 py-3">Debit card / credit card</td><td className="px-4 py-3">7 to 9 working days, depending on the issuing bank</td></tr>
+                  <tr><td className="px-4 py-3">Net banking or other gateway methods</td><td className="px-4 py-3">5 to 10 working days, depending on the bank or gateway</td></tr>
+                  <tr><td className="px-4 py-3">Manual UPI or offline refund</td><td className="px-4 py-3">5 to 7 working days after account verification</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className={`${paragraph} mt-3`}>Gateway or bank delays after refund initiation are outside Ghumakkars' control, but we will share available refund reference details with the traveller on request.</p>
+          </>
         ),
       },
       {
         title: '6. Trip cancellation by Ghumakkars',
         icon: <Shield className={iconClass} />,
         body: (
-          <p className={paragraph}>If Ghumakkars cancels a trip before departure for operational reasons, insufficient participation or a company decision, travellers may be offered a full refund of the amount paid to Ghumakkars, a credit for a future trip or transfer to another departure, depending on the situation and traveller preference where feasible.</p>
+          <p className={paragraph}>If Ghumakkars cancels a trip before departure due to an internal operational reason, insufficient participation or a company decision, the traveller is eligible for a <strong>100% refund of the amount paid to Ghumakkars</strong>. If the traveller prefers, the amount can instead be transferred to another departure or kept as trip credit, but a refund remains available for company-side cancellations covered by this section.</p>
         ),
       },
       {
         title: '7. Weather, landslides, road closures and restrictions',
         icon: <AlertTriangle className={iconClass} />,
         body: (
-          <p className={paragraph}>If a trip is cancelled, delayed, shortened, rerouted or modified due to weather, landslide, road closure, traffic disruption, government restriction, permit issue, safety advisory, transport disruption or other force majeure event, refunds are limited to amounts recoverable from vendors after deducting costs already incurred. Ghumakkars may offer rescheduling, alternate itinerary, credit or partial refund depending on what is operationally possible and recoverable.</p>
+          <p className={paragraph}>If a trip is cancelled, delayed, shortened, rerouted or modified due to weather, landslide, road closure, traffic disruption, government restriction, permit issue, safety advisory, transport disruption or other force majeure event, Ghumakkars will first try to provide a safe alternate itinerary, rescheduling option or trip credit. If a monetary refund is applicable, it will be limited to the amount Ghumakkars can recover from hotels, transporters, activity vendors and other suppliers after deducting costs already incurred for the booking.</p>
         ),
       },
       {
-        title: '8. No-show and late arrival',
+        title: '8. Failed, duplicate or excess payments',
+        icon: <CreditCard className={iconClass} />,
+        body: (
+          <p className={paragraph}>If money is deducted but a booking is not confirmed, or if a duplicate or excess payment is received, Ghumakkars will verify the payment with the gateway or bank. Confirmed duplicate or excess payments are refunded to the original payment source. Failed payment reversals follow the applicable UPI, PhonePe, card, bank or gateway timeline.</p>
+        ),
+      },
+      {
+        title: '9. No-show and late arrival',
         icon: <AlertTriangle className={iconClass} />,
         body: (
           <p className={paragraph}>No refund is provided for no-shows, missed departures, late arrival at pickup point, failure to carry required documents, refusal by authorities or vendors due to traveller conduct or documents, or voluntary withdrawal before or during the trip.</p>
         ),
       },
       {
-        title: '9. Partial usage and unused services',
+        title: '10. Partial usage and unused services',
         icon: <RefreshCw className={iconClass} />,
         body: (
-          <p className={paragraph}>No refund is provided for partially used services, early departure, unused meals, unused stays, unused transport, skipped activities, personal preference changes, illness during travel, or any service not used by the traveller after the trip has started, unless Ghumakkars receives a recoverable refund from the relevant vendor and approves a partial pass-through refund.</p>
+          <p className={paragraph}>No refund is provided for partially used services, early departure, unused meals, unused stays, unused transport, skipped activities, personal preference changes, illness during travel, or any service not used by the traveller after the trip has started. If a supplier returns any specific unused-service amount to Ghumakkars, that recovered amount will be passed to the traveller after deducting applicable charges.</p>
         ),
       },
       {
-        title: '10. Misconduct and safety removals',
+        title: '11. Misconduct and safety removals',
         icon: <Gavel className={iconClass} />,
         body: (
           <p className={paragraph}>A traveller removed from a trip or denied boarding for fighting, harassment, abuse, intoxication, possession of illegal substances, unsafe conduct, damage to property, non-compliance with trip leader instructions or violation of law is not eligible for refund. The traveller is responsible for any additional return travel, stay, fine, damage or legal cost arising from such conduct.</p>
         ),
       },
       {
-        title: '11. Final review',
+        title: '12. Final review',
         icon: <Scale className={iconClass} />,
         body: (
-          <p className={paragraph}>Every refund is subject to booking records, payment records, supplier recovery, trip status and this policy. Ghumakkars will review requests in good faith, but approval of one refund does not create an obligation to approve another refund in different facts.</p>
+          <p className={paragraph}>Every refund is calculated according to this policy, the booking record, the payment record, the cancellation date and the trip status. If a traveller believes a refund has been calculated incorrectly, they can contact Ghumakkars support with the booking ID and payment reference for review.</p>
         ),
       },
     ],
