@@ -2119,8 +2119,8 @@ export default function BookTripPage() {
               <p className="text-[11px] text-[#94a3b8] text-center leading-relaxed pt-1.5">
                 By booking, you agree to our{' '}
                 <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Terms &amp; Conditions</a>,{' '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Privacy Policy</a>{' '}and{' '}
-                <a href="/cancellation-policy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Refund Policy</a>, and confirm you have read them.
+                <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Privacy Policy</a>{' '}and{' '}
+                <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-[#7C3AED] hover:underline">Refund &amp; Cancellation Policy</a>, and confirm you have read them.
               </p>
             </div>
           </div>

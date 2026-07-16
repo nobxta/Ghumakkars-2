@@ -1,10 +1,18 @@
 'use client';
 
+import type React from 'react';
 import { useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown, HelpCircle, User, Mail, MessageSquare, Send, Phone } from 'lucide-react';
 import ScrollAnimation from './ScrollAnimation';
 
-const faqs = [
+type FAQItem = {
+  id: number;
+  question: string;
+  answer: React.ReactNode;
+};
+
+const faqs: FAQItem[] = [
   {
     id: 1,
     question: 'How do I book?',
@@ -117,7 +125,17 @@ export default function FAQ() {
                 <div className="px-5 md:px-6 lg:px-8 pb-4 md:pb-5 lg:pb-6">
                   <div className="pt-2 border-t border-purple-100">
                     <p className="text-sm md:text-base text-gray-600 font-light leading-relaxed pt-4">
-                      {faq.answer}
+                      {faq.id === 4 ? (
+                        <>
+                          Cancellation charges depend on how close the request is to departure, and seat-lock amounts are non-refundable once confirmed. Read the full{' '}
+                          <Link href="/refund-policy" className="font-semibold text-purple-700 underline underline-offset-2 hover:text-purple-900">
+                            Refund &amp; Cancellation Policy
+                          </Link>
+                          {' '}before booking.
+                        </>
+                      ) : (
+                        faq.answer
+                      )}
                     </p>
                   </div>
                 </div>
@@ -255,4 +273,3 @@ export default function FAQ() {
     </section>
   );
 }
-

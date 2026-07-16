@@ -787,7 +787,7 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
                 You won&apos;t be charged yet. By booking you agree to our{' '}
                 <Link href="/terms" className="text-purple-600 underline hover:text-purple-700">Terms</Link>
                 {' '}and{' '}
-                <Link href="/cancellation-policy" className="text-purple-600 underline hover:text-purple-700">Cancellation Policy</Link>.
+                <Link href="/refund-policy" className="text-purple-600 underline hover:text-purple-700">Refund &amp; Cancellation Policy</Link>.
               </p>
 
               {/* Pickup points + Booking deadline */}
@@ -945,4 +945,3 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
     </div>
   );
 }
-

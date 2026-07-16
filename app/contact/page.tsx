@@ -85,7 +85,7 @@ export default function ContactPage() {
           <ul className="text-sm sm:text-base text-gray-700 space-y-2">
             <li>
               <strong>Refunds & cancellations →</strong>{' '}
-              <Link href="/cancellation-policy" className="text-purple-700 font-semibold underline">Cancellation Policy</Link>
+              <Link href="/refund-policy" className="text-purple-700 font-semibold underline">Refund &amp; Cancellation Policy</Link>
             </li>
             <li>
               <strong>Booking terms →</strong>{' '}
@@ -93,7 +93,7 @@ export default function ContactPage() {
             </li>
             <li>
               <strong>Data & privacy →</strong>{' '}
-              <Link href="/privacy" className="text-purple-700 font-semibold underline">Privacy Policy</Link>
+              <Link href="/privacy-policy" className="text-purple-700 font-semibold underline">Privacy Policy</Link>
             </li>
             <li>
               <strong>Browse trips →</strong>{' '}

@@ -54,8 +54,8 @@ export default function Footer() {
             <h4 className="text-xs md:text-sm font-bold text-gray-900 mb-4 tracking-wider uppercase">Legal</h4>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/terms" className="text-gray-600 hover:text-purple-600 transition-colors">Terms &amp; Conditions</Link></li>
-              <li><Link href="/privacy" className="text-gray-600 hover:text-purple-600 transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/cancellation-policy" className="text-gray-600 hover:text-purple-600 transition-colors">Refund &amp; Cancellation</Link></li>
+              <li><Link href="/privacy-policy" className="text-gray-600 hover:text-purple-600 transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/refund-policy" className="text-gray-600 hover:text-purple-600 transition-colors">Refund &amp; Cancellation</Link></li>
               <li><Link href="/contact" className="text-gray-600 hover:text-purple-600 transition-colors">Support</Link></li>
             </ul>
           </div>
@@ -89,9 +89,9 @@ export default function Footer() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link href="/terms" className="hover:text-purple-600">Terms</Link>
             <span aria-hidden>·</span>
-            <Link href="/privacy" className="hover:text-purple-600">Privacy</Link>
+            <Link href="/privacy-policy" className="hover:text-purple-600">Privacy</Link>
             <span aria-hidden>·</span>
-            <Link href="/cancellation-policy" className="hover:text-purple-600">Refunds</Link>
+            <Link href="/refund-policy" className="hover:text-purple-600">Refunds</Link>
             <span aria-hidden>·</span>
             <Link href="/contact" className="hover:text-purple-600">Contact</Link>
           </div>
