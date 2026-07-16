@@ -70,7 +70,7 @@ const policyContent: Record<PolicyKey, {
     canonicalPath: '/privacy-policy',
     jsonLdType: 'PrivacyPolicy',
     description:
-      'This Privacy Policy explains how Ghumakkars collects, uses, stores, protects and shares information when you visit ghumakkars.in, create an account, contact us or book a trip.',
+      'This Privacy Policy explains how Ghumakkars collects, uses, stores, protects and shares information when you visit www.ghumakkars.in, create an account, contact us or book a trip.',
     sections: [
       {
         title: '1. Information we collect',
@@ -199,7 +199,7 @@ const policyContent: Record<PolicyKey, {
         title: '1. Acceptance of terms',
         icon: <FileText className={iconClass} />,
         body: (
-          <p className={paragraph}>By accessing ghumakkars.in, creating an account, contacting us, making a payment or booking a trip, you agree to these Terms & Conditions, the <TextLink href="/privacy-policy">Privacy Policy</TextLink> and the <TextLink href="/refund-policy">Refund & Cancellation Policy</TextLink>. If you do not agree, do not use the website or complete a booking.</p>
+          <p className={paragraph}>By accessing www.ghumakkars.in, creating an account, contacting us, making a payment or booking a trip, you agree to these Terms & Conditions, the <TextLink href="/privacy-policy">Privacy Policy</TextLink> and the <TextLink href="/refund-policy">Refund & Cancellation Policy</TextLink>. If you do not agree, do not use the website or complete a booking.</p>
         ),
       },
       {
@@ -310,7 +310,7 @@ const policyContent: Record<PolicyKey, {
         title: '1. Scope',
         icon: <FileText className={iconClass} />,
         body: (
-          <p className={paragraph}>This policy applies to all travel bookings made with Ghumakkars through ghumakkars.in, WhatsApp, phone, manual UPI, Razorpay or any other payment method accepted by Ghumakkars. Trip-specific terms shown on the trip page or booking confirmation may add stricter conditions for special departures, permits, long weekends, festivals or limited-capacity trips.</p>
+          <p className={paragraph}>This policy applies to all travel bookings made with Ghumakkars through www.ghumakkars.in, WhatsApp, phone, manual UPI, Razorpay or any other payment method accepted by Ghumakkars. Trip-specific terms shown on the trip page or booking confirmation may add stricter conditions for special departures, permits, long weekends, festivals or limited-capacity trips.</p>
         ),
       },
       {
@@ -475,6 +475,45 @@ export function LegalPolicyPage({ type }: { type: PolicyKey }) {
             </div>
           </div>
         </header>
+
+        <section className="mt-6 rounded-xl border border-purple-100 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-lg font-extrabold text-slate-950">Merchant Information</h2>
+          <p className={`${paragraph} mt-2`}>
+            These policies apply to online travel bookings and group trip services offered on the Ghumakkars website.
+          </p>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-bold text-slate-500">Public merchant name</dt>
+              <dd className="mt-1 text-slate-900">{CONTACT.brandName}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Website</dt>
+              <dd className="mt-1 text-slate-900">{siteUrl}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Service category</dt>
+              <dd className="mt-1 text-slate-900">Travel bookings, group trips and related trip add-ons</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Operating location</dt>
+              <dd className="mt-1 text-slate-900">{CONTACT.address}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Support email</dt>
+              <dd className="mt-1">
+                <EmailLink />
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Phone/WhatsApp</dt>
+              <dd className="mt-1">
+                <a href={CONTACT.whatsappLink} className="font-semibold text-purple-700 underline underline-offset-2 hover:text-purple-900">
+                  {CONTACT.phoneDisplay}
+                </a>
+              </dd>
+            </div>
+          </dl>
+        </section>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="hidden lg:block">

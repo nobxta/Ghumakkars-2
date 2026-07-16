@@ -821,7 +821,7 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
                   <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                     <Shield className="h-4 w-4 text-green-700" />
                   </div>
-                  <span>Free cancellation up to 7 days before</span>
+                  <span>Policy-based cancellation terms</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-gray-700">
                   <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">

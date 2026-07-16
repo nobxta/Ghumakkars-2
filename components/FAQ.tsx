@@ -31,7 +31,7 @@ const faqs: FAQItem[] = [
   {
     id: 4,
     question: 'What if I need to cancel?',
-    answer: 'Cancel 7+ days before the trip and you can reschedule for free or get a refund minus a small processing fee. Cancel within 7 days — it depends on the trip, but we try to be fair about it. Seat lock deposits are non-refundable though. Check the specific trip page for exact terms.',
+    answer: 'Cancellation charges depend on how close the request is to departure, and seat-lock amounts are non-refundable once confirmed. Read the full Refund & Cancellation Policy before booking.',
   },
   {
     id: 5,
@@ -41,7 +41,7 @@ const faqs: FAQItem[] = [
   {
     id: 6,
     question: 'What if Ghumakkars cancels a trip?',
-    answer: 'It happens rarely — usually weather or safety reasons. If we cancel, you get a full refund. No questions, no processing fees. Or you can move your booking to another trip if you prefer. We\'ll let you know as early as we can.',
+    answer: 'If Ghumakkars cancels a trip before departure for operational reasons, we may offer a refund, credit, or transfer to another departure as per the Refund & Cancellation Policy. Weather, road closure, government restriction, and other force majeure cases are handled according to recoverable vendor costs and safety conditions.',
   },
   {
     id: 7,

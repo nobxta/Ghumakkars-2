@@ -64,6 +64,9 @@ export default function Footer() {
           <div>
             <h4 className="text-xs md:text-sm font-bold text-gray-900 mb-4 tracking-wider uppercase">Get In Touch</h4>
             <ul className="space-y-2.5 text-sm text-gray-600">
+              <li className="text-gray-700">
+                <span className="font-semibold">Travel bookings and group trips</span>
+              </li>
               <li className="flex items-start gap-2">
                 <Mail className="h-4 w-4 mt-0.5 text-purple-500 flex-shrink-0" />
                 <a href="mailto:Contact@ghumakkars.in" className="hover:text-purple-600 break-all">Contact@ghumakkars.in</a>

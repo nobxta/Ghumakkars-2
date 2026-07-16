@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Mountain, Heart, Users, Shield, Sparkles } from 'lucide-react';
+import { CONTACT } from '@/lib/contact';
 
 export const metadata: Metadata = {
   title: 'About Ghumakkars | Group Trips Across India',
@@ -72,6 +73,30 @@ export default function AboutPage() {
               body="We work with local guides, eat at family-run dhabas and put money back into the places we visit."
             />
           </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 sm:p-7 mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 pl-3 border-l-4 border-purple-600">
+            Business information
+          </h2>
+          <dl className="grid gap-3 text-sm sm:text-base text-gray-700 sm:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-gray-500">Public merchant name</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.brandName}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Service category</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">Travel bookings and group trips</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Operating location</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.address}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Support</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.supportEmail}</dd>
+            </div>
+          </dl>
         </section>
 
         <section className="bg-gradient-to-br from-purple-600 to-fuchsia-700 rounded-2xl p-6 sm:p-8 text-white text-center shadow-lg shadow-purple-500/30">

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Mail, MessageCircle, Phone, MapPin, Clock, Instagram } from 'lucide-react';
+import { CONTACT } from '@/lib/contact';
 
 export const metadata: Metadata = {
   title: 'Contact Us | Ghumakkars',
@@ -63,6 +64,28 @@ export default function ContactPage() {
             value="Mathura, Uttar Pradesh, India"
           />
         </div>
+
+        <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-8">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Business Information</h2>
+          <dl className="grid gap-3 text-sm sm:text-base text-gray-700 sm:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-gray-500">Public merchant name</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.brandName}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Website</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.siteUrl}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Service category</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">Travel bookings and group trips</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-500">Operating location</dt>
+              <dd className="mt-0.5 font-bold text-gray-900">{CONTACT.address}</dd>
+            </div>
+          </dl>
+        </section>
 
         <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-8">
           <div className="flex items-center gap-3 mb-3">

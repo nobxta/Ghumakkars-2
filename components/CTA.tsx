@@ -57,7 +57,7 @@ export default function CTA() {
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-white rounded-full"></div>
-              <span className="text-sm md:text-base font-light">Easy Cancellation</span>
+              <span className="text-sm md:text-base font-light">Clear Refund Policy</span>
             </div>
           </div>
         </ScrollAnimation>
