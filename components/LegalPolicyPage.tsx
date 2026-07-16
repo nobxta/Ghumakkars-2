@@ -511,45 +511,6 @@ export function LegalPolicyPage({ type }: { type: PolicyKey }) {
           </div>
         </header>
 
-        <section className="mt-6 rounded-xl border border-purple-100 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-lg font-extrabold text-slate-950">Merchant Information</h2>
-          <p className={`${paragraph} mt-2`}>
-            These policies apply to online travel bookings and group trip services offered on the Ghumakkars website.
-          </p>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="font-bold text-slate-500">Public merchant name</dt>
-              <dd className="mt-1 text-slate-900">{CONTACT.brandName}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Website</dt>
-              <dd className="mt-1 text-slate-900">{siteUrl}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Service category</dt>
-              <dd className="mt-1 text-slate-900">Travel bookings, group trips and related trip add-ons</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Operating location</dt>
-              <dd className="mt-1 text-slate-900">{CONTACT.address}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Support email</dt>
-              <dd className="mt-1">
-                <EmailLink />
-              </dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Phone/WhatsApp</dt>
-              <dd className="mt-1">
-                <a href={CONTACT.whatsappLink} className="font-semibold text-purple-700 underline underline-offset-2 hover:text-purple-900">
-                  {CONTACT.phoneDisplay}
-                </a>
-              </dd>
-            </div>
-          </dl>
-        </section>
-
         <div className="mt-8 grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="hidden lg:block">
             <nav className="sticky top-24 rounded-xl border border-purple-100 bg-white p-4 shadow-sm">
