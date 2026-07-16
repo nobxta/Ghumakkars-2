@@ -590,10 +590,26 @@ export default function AdminTripDetailsPage() {
     const margin = 12;
     const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
     const statusLabel = customStatus === 'all' ? 'All active bookings' : customStatus === 'addons' ? 'Bookings with add-ons' : customStatus.replace('_', ' ');
-    const totalPaid = list.reduce((s: number, b: any) => s + bookingPaid(b), 0);
-    const totalDue = list.reduce((s: number, b: any) => s + bookingRemaining(b), 0);
+    const aggregateParts: string[] = [];
+    if (customFields.total) {
+      const totalPayable = list.reduce((s: number, b: any) => s + bookingFull(b), 0);
+      aggregateParts.push(`Total Rs ${totalPayable.toLocaleString('en-IN')}`);
+    }
+    if (customFields.paid) {
+      const totalPaid = list.reduce((s: number, b: any) => s + bookingPaid(b), 0);
+      aggregateParts.push(`Paid Rs ${totalPaid.toLocaleString('en-IN')}`);
+    }
+    if (customFields.remaining) {
+      const totalDue = list.reduce((s: number, b: any) => s + bookingRemaining(b), 0);
+      aggregateParts.push(`Due Rs ${totalDue.toLocaleString('en-IN')}`);
+    }
+    if (customFields.addonsTotal) {
+      const totalAddons = list.reduce((s: number, b: any) => s + bookingAddonsTotal(b), 0);
+      aggregateParts.push(`Add-ons Rs ${totalAddons.toLocaleString('en-IN')}`);
+    }
+    const subtitle = [statusLabel, `${list.length} bookings`, ...aggregateParts].join(' - ');
 
-    _pdfHeader(doc, pageW, margin, 'Custom passenger export', `${statusLabel} - ${list.length} bookings - Paid Rs ${totalPaid.toLocaleString('en-IN')} - Due Rs ${totalDue.toLocaleString('en-IN')}`);
+    _pdfHeader(doc, pageW, margin, 'Custom passenger export', subtitle);
     autoTable(doc, {
       head: [['#', ...active.map((c) => c.label)]],
       body: list.map((b: any, i: number) => [
@@ -607,7 +623,15 @@ export default function AdminTripDetailsPage() {
       alternateRowStyles: { fillColor: [248, 248, 252] },
       theme: 'grid',
     });
-    _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars - Custom export. Include payment columns only for internal use.');
+    _pdfFooter(
+      doc,
+      pageW,
+      pageH,
+      margin,
+      aggregateParts.length > 0
+        ? 'Ghumakkars - Custom export. Includes selected payment columns.'
+        : 'Ghumakkars - Custom export. No payment totals included.',
+    );
     doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Custom-${customStatus}-${new Date().toISOString().slice(0, 10)}.pdf`);
     return;
 
