@@ -18,11 +18,13 @@ import {
   Smartphone,
   Trash2,
   Users,
+  UserPlus,
   X,
   XCircle,
 } from 'lucide-react';
 import { bookingStatusLabel, effectiveBookingStatus } from '@/lib/booking-status-labels';
 import { moneyOf } from '@/lib/booking-money';
+import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 
 type Booking = any;
 type FilterKey = 'all' | 'needs_review' | 'pending' | 'seat_locked' | 'confirmed' | 'cancelled' | 'upcoming' | 'today' | 'week' | 'referrals';
@@ -211,6 +213,7 @@ export default function AdminBookingsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCashPaymentModal, setShowCashPaymentModal] = useState(false);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('fake_payment');
   const [reviewing, setReviewing] = useState(false);
@@ -693,10 +696,16 @@ export default function AdminBookingsPage() {
             <h1 className="text-[21px] font-bold leading-tight tracking-tight text-gray-950 sm:text-2xl">All Bookings</h1>
             <p className="mt-1 text-sm leading-5 text-gray-600">Manage bookings, payments and pending actions.</p>
           </div>
-          <button onClick={fetchBookings} disabled={loading} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-purple-200 bg-white px-4 text-sm font-semibold text-purple-700 hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-200 disabled:opacity-60 sm:w-auto">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button onClick={() => setShowOfflineModal(true)} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-bold text-white hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-200 sm:w-auto">
+              <UserPlus className="h-4 w-4" />
+              Add offline booking
+            </button>
+            <button onClick={fetchBookings} disabled={loading} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-purple-200 bg-white px-4 text-sm font-semibold text-purple-700 hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-200 disabled:opacity-60 sm:w-auto">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
@@ -1040,6 +1049,31 @@ export default function AdminBookingsPage() {
                   {deletingBookingId ? 'Deleting...' : 'Delete Booking'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOfflineModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/45 p-3" role="dialog" aria-modal="true" aria-labelledby="offline-booking-title">
+          <div className="my-6 max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="offline-booking-title" className="text-lg font-bold text-gray-950">Add offline booking</h2>
+                <p className="text-sm text-gray-500">Choose trip, batch, passenger details, add-ons and collected amount.</p>
+              </div>
+              <button onClick={() => setShowOfflineModal(false)} className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-100" aria-label="Close offline booking">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-4 sm:p-5">
+              <OfflineBookingForm
+                onCreated={async () => {
+                  setShowOfflineModal(false);
+                  setToast({ type: 'success', message: 'Offline booking added.' });
+                  await fetchBookings();
+                }}
+              />
             </div>
           </div>
         </div>

@@ -26,6 +26,8 @@ import {
   DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, X, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
 } from 'lucide-react';
 import { nextOccurrences, formatDeparture, toDateString } from '@/lib/recurrence';
+import { moneyOf } from '@/lib/booking-money';
+import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 
 export default function AdminTripDetailsPage() {
   const params = useParams();
@@ -36,9 +38,10 @@ export default function AdminTripDetailsPage() {
   const [customExportOpen, setCustomExportOpen] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, boolean>>({
     name: true, phone: true, email: false, age: false, gender: true,
-    passengers: true, pax: true, status: true, total: false, paid: true, bookedOn: false, pickup: false,
+    passengers: true, pax: true, status: true, addons: true, total: false, paid: false,
+    remaining: false, paymentMode: false, paymentMethod: false, bookedOn: false, pickup: false,
   });
-  const [customStatus, setCustomStatus] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending'>('all');
+  const [customStatus, setCustomStatus] = useState<'all' | 'confirmed' | 'seat_locked' | 'pending' | 'addons'>('all');
   const [trip, setTrip] = useState<any>(null);
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
@@ -46,16 +49,7 @@ export default function AdminTripDetailsPage() {
   const batchDefaulted = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [offlineForm, setOfflineForm] = useState({
-    name: '',
-    mobile: '',
-    participants: 1,
-    amount_paid: '',
-    departure_date: '',
-    passengers: [{ name: '', age: '' }] as { name: string; age: string }[],
-  });
   const [offlineOpen, setOfflineOpen] = useState(false);
-  const [offlineSubmitting, setOfflineSubmitting] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
   const [editingAmountValue, setEditingAmountValue] = useState('');
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
@@ -213,32 +207,13 @@ export default function AdminTripDetailsPage() {
   const pastBatches = batchList.filter((b) => b.past).sort((a, b) => b.date.localeCompare(a.date));
   const nextBatchDate = upcomingBatches[0]?.date || '';
 
-  // Per-booking money: what they paid, the full trip cost (after discount), and remaining.
-  const bookingPaid = (b: any): number => {
-    if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
-    return (b.payment_transactions || [])
-      .filter((pt: any) => pt.payment_status === 'verified')
-      .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
-  };
-  const bookingFull = (b: any): number => {
-    const pax = Number(b.number_of_participants) || 1;
-    const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
-    const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
-    // Seat-lock: total_price / final_amount only hold the DEPOSIT, so the real
-    // full trip cost must come from list price × participants.
-    if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
-      const gross = (Number(trip?.discounted_price) || 0) * pax;
-      return Math.max(0, gross - coupon - wallet);
-    }
-    // Full-payment: final_amount already equals gross − coupon − wallet.
-    const fa = parseFloat(String(b.final_amount || 0));
-    if (fa > 0) return fa;
-    const gross = parseFloat(String(b.total_price || 0)) || (Number(trip?.discounted_price) || 0) * pax;
-    return Math.max(0, gross - coupon - wallet);
-  };
+  // Per-booking money: shared helper includes add-ons, refunds and waivers.
+  const bookingMoney = (b: any) => moneyOf(b, trip);
+  const bookingPaid = (b: any): number => bookingMoney(b).paid;
+  const bookingFull = (b: any): number => bookingMoney(b).owed;
   const bookingRemaining = (b: any): number => {
     if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;
-    return Math.max(0, bookingFull(b) - bookingPaid(b));
+    return bookingMoney(b).remaining;
   };
 
   // Bookings made before the trip became recurring have no departure_date.
@@ -325,8 +300,6 @@ export default function AdminTripDetailsPage() {
     return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
   };
   const _displayPhone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
-  const _paid = (b: any) => (b.payment_transactions || []).filter((pt: any) => pt.payment_status === 'verified').reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
-
   /** Operational export: Passenger Manifest — what trip captains need on board */
   const exportPassengerManifest = () => {
     const headers = ['#', 'Name', 'Age', 'Gender', 'Phone', 'Emergency Name', 'Emergency Phone', 'Booking ID', 'Pickup'];
@@ -388,9 +361,9 @@ export default function AdminTripDetailsPage() {
   /** Operational export: Revenue Report */
   const exportRevenueReport = () => {
     const headers = ['Metric', 'Amount (₹)'];
-    const collected = confirmedBookings.reduce((s: number, b: any) => s + _paid(b), 0);
-    const expected = bookings.filter((b: any) => b.booking_status !== 'cancelled' && b.booking_status !== 'rejected').reduce((s: number, b: any) => s + parseFloat(String(b.final_amount || 0)), 0);
-    const seatLockCollected = bookings.filter((b: any) => b.booking_status === 'seat_locked').reduce((s: number, b: any) => s + _paid(b), 0);
+    const collected = confirmedBookings.reduce((s: number, b: any) => s + bookingPaid(b), 0);
+    const expected = bookings.filter((b: any) => b.booking_status !== 'cancelled' && b.booking_status !== 'rejected').reduce((s: number, b: any) => s + bookingFull(b), 0);
+    const seatLockCollected = bookings.filter((b: any) => b.booking_status === 'seat_locked').reduce((s: number, b: any) => s + bookingPaid(b), 0);
     const pending = Math.max(0, expected - collected - seatLockCollected);
     const rows = [
       ['Total expected revenue', expected.toFixed(0)],
@@ -546,9 +519,31 @@ export default function AdminTripDetailsPage() {
   };
 
   /** Custom export — admin picks columns + status filter, output as CSV or printable page. */
-  const runCustomExport = (format: 'csv' | 'print') => {
+  const activeBookingAddons = (b: any): any[] =>
+    Array.isArray(b.booking_addons)
+      ? b.booking_addons.filter((a: any) => a && a.status !== 'cancelled')
+      : [];
+
+  const bookingAddonsTotal = (b: any): number =>
+    activeBookingAddons(b).reduce((s: number, a: any) => s + (parseFloat(String(a.addon_total || 0)) || 0), 0);
+
+  const formatAddons = (b: any, opts: { includeAmounts?: boolean; html?: boolean } = {}) => {
+    const rows = activeBookingAddons(b);
+    if (rows.length === 0) return 'None';
+    const separator = opts.html ? '<br>' : ' | ';
+    return rows.map((a: any) => {
+      const travellers = Array.isArray(a.selected_passenger_names) && a.selected_passenger_names.length
+        ? ` (${a.selected_passenger_names.join(', ')})`
+        : '';
+      const amount = opts.includeAmounts ? ` - Rs ${Number(a.addon_total || 0).toLocaleString('en-IN')}` : '';
+      return `${a.name || 'Add-on'}${travellers}${amount}`;
+    }).join(separator);
+  };
+
+  const runCustomExport = async (format: 'csv' | 'pdf') => {
     const list = bookings.filter((b: any) => {
       if (customStatus === 'all') return !['cancelled', 'rejected'].includes(b.booking_status);
+      if (customStatus === 'addons') return !['cancelled', 'rejected'].includes(b.booking_status) && activeBookingAddons(b).length > 0;
       return b.booking_status === customStatus;
     });
     if (list.length === 0) { alert('No bookings match the selected status.'); return; }
@@ -559,13 +554,6 @@ export default function AdminTripDetailsPage() {
       return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
     };
     const _phone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
-    const _paid = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return parseFloat(String(b.amount_paid || 0));
-      return (b.payment_transactions || [])
-        .filter((pt: any) => pt.payment_status === 'verified')
-        .reduce((s: number, pt: any) => s + parseFloat(String(pt.amount || 0)), 0);
-    };
-
     const cols: { key: string; label: string; get: (b: any) => string }[] = [
       { key: 'name', label: 'Name', get: _name },
       { key: 'phone', label: 'Phone', get: _phone },
@@ -575,8 +563,13 @@ export default function AdminTripDetailsPage() {
       { key: 'passengers', label: 'Passengers', get: (b) => formatPassengersMultiline(b).join(format === 'csv' ? ' | ' : '<br>') },
       { key: 'pax', label: 'Pax', get: (b) => String(b.number_of_participants || 1) },
       { key: 'status', label: 'Status', get: (b) => (b.booking_status || 'pending').replace('_', ' ') },
-      { key: 'total', label: 'Total (₹)', get: (b) => parseFloat(String(b.final_amount || 0)).toFixed(0) },
-      { key: 'paid', label: 'Paid (₹)', get: (b) => _paid(b).toFixed(0) },
+      { key: 'addons', label: 'Add-ons', get: (b) => formatAddons(b, { includeAmounts: false, html: format !== 'csv' }) },
+      { key: 'addonsTotal', label: 'Add-ons (Rs)', get: (b) => bookingAddonsTotal(b).toFixed(0) },
+      { key: 'total', label: 'Total payable (Rs)', get: (b) => bookingFull(b).toFixed(0) },
+      { key: 'paid', label: 'Paid (Rs)', get: (b) => bookingPaid(b).toFixed(0) },
+      { key: 'remaining', label: 'Remaining (Rs)', get: (b) => bookingRemaining(b).toFixed(0) },
+      { key: 'paymentMode', label: 'Payment mode', get: (b) => getPaymentModeLabel(b.payment_mode) },
+      { key: 'paymentMethod', label: 'Payment method', get: (b) => getPaymentMethodLabel(b.payment_method) },
       { key: 'bookedOn', label: 'Booked on', get: (b) => new Date(b.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
       { key: 'pickup', label: 'Pickup point', get: (b) => b.pickup_point || '—' },
     ];
@@ -590,6 +583,34 @@ export default function AdminTripDetailsPage() {
     }
 
     // Print version — one passenger per line via <br>
+    const { jsPDF, autoTable } = await loadPdfLibs();
+    const landscape = active.length > 6;
+    const pageW = landscape ? 297 : 210;
+    const pageH = landscape ? 210 : 297;
+    const margin = 12;
+    const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+    const statusLabel = customStatus === 'all' ? 'All active bookings' : customStatus === 'addons' ? 'Bookings with add-ons' : customStatus.replace('_', ' ');
+    const totalPaid = list.reduce((s: number, b: any) => s + bookingPaid(b), 0);
+    const totalDue = list.reduce((s: number, b: any) => s + bookingRemaining(b), 0);
+
+    _pdfHeader(doc, pageW, margin, 'Custom passenger export', `${statusLabel} - ${list.length} bookings - Paid Rs ${totalPaid.toLocaleString('en-IN')} - Due Rs ${totalDue.toLocaleString('en-IN')}`);
+    autoTable(doc, {
+      head: [['#', ...active.map((c) => c.label)]],
+      body: list.map((b: any, i: number) => [
+        String(i + 1),
+        ...active.map((c) => c.get(b).replace(/<br>/g, '\n')),
+      ]),
+      startY: 33,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: active.length > 8 ? 7 : 8, cellPadding: 1.8, overflow: 'linebreak' },
+      headStyles: { fillColor: [67, 56, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 248, 252] },
+      theme: 'grid',
+    });
+    _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars - Custom export. Include payment columns only for internal use.');
+    doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Custom-${customStatus}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    return;
+
     const w = window.open('', '_blank');
     if (!w) return;
     const head = ['#', ...active.map((c) => c.label)].map((h) => `<th>${h}</th>`).join('');
@@ -726,15 +747,17 @@ export default function AdminTripDetailsPage() {
     const headPax = list.reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0);
     _pdfHeader(doc, pageW, margin, 'Travel list (no payment info)', `${list.length} bookings  •  ${headPax} travellers  •  safe to print`);
 
-    const headers = [['#', 'Lead name', 'Age', 'M/F', 'Phone', 'Pickup', 'All passengers (name, age, M/F)']];
+    const headers = [['#', 'Lead name', 'Age', 'M/F', 'Phone', 'Status', 'Pickup', 'All passengers (name, age, M/F)', 'Add-ons']];
     const rows = list.map((b: any, i: number) => [
       String(i + 1),
       _pdfName(b, 26),
       b.primary_passenger_age || '—',
       _pdfGender(b),
       _pdfPhone(b),
+      _pdfStatus(b),
       (b.pickup_point || '—').substring(0, 18),
       formatPassengersMultiline(b).join('\n'),
+      formatAddons(b),
     ]);
 
     autoTable(doc, {
@@ -747,8 +770,9 @@ export default function AdminTripDetailsPage() {
       alternateRowStyles: { fillColor: [248, 248, 252] },
       theme: 'grid',
       columnStyles: {
-        0: { cellWidth: 10 }, 1: { cellWidth: 40 }, 2: { cellWidth: 12, halign: 'center' },
-        3: { cellWidth: 12, halign: 'center' }, 4: { cellWidth: 32 }, 5: { cellWidth: 30 }, 6: { cellWidth: 129 },
+        0: { cellWidth: 8 }, 1: { cellWidth: 34 }, 2: { cellWidth: 10, halign: 'center' },
+        3: { cellWidth: 10, halign: 'center' }, 4: { cellWidth: 28 }, 5: { cellWidth: 20 },
+        6: { cellWidth: 24 }, 7: { cellWidth: 92 }, 8: { cellWidth: 47 },
       },
     });
 
@@ -809,50 +833,6 @@ export default function AdminTripDetailsPage() {
 
     _pdfFooter(doc, pageW, pageH, margin, 'Ghumakkars — Collection follow-up list. Confidential.');
     doc.save(`${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-Collection-${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
-
-  const handleAddOffline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!offlineForm.name.trim() || !offlineForm.mobile.trim()) {
-      alert('Name and mobile are required.');
-      return;
-    }
-    const amount = parseFloat(offlineForm.amount_paid) || 0;
-    if (amount <= 0) {
-      alert('Please enter amount paid.');
-      return;
-    }
-    if (trip?.is_recurring && !offlineForm.departure_date) {
-      alert('Please choose a departure date for this booking.');
-      return;
-    }
-    setOfflineSubmitting(true);
-    try {
-      const res = await fetch(`/api/admin/trips/${params.id}/offline-bookings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: offlineForm.name.trim(),
-          mobile: offlineForm.mobile.trim(),
-          participants: Math.max(1, parseInt(String(offlineForm.participants), 10) || 1),
-          amount_paid: amount,
-          departure_date: trip?.is_recurring ? offlineForm.departure_date : null,
-          passengers: offlineForm.passengers
-            .filter(p => p.name.trim())
-            .map(p => ({ name: p.name.trim(), age: p.age.trim() || undefined })),
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to add offline booking');
-      }
-      setOfflineForm({ name: '', mobile: '', participants: 1, amount_paid: '', departure_date: '', passengers: [{ name: '', age: '' }] });
-      await fetchTripDetails();
-    } catch (err: any) {
-      alert(err.message || 'Failed to add offline booking');
-    } finally {
-      setOfflineSubmitting(false);
-    }
   };
 
   const handleSaveOfflineAmount = async (bookingId: string) => {
@@ -1108,120 +1088,9 @@ export default function AdminTripDetailsPage() {
             <ChevronDown className={`h-4 w-4 text-amber-700 transition-transform ${offlineOpen ? 'rotate-180' : ''}`} />
           </button>
           {offlineOpen && (
-          <>
-          <p className="text-xs text-gray-600 mb-4 mt-3">Only name and mobile are required. Everything else is optional.</p>
-
-          {/* Departure batch selector for recurring trips */}
-          {trip.is_recurring && typeof trip.recurrence_day === 'number' && (
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Departure date <span className="text-red-500">*</span></label>
-              <select
-                value={offlineForm.departure_date}
-                onChange={e => setOfflineForm(f => ({ ...f, departure_date: e.target.value }))}
-                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
-              >
-                <option value="">Choose a departure…</option>
-                {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => (
-                  <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</option>
-                ))}
-              </select>
+            <div className="mt-4">
+              <OfflineBookingForm initialTrip={trip} lockTrip onCreated={fetchTripDetails} />
             </div>
-          )}
-
-          <form onSubmit={handleAddOffline} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={offlineForm.name}
-                  onChange={e => setOfflineForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Full name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Mobile</label>
-                <input
-                  type="text"
-                  value={offlineForm.mobile}
-                  onChange={e => setOfflineForm(f => ({ ...f, mobile: e.target.value }))}
-                  placeholder="10-digit number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Passengers</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={offlineForm.participants}
-                  onChange={e => {
-                    const n = Math.max(1, parseInt(e.target.value, 10) || 1);
-                    setOfflineForm(f => ({
-                      ...f,
-                      participants: n,
-                      passengers: Array.from({ length: n }, (_, i) => f.passengers[i] || { name: '', age: '' }),
-                    }));
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Amount paid (₹)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={offlineForm.amount_paid}
-                  onChange={e => setOfflineForm(f => ({ ...f, amount_paid: e.target.value }))}
-                  placeholder="e.g. 100"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-500"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={offlineSubmitting || !offlineForm.name.trim() || !offlineForm.mobile.trim()}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1"
-                >
-                  <Plus className="h-4 w-4" />
-                  {offlineSubmitting ? 'Adding...' : 'Add'}
-                </button>
-              </div>
-            </div>
-            <div className="border-t border-amber-200 pt-3">
-              <label className="block text-xs font-medium text-gray-700 mb-2">Passenger details (name & age)</label>
-              <div className="space-y-2">
-                {offlineForm.passengers.map((p, i) => (
-                  <div key={i} className="flex flex-wrap gap-2 items-center">
-                    <span className="text-xs text-gray-500 w-20">Passenger {i + 1}</span>
-                    <input
-                      type="text"
-                      value={p.name}
-                      onChange={e => setOfflineForm(f => ({
-                        ...f,
-                        passengers: f.passengers.map((pp, j) => j === i ? { ...pp, name: e.target.value } : pp),
-                      }))}
-                      placeholder="Name"
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-500 w-40"
-                    />
-                    <input
-                      type="text"
-                      value={p.age}
-                      onChange={e => setOfflineForm(f => ({
-                        ...f,
-                        passengers: f.passengers.map((pp, j) => j === i ? { ...pp, age: e.target.value } : pp),
-                      }))}
-                      placeholder="Age"
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-500 w-20"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </form>
-          </>
           )}
         </div>
 
@@ -1652,7 +1521,7 @@ export default function AdminTripDetailsPage() {
               <div>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Booking status</p>
                 <div className="flex flex-wrap gap-2">
-                  {([['all', 'All active'], ['confirmed', 'Confirmed'], ['seat_locked', 'Seat locked'], ['pending', 'Pending']] as const).map(([val, label]) => (
+                  {([['all', 'All active'], ['confirmed', 'Confirmed'], ['seat_locked', 'Seat locked'], ['pending', 'Pending'], ['addons', 'With add-ons']] as const).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setCustomStatus(val)}
@@ -1672,7 +1541,9 @@ export default function AdminTripDetailsPage() {
                   {([
                     ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['age', 'Age'],
                     ['gender', 'Gender'], ['passengers', 'Passengers (one per line)'], ['pax', 'Pax count'],
-                    ['status', 'Booking status'], ['total', 'Total price'], ['paid', 'Paid amount'], ['bookedOn', 'Booking date'], ['pickup', 'Pickup point'],
+                    ['status', 'Booking status'], ['addons', 'Add-ons'], ['addonsTotal', 'Add-ons total'],
+                    ['total', 'Total payable'], ['paid', 'Paid amount'], ['remaining', 'Remaining amount'],
+                    ['paymentMode', 'Payment mode'], ['paymentMethod', 'Payment method'], ['bookedOn', 'Booking date'], ['pickup', 'Pickup point'],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:border-purple-300 cursor-pointer text-sm">
                       <input
@@ -1696,10 +1567,10 @@ export default function AdminTripDetailsPage() {
                 <Download className="h-4 w-4" /> Download CSV
               </button>
               <button
-                onClick={() => { setCustomExportOpen(false); runCustomExport('print'); }}
+                onClick={() => { setCustomExportOpen(false); runCustomExport('pdf'); }}
                 className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 flex items-center justify-center gap-1.5"
               >
-                <Printer className="h-4 w-4" /> Print / PDF
+                <Printer className="h-4 w-4" /> Download PDF
               </button>
             </div>
           </div>
@@ -1708,4 +1579,3 @@ export default function AdminTripDetailsPage() {
     </div>
   );
 }
-

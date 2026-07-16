@@ -38,6 +38,25 @@ export async function GET(
         payment_transactions (
           id,
           amount,
+          amount_refunded,
+          payment_mode,
+          payment_method,
+          payment_status,
+          created_at
+        ),
+        booking_addons (
+          id,
+          trip_addon_id,
+          name,
+          pricing_method,
+          unit_price,
+          selected_passenger_ids,
+          selected_passenger_names,
+          quantity,
+          room_count,
+          chargeable_units,
+          addon_total,
+          status,
           payment_status,
           created_at
         )
