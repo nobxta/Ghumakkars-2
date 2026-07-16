@@ -191,7 +191,7 @@ const policyContent: Record<PolicyKey, {
     title: 'Terms & Conditions',
     eyebrow: 'Website use and booking terms',
     canonicalPath: '/terms',
-    jsonLdType: 'TermsOfService',
+    jsonLdType: 'WebPage',
     description:
       'These Terms & Conditions govern your use of the Ghumakkars website and all trip bookings made with Ghumakkars.',
     sections: [
@@ -215,7 +215,19 @@ const policyContent: Record<PolicyKey, {
         ),
       },
       {
-        title: '3. Booking rules',
+        title: '3. Services and digital delivery',
+        icon: <Map className={iconClass} />,
+        body: (
+          <ul className={list}>
+            <li>Ghumakkars provides travel booking services, group trip packages, itinerary coordination, transport and stay coordination, and optional trip add-ons.</li>
+            <li>No physical product is shipped by Ghumakkars. Booking confirmations, payment confirmations, trip details, tickets, invoices or support updates are delivered digitally by website dashboard, email, WhatsApp, SMS, phone or PDF where applicable.</li>
+            <li>A booking confirmation is normally generated after successful payment verification. Manual UPI or offline payments may require additional review before the booking is marked as confirmed.</li>
+            <li>Actual travel service delivery happens on the trip departure date and itinerary dates shown on the relevant trip page or booking confirmation.</li>
+          </ul>
+        ),
+      },
+      {
+        title: '4. Booking rules',
         icon: <Map className={iconClass} />,
         body: (
           <ul className={list}>
@@ -228,20 +240,21 @@ const policyContent: Record<PolicyKey, {
         ),
       },
       {
-        title: '4. Pricing, offers and payments',
+        title: '5. Pricing, offers and payments',
         icon: <CreditCard className={iconClass} />,
         body: (
           <ul className={list}>
             <li>Prices are listed in Indian Rupees unless stated otherwise.</li>
             <li>Prices may change based on season, availability, early-bird offers, add-ons, coupons, pickup location or operational costs.</li>
             <li>A price is locked only after successful payment and booking confirmation.</li>
-            <li>Payments may be collected through Razorpay, UPI, wallet balance, manual payment review or other methods enabled by Ghumakkars.</li>
+            <li>Payments may be collected through PhonePe, Razorpay, UPI, wallet balance, manual payment review or other methods enabled by Ghumakkars.</li>
+            <li>Online payments are subject to successful authorization, capture and verification by the relevant payment gateway, bank, card network, UPI system or wallet provider.</li>
             <li>Payment gateway charges, bank charges or convenience fees, if shown during checkout, may be non-refundable unless required by law or the gateway's rules.</li>
           </ul>
         ),
       },
       {
-        title: '5. Traveller responsibilities',
+        title: '6. Traveller responsibilities',
         icon: <Shield className={iconClass} />,
         body: (
           <ul className={list}>
@@ -255,42 +268,42 @@ const policyContent: Record<PolicyKey, {
         ),
       },
       {
-        title: '6. Trip modifications',
+        title: '7. Trip modifications',
         icon: <RefreshCw className={iconClass} />,
         body: (
           <p className={paragraph}>Travel operations can change due to weather, road conditions, landslides, traffic, vehicle issues, permits, hotel availability, local restrictions, government orders or safety concerns. Ghumakkars may modify routes, stay arrangements, transport, pickup points, activity order or itinerary timing while making reasonable efforts to preserve the overall trip experience.</p>
         ),
       },
       {
-        title: '7. Force majeure',
+        title: '8. Force majeure',
         icon: <AlertTriangle className={iconClass} />,
         body: (
           <p className={paragraph}>Ghumakkars is not liable for delay, modification, interruption or cancellation caused by events beyond reasonable control, including natural disasters, extreme weather, landslides, road closures, epidemics, strikes, political unrest, war, terrorism, government restrictions, transport disruption, supplier failure or safety emergencies. Refunds or credits in such cases are governed by the <TextLink href="/refund-policy">Refund & Cancellation Policy</TextLink>.</p>
         ),
       },
       {
-        title: '8. Intellectual property',
+        title: '9. Intellectual property',
         icon: <FileText className={iconClass} />,
         body: (
           <p className={paragraph}>The Ghumakkars name, website design, text, photographs, videos, itineraries, graphics, logos and other content are owned by Ghumakkars or licensed to Ghumakkars. You may not copy, reproduce, sell, scrape, redistribute or commercially use website content without written permission. By submitting reviews, photos or testimonials, you allow Ghumakkars to use them for service, marketing and promotional purposes, unless you withdraw permission in writing where legally available.</p>
         ),
       },
       {
-        title: '9. Limitation of liability',
+        title: '10. Limitation of liability',
         icon: <Scale className={iconClass} />,
         body: (
           <p className={paragraph}>To the maximum extent permitted by law, Ghumakkars is not liable for indirect, incidental, special, punitive or consequential losses, loss of enjoyment, loss of opportunity, personal expenses, missed connections, personal injury caused by your negligence or third-party acts, or loss of belongings. For any proven direct claim, Ghumakkars' aggregate liability is limited to the amount paid by you to Ghumakkars for the specific booking giving rise to the claim.</p>
         ),
       },
       {
-        title: '10. Governing law and dispute resolution',
+        title: '11. Governing law and dispute resolution',
         icon: <Gavel className={iconClass} />,
         body: (
           <p className={paragraph}>These Terms are governed by the laws of India. The parties will first try to resolve disputes through good-faith communication by email or phone. If unresolved, disputes will be subject to the exclusive jurisdiction of competent courts at Mathura, Uttar Pradesh, India, unless applicable law requires another forum.</p>
         ),
       },
       {
-        title: '11. Contact',
+        title: '12. Contact',
         icon: <Mail className={iconClass} />,
         body: (
           <p className={paragraph}>For questions about these Terms, contact <EmailLink /> or call/WhatsApp <a href={CONTACT.whatsappLink} className="font-semibold text-purple-700 underline underline-offset-2 hover:text-purple-900">{CONTACT.phoneDisplay}</a>.</p>
