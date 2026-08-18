@@ -16,6 +16,31 @@ function cleanBody(value: unknown) {
   return String(value || '').replace(/\0/g, '').trim().slice(0, 12000);
 }
 
+function cleanRichHtml(value: unknown) {
+  return String(value || '')
+    .replace(/\0/g, '')
+    .replace(/<\/?(?:script|style|iframe|object|embed|form|input|button|textarea|select|meta|link)[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(?:javascript|vbscript):/gi, '')
+    .slice(0, 18_000_000);
+}
+
+function cleanAttachments(value: unknown) {
+  if (!Array.isArray(value) || value.length > 8) return [];
+  let total = 0;
+  const attachments = value.map((item: any) => {
+    const name = cleanHeader(item?.name, 160) || 'attachment';
+    const type = cleanHeader(item?.type, 100) || 'application/octet-stream';
+    const content = String(item?.content || '').replace(/[^A-Za-z0-9+/=]/g, '');
+    const size = Buffer.byteLength(content, 'base64');
+    if (!content || size > 5 * 1024 * 1024) throw new Error(`${name} is too large`);
+    total += size;
+    return { filename: name, content, encoding: 'base64' as const, contentType: type };
+  });
+  if (total > 12 * 1024 * 1024) throw new Error('Attachments exceed the 12 MB total limit');
+  return attachments;
+}
+
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -38,6 +63,8 @@ export async function POST(
     const fromName = cleanHeader(body.senderName, 80);
     const subject = cleanHeader(body.subject, 140);
     const message = cleanBody(body.message);
+    const html = cleanRichHtml(body.html);
+    const attachments = cleanAttachments(body.attachments);
     const idempotencyKey = cleanHeader(body.idempotencyKey || request.headers.get('idempotency-key'), 120);
 
     if (idempotencyKey && sentKeys.has(idempotencyKey)) {
@@ -73,6 +100,8 @@ export async function POST(
       fromName,
       subject,
       text: message,
+      html,
+      attachments,
       replyTo: fromEmail === 'no-reply@ghumakkars.in' ? 'support@ghumakkars.in' : fromEmail,
     });
 
@@ -94,6 +123,7 @@ export async function POST(
           subject,
           provider_message_id: result.messageId || null,
           send_status: 'sent',
+          attachment_count: attachments.length,
         },
       });
 

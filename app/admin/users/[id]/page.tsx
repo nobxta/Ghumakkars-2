@@ -7,7 +7,11 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Activity,
   AlertCircle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowLeft,
+  Bold,
   Calendar,
   CheckCircle,
   ChevronDown,
@@ -16,22 +20,29 @@ import {
   Eye,
   Gift,
   Hash,
+  Image as ImageIcon,
   IndianRupee,
   Info,
+  Italic,
+  Link2,
   LogIn,
   Mail,
   MessageCircle,
   Package,
+  Paperclip,
   Phone,
   Send,
   ShieldCheck,
   Trash2,
+  Underline,
   User,
   Users,
   Wallet,
   X,
   XCircle,
 } from 'lucide-react';
+
+type EmailAttachment = { id: string; name: string; type: string; size: number; content: string };
 
 type TabKey = 'overview' | 'bookings' | 'activity';
 
@@ -174,6 +185,58 @@ function Field({ label, children, className = '' }: { label: string; children: R
   );
 }
 
+function RichEmailEditor({ html, onChange, onAddFiles }: { html: string; onChange: (html: string, text: string) => void; onAddFiles: (files: FileList | null, inline?: boolean) => void }) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== html) editorRef.current.innerHTML = html;
+  }, [html]);
+
+  const emitChange = () => onChange(editorRef.current?.innerHTML || '', editorRef.current?.innerText || '');
+  const format = (command: string, value?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+    emitChange();
+  };
+  const addLink = () => {
+    const url = window.prompt('Paste the link URL');
+    if (!url) return;
+    format('createLink', /^https?:\/\//i.test(url) ? url : `https://${url}`);
+  };
+  const tool = 'flex h-8 w-8 items-center justify-center rounded-lg text-[#565966] transition hover:bg-white hover:text-[#8758F6] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8758F6]/20';
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#DADCE5] bg-white transition focus-within:border-[#8758F6] focus-within:ring-4 focus-within:ring-[#8758F6]/10">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[#E7E8EE] bg-[#F7F8FC] px-2.5 py-2" role="toolbar" aria-label="Email formatting">
+        <button type="button" className={tool} onClick={() => format('bold')} title="Bold"><Bold className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => format('italic')} title="Italic"><Italic className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => format('underline')} title="Underline"><Underline className="h-4 w-4" /></button>
+        <span className="mx-1 h-5 w-px bg-[#DADCE5]" />
+        <select aria-label="Text style" defaultValue="p" onChange={(event) => format('formatBlock', event.target.value)} className="h-8 rounded-lg border-0 bg-transparent px-2 text-xs font-semibold text-[#565966] outline-none hover:bg-white">
+          <option value="p">Normal text</option><option value="h2">Heading</option><option value="h3">Subheading</option>
+        </select>
+        <span className="mx-1 h-5 w-px bg-[#DADCE5]" />
+        <button type="button" className={tool} onClick={() => format('insertUnorderedList')} title="Bulleted list"><span className="text-base font-bold">•≡</span></button>
+        <button type="button" className={tool} onClick={() => format('insertOrderedList')} title="Numbered list"><span className="text-xs font-bold">1.≡</span></button>
+        <button type="button" className={tool} onClick={() => format('justifyLeft')} title="Align left"><AlignLeft className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => format('justifyCenter')} title="Align center"><AlignCenter className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => format('justifyRight')} title="Align right"><AlignRight className="h-4 w-4" /></button>
+        <span className="mx-1 h-5 w-px bg-[#DADCE5]" />
+        <button type="button" className={tool} onClick={addLink} title="Insert link"><Link2 className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => imageInputRef.current?.click()} title="Insert image"><ImageIcon className="h-4 w-4" /></button>
+        <button type="button" className={tool} onClick={() => fileInputRef.current?.click()} title="Attach files"><Paperclip className="h-4 w-4" /></button>
+        <button type="button" className={`${tool} ml-auto`} onClick={() => format('removeFormat')} title="Clear formatting"><span className="text-xs font-bold">Tx</span></button>
+        <input ref={imageInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple onChange={(e) => { onAddFiles(e.target.files, true); e.target.value = ''; }} />
+        <input ref={fileInputRef} className="hidden" type="file" multiple onChange={(e) => { onAddFiles(e.target.files); e.target.value = ''; }} />
+      </div>
+      <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={emitChange} data-placeholder="Write your email here…" className="min-h-[280px] max-h-[460px] overflow-y-auto px-5 py-4 text-[15px] leading-7 text-[#25262C] outline-none empty:before:pointer-events-none empty:before:text-[#9A9DA8] empty:before:content-[attr(data-placeholder)] [&_a]:text-[#7040DD] [&_a]:underline [&_h2]:mb-2 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-xl [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-3 [&_ul]:list-disc" />
+      <div className="border-t border-[#EEF0F4] px-4 py-2 text-xs text-[#8A8D99]">Formatting is preserved in the delivered email. Images can be inserted inline; other files appear as attachments.</div>
+    </div>
+  );
+}
+
 function ModalShell({
   title,
   subtitle,
@@ -266,6 +329,8 @@ export default function AdminUserDetailsPage() {
   const [emailSenderName, setEmailSenderName] = useState('Ghumakkars Support');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
+  const [emailHtml, setEmailHtml] = useState('');
+  const [emailAttachments, setEmailAttachments] = useState<EmailAttachment[]>([]);
   const [emailInstruction, setEmailInstruction] = useState('');
   const [emailLength, setEmailLength] = useState<'short' | 'standard' | 'detailed'>('standard');
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -496,6 +561,8 @@ export default function AdminUserDetailsPage() {
     setEmailDraftUpdated(false);
     setEmailSubject('');
     setEmailMessage('');
+    setEmailHtml('');
+    setEmailAttachments([]);
     setEmailInstruction('');
     setShowAiPanel(false);
     try {
@@ -531,6 +598,7 @@ export default function AdminUserDetailsPage() {
       if (!response.ok) throw new Error(data.error || 'Draft could not be generated');
       setEmailSubject(data.subject || '');
       setEmailMessage(data.body || '');
+      setEmailHtml(String(data.body || '').split(/\n{2,}/).map((p: string) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join(''));
       setEmailDraftGenerated(true);
       setEmailDraftUpdated(true);
       setTimeout(() => setEmailDraftUpdated(false), 1600);
@@ -553,6 +621,8 @@ export default function AdminUserDetailsPage() {
           senderName: emailSenderName,
           subject: emailSubject,
           message: emailMessage,
+          html: emailHtml,
+          attachments: emailAttachments,
           idempotencyKey: `${params.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
         }),
       });
@@ -568,6 +638,31 @@ export default function AdminUserDetailsPage() {
       setActionMessage({ type: 'error', text: error.message || 'Email could not be sent. Your draft has been preserved.' });
     } finally {
       setEmailSending(false);
+    }
+  };
+
+  const handleEmailFiles = async (files: FileList | null, inline = false) => {
+    if (!files?.length) return;
+    const selected = Array.from(files);
+    const currentSize = emailAttachments.reduce((total, file) => total + file.size, 0);
+    if (emailAttachments.length + selected.length > 8) {
+      setActionMessage({ type: 'error', text: 'You can add up to 8 files per email.' });
+      return;
+    }
+    if (selected.some((file) => file.size > 5 * 1024 * 1024) || currentSize + selected.reduce((sum, file) => sum + file.size, 0) > 12 * 1024 * 1024) {
+      setActionMessage({ type: 'error', text: 'Each file must be under 5 MB and the total must stay under 12 MB.' });
+      return;
+    }
+    const encoded = await Promise.all(selected.map((file) => new Promise<EmailAttachment>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ id: crypto.randomUUID(), name: file.name, type: file.type || 'application/octet-stream', size: file.size, content: String(reader.result).split(',')[1] || '' });
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+      reader.readAsDataURL(file);
+    })));
+    setEmailAttachments((current) => [...current, ...encoded]);
+    if (inline) {
+      const imageHtml = encoded.map((file) => `<p><img src="data:${file.type};base64,${file.content}" alt="${file.name.replace(/[<>\"]/g, '')}" style="max-width:100%;height:auto;border-radius:12px;" /></p>`).join('');
+      setEmailHtml((current) => `${current}${imageHtml}`);
     }
   };
 
@@ -947,7 +1042,7 @@ export default function AdminUserDetailsPage() {
           subtitle="Write and send an email directly from the Ghumakkars dashboard."
           icon={<Mail className="h-5 w-5" />}
           onClose={() => setShowEmailModal(false)}
-          width="max-w-3xl"
+          width="max-w-5xl"
           footer={(
             <>
               <Button className="sm:mr-auto" onClick={() => setShowEmailPreview((value) => !value)} disabled={!emailSubject.trim() && !emailMessage.trim()}>
@@ -961,10 +1056,10 @@ export default function AdminUserDetailsPage() {
           )}
         >
           <div className="space-y-5">
-            <div className="rounded-xl border border-[#E7E8EE] bg-[#FAFAFD] p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.08em] text-[#666873]">Customer</p>
-              <p className="mt-1 text-sm font-semibold text-[#17171C]">{fullName}</p>
-              <p className="mt-0.5 text-sm text-[#666873]">{user.email}</p>
+            <div className="flex items-center gap-3 rounded-xl border border-[#E7E8EE] bg-[#FAFAFD] px-4 py-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EDE7FF] text-sm font-bold text-[#7040DD]">{getInitials(fullName)}</div>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#17171C]">{fullName}</p><p className="truncate text-xs text-[#666873]">{user.email}</p></div>
+              <Badge className="ml-auto border-green-200 bg-green-50 text-green-700">Recipient</Badge>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1056,18 +1151,29 @@ export default function AdminUserDetailsPage() {
               )}
             </div>
 
-            <Field label="Message">
-              <textarea
-                value={emailMessage}
-                onChange={(event) => setEmailMessage(event.target.value)}
-                className={`${textareaCls} min-h-[260px] ${emailDraftUpdated ? 'ring-4 ring-[#8758F6]/10' : ''}`}
-                placeholder="Write your email here..."
-              />
-            </Field>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-medium text-[#4F5260]">Message</span><span className="text-xs text-[#8A8D99]">{emailMessage.length.toLocaleString()} characters</span></div>
+              <RichEmailEditor html={emailHtml} onChange={(html, text) => { setEmailHtml(html); setEmailMessage(text); }} onAddFiles={handleEmailFiles} />
+            </div>
+
+            {emailAttachments.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-[#4F5260]">Attachments ({emailAttachments.length})</p><p className="text-xs text-[#8A8D99]">{(emailAttachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(1)} MB total</p></div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {emailAttachments.map((file) => (
+                    <div key={file.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-[#E7E8EE] bg-[#FAFAFD] p-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#8758F6]"><Paperclip className="h-4 w-4" /></div>
+                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[#25262C]">{file.name}</p><p className="mt-0.5 text-[11px] text-[#8A8D99]">{file.type.split('/').pop()?.toUpperCase()} · {(file.size / 1024).toFixed(0)} KB</p></div>
+                      <button type="button" onClick={() => setEmailAttachments((current) => current.filter((item) => item.id !== file.id))} className="rounded-md p-1.5 text-[#8A8D99] hover:bg-red-50 hover:text-red-600" aria-label={`Remove ${file.name}`}><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => navigator.clipboard?.writeText(emailMessage)} disabled={!emailMessage.trim()}><Copy className="h-4 w-4" />Copy</Button>
-              <Button onClick={() => { setEmailSubject(''); setEmailMessage(''); setEmailDraftGenerated(false); }} disabled={!emailSubject && !emailMessage}>Clear</Button>
+              <Button onClick={() => { setEmailSubject(''); setEmailMessage(''); setEmailHtml(''); setEmailAttachments([]); setEmailDraftGenerated(false); }} disabled={!emailSubject && !emailMessage && !emailAttachments.length}>Clear</Button>
               {emailDraftGenerated && <span className="inline-flex items-center text-xs font-medium text-[#666873]">AI-generated draft. Review before sending.</span>}
             </div>
 
@@ -1080,9 +1186,8 @@ export default function AdminUserDetailsPage() {
                   <InfoRow label="Subject" value={emailSubject || 'Not provided'} />
                   <InfoRow label="Reply-to" value={emailSender === 'no-reply@ghumakkars.in' ? 'support@ghumakkars.in' : emailSender} />
                 </div>
-                <div className="mt-4 whitespace-pre-wrap rounded-xl border border-[#E7E8EE] bg-white p-4 text-sm leading-6 text-[#17171C]">
-                  {emailMessage || 'No message written yet.'}
-                </div>
+                <div className="mt-4 rounded-xl border border-[#E7E8EE] bg-white p-5 text-sm leading-6 text-[#17171C] [&_a]:text-[#7040DD] [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-xl" dangerouslySetInnerHTML={{ __html: emailHtml || '<span style="color:#8A8D99">No message written yet.</span>' }} />
+                {emailAttachments.length > 0 && <p className="mt-3 text-xs font-medium text-[#666873]"><Paperclip className="mr-1 inline h-3.5 w-3.5" />{emailAttachments.length} attachment{emailAttachments.length === 1 ? '' : 's'} included</p>}
               </div>
             )}
           </div>
