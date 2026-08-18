@@ -430,6 +430,8 @@ export async function sendAdminComposedEmail(options: {
   fromName: string;
   subject: string;
   text: string;
+  html?: string;
+  attachments?: Array<{ filename: string; content: string; encoding: 'base64'; contentType: string }>;
   replyTo?: string;
 }) {
   if (!isAllowedAdminSender(options.fromEmail)) {
@@ -439,7 +441,7 @@ export async function sendAdminComposedEmail(options: {
   const safeName = sanitizeHeaderValue(options.fromName || FROM_NAME).slice(0, 80);
   const safeSubject = sanitizeHeaderValue(options.subject).slice(0, 160);
   const text = String(options.text || '').slice(0, 12000);
-  const html = textToHtmlEmail(text, safeSubject);
+  const html = options.html?.trim() ? richTextToHtmlEmail(options.html, text, safeSubject) : textToHtmlEmail(text, safeSubject);
 
   return send({
     from: `"${safeName}" <${options.fromEmail}>`,
@@ -448,6 +450,7 @@ export async function sendAdminComposedEmail(options: {
     html,
     text,
     replyTo: options.replyTo || (options.fromEmail === EMAIL_ALIASES.noreply ? EMAIL_ALIASES.support : options.fromEmail),
+    attachments: options.attachments,
   });
 }
 
@@ -482,7 +485,18 @@ function textToHtmlEmail(text: string, subject: string) {
   });
 }
 
-async function send(mailOptions: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) {
+function richTextToHtmlEmail(html: string, text: string, subject: string) {
+  const styled = html
+    .replace(/<p(?:\s[^>]*)?>/gi, '<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#334155;">')
+    .replace(/<h2(?:\s[^>]*)?>/gi, '<h2 style="margin:20px 0 10px;font-size:22px;line-height:1.3;color:#111827;">')
+    .replace(/<h3(?:\s[^>]*)?>/gi, '<h3 style="margin:18px 0 8px;font-size:18px;line-height:1.4;color:#111827;">')
+    .replace(/<a\s/gi, '<a style="color:#7040dd;text-decoration:underline;" ')
+    .replace(/<(ul|ol)(?:\s[^>]*)?>/gi, '<$1 style="margin:0 0 16px;padding-left:24px;color:#334155;">')
+    .replace(/<li(?:\s[^>]*)?>/gi, '<li style="margin:5px 0;font-size:15px;line-height:1.6;">');
+  return renderEmail({ theme: 'brand', preheader: text.slice(0, 120), title: subject || 'A message from Ghumakkars', bodyHtml: styled });
+}
+
+async function send(mailOptions: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; attachments?: Array<{ filename: string; content: string; encoding: 'base64'; contentType: string }> }) {
   try {
     const info = await transporter.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
