@@ -1,503 +1,11 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Camera, Utensils, Mountain, Waves, Sunrise, Calendar, Users, Star, ArrowRight, Heart, Share2, Plane, TrendingUp, Clock, Check, Snowflake, Sun, CloudRain, ChevronDown } from 'lucide-react';
+import { ArrowLeft, MapPin, Mountain, Calendar, Users, Star, ArrowRight, Plane, TrendingUp, Clock, Check, Snowflake, Sun, CloudRain, ChevronDown, Utensils } from 'lucide-react';
 import ScrollAnimation from '@/components/ScrollAnimation';
-
-const destinationsData: Record<string, {
-  name: string;
-  slug: string;
-  image: string;
-  description: string;
-  location: string;
-  bestTime: string;
-  culture: {
-    title: string;
-    description: string;
-    highlights: string[];
-  };
-  bestThings: {
-    title: string;
-    items: {
-      icon: any;
-      name: string;
-      description: string;
-    }[];
-  };
-  gallery: string[];
-  tips: string[];
-  nearbyDestinations: string[];
-  // Optional rich article content (only some destinations have it)
-  intro?: string[];
-  whyVisit?: { text: string; highlights: string[] };
-  topPlaces?: { name: string; description: string; image?: string }[];
-  adventure?: { text: string; activities: string[]; treks?: string[] };
-  food?: { text: string; dishes: string[] };
-  seasons?: { name: string; months: string; points: string[] }[];
-  faqs?: { q: string; a: string }[];
-  altitude?: string;
-  nearestAirport?: string;
-  idealDuration?: string;
-}> = {
-  'manali': {
-    name: 'Manali',
-    slug: 'manali',
-    image: 'https://d2rdhxfof4qmbb.cloudfront.net/wp-content/uploads/2024/09/Manali_City.jpg',
-    description: 'Nestled in the Pir Panjal and Dhauladhar ranges of the Himalayas, Manali is a breathtaking hill station that offers stunning landscapes, adventure activities, and rich cultural experiences.',
-    location: 'Himachal Pradesh, India',
-    bestTime: 'March to June, October to February',
-    culture: {
-      title: 'Rich Himalayan Culture',
-      description: 'Manali is home to a vibrant mix of cultures with influences from Tibetan, Himachali, and Punjabi traditions. The region celebrates numerous festivals throughout the year, with colorful fairs, traditional music, and dance performances.',
-      highlights: [
-        'Traditional Himachali architecture with wooden houses',
-        'Tibetan monasteries and Buddhist influence',
-        'Local handicrafts including woolen shawls and carpets',
-        'Folk music and dance performances',
-        'Temple festivals and religious ceremonies',
-        'Warm hospitality of the mountain people'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        {
-          icon: Mountain,
-          name: 'Adventure Sports',
-          description: 'Paragliding, skiing, river rafting, ziplining, and trekking in the Himalayas'
-        },
-        {
-          icon: Camera,
-          name: 'Scenic Views',
-          description: 'Visit Rohtang Pass, Solang Valley, Hadimba Temple, and Jogini Falls'
-        },
-        {
-          icon: Utensils,
-          name: 'Local Cuisine',
-          description: 'Try traditional dishes like Dham, Sidu, Trout fish, and local apple products'
-        },
-        {
-          icon: Sunrise,
-          name: 'Nature Experiences',
-          description: 'Hot springs, wildlife sanctuaries, apple orchards, and mountain trekking'
-        }
-      ]
-    },
-    gallery: [
-      'https://s7ap1.scene7.com/is/image/incredibleindia/hidimba-temple-manali-himachal-pradesh-1-musthead-hero?qlt=82&ts=1726730732148',
-      'https://discoverkullumanali.in/wp-content/uploads/2020/11/Solang-valley-in-Manali-1089x530.jpg',
-      'https://s7ap1.scene7.com/is/image/incredibleindia/rohtang-pass-manali-himachal-pradesh-1-attr-hero?qlt=82&ts=1726730701545',
-      'https://apnayatra.com/wp-content/uploads/2025/03/Jogini-Waterfalls-Manali-3.jpg',
-      'https://d2rdhxfof4qmbb.cloudfront.net/wp-content/uploads/2024/09/Manali_City.jpg'
-    ],
-    tips: [
-      'Carry warm clothing throughout the year — even summer evenings get cold.',
-      'Book hotels and activities early during peak season (May–June, Dec–Jan).',
-      'Keep valid ID proof handy for permits and hotel check-ins.',
-      'Stay hydrated when travelling to higher altitudes like Rohtang.',
-      'Respect local customs and religious sites.',
-      'Carry some cash when visiting remote areas — ATMs are limited.',
-      'Check weather conditions before heading to Rohtang Pass.'
-    ],
-    nearbyDestinations: ['Solang Valley', 'Rohtang Pass', 'Sissu', 'Kasol', 'Tosh', 'Kullu', 'Naggar', 'Jibhi', 'Tirthan Valley'],
-    altitude: '~2,050 m above sea level',
-    nearestAirport: 'Bhuntar Airport (~50 km)',
-    idealDuration: '4 to 6 days',
-    intro: [
-      "Nestled in the heart of the Himalayas, Manali is one of India's most loved hill stations and a dream destination for nature lovers, adventure seekers, honeymooners, and backpackers. Surrounded by snow-capped peaks, dense pine forests, flowing rivers, and picturesque valleys, it's the perfect escape from busy city life.",
-      'Located in the Kullu district of Himachal Pradesh at roughly 2,050 metres above sea level, Manali is the gateway to iconic spots like Rohtang Pass, Solang Valley, Sissu, Atal Tunnel, and Leh-Ladakh. Whether you want thrilling adventure sports, peaceful mountain views, vibrant local culture, or a relaxed family holiday, Manali has something for everyone.'
-    ],
-    whyVisit: {
-      text: 'Manali combines breathtaking natural beauty with exciting outdoor experiences. From snow-covered landscapes in winter to lush green valleys in summer, every season offers a completely different charm.',
-      highlights: [
-        'Stunning Himalayan mountain views',
-        'Famous Solang Valley adventure activities',
-        'Scenic drives through Rohtang Pass and Atal Tunnel',
-        'Ancient temples and cultural landmarks',
-        'Riverside cafés and vibrant markets',
-        'Snowfall experiences in winter',
-        'Trekking routes for beginners and pros',
-        'A romantic getaway for couples'
-      ]
-    },
-    topPlaces: [
-      { name: 'Hadimba Devi Temple', description: 'Built amidst towering cedar forests, this iconic temple is known for its unique wooden architecture and peaceful surroundings. A must-visit in Manali.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/hidimba-temple-manali-himachal-pradesh-1-musthead-hero?qlt=82&ts=1726730732148' },
-      { name: 'Solang Valley', description: 'The adventure capital of Manali — paragliding, ziplining, ATV rides, skiing, snowboarding, and cable car experiences all in one stunning valley.', image: 'https://discoverkullumanali.in/wp-content/uploads/2020/11/Solang-valley-in-Manali-1089x530.jpg' },
-      { name: 'Rohtang Pass', description: 'At over 13,000 feet, Rohtang offers breathtaking panoramic views of glaciers, mountains and valleys. One of the most popular day trips from Manali.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/rohtang-pass-manali-himachal-pradesh-1-attr-hero?qlt=82&ts=1726730701545' },
-      { name: 'Jogini Waterfall', description: 'A scenic trek through pine forests and local villages leads to this beautiful waterfall — perfect for photography and nature lovers.', image: 'https://apnayatra.com/wp-content/uploads/2025/03/Jogini-Waterfalls-Manali-3.jpg' },
-      { name: 'Old Manali', description: 'Famous for its relaxed atmosphere, charming cafés, live music venues and backpacker culture — a completely different vibe from the main town.' },
-      { name: 'Manu Temple', description: 'Dedicated to Sage Manu, this historic temple is an important cultural and spiritual landmark set in the quiet surroundings of Old Manali.' }
-    ],
-    adventure: {
-      text: "Manali is one of India's leading adventure tourism destinations, with activities for every thrill level.",
-      activities: [
-        'Paragliding in Solang Valley',
-        'River rafting on the Beas River',
-        'Skiing and snowboarding in winter',
-        'Mountain biking trails',
-        'Ziplining and rope activities',
-        'ATV rides',
-        'Camping under the stars',
-        'Himalayan trekking expeditions'
-      ],
-      treks: ['Hampta Pass Trek', 'Bhrigu Lake Trek', 'Beas Kund Trek', 'Chandrakhani Pass Trek']
-    },
-    food: {
-      text: 'A trip to Manali is incomplete without experiencing local Himachali cuisine. The cafés of Old Manali also serve a wide range of international dishes.',
-      dishes: ['Himachali Dham', 'Sidu', 'Babru', 'Trout Fish', 'Madra', 'Chha Gosht', 'Local apple cider & apple products', 'Fresh mountain honey']
-    },
-    seasons: [
-      { name: 'Summer', months: 'March to June', points: ['Pleasant weather', 'Ideal for sightseeing', 'Peak adventure-sports season', 'Perfect for family vacations'] },
-      { name: 'Monsoon', months: 'July to September', points: ['Lush green landscapes', 'Fewer crowds', 'Occasional landslides & road disruptions'] },
-      { name: 'Winter', months: 'October to February', points: ['Snowfall season', 'Skiing & snow activities', 'Romantic atmosphere for couples', 'Spectacular mountain views'] }
-    ],
-    faqs: [
-      { q: 'Is Manali worth visiting?', a: "Yes. Manali is one of India's most scenic mountain destinations and offers a perfect mix of nature, adventure, culture and relaxation." },
-      { q: 'How many days are enough for Manali?', a: 'A 4 to 6-day trip is ideal for exploring the major attractions and nearby destinations.' },
-      { q: 'Does Manali receive snowfall?', a: 'Yes. Snowfall typically occurs between December and February.' },
-      { q: 'Is Manali suitable for family trips?', a: 'Absolutely. Families, couples, solo travellers and groups all enjoy Manali’s diverse experiences.' },
-      { q: 'What is the nearest airport to Manali?', a: 'Bhuntar Airport, around 50 km away, is the nearest airport.' }
-    ]
-  },
-  'mussorie': {
-    name: 'Mussoorie',
-    slug: 'mussorie',
-    image: 'https://hblimg.mmtcdn.com/content/hubble/img/destimg/mmt/destination/m_Mussorrie_main_tv_destination_img_1_l_639_958.jpg',
-    description: 'Known as the "Queen of the Hills", Mussoorie is a charming hill station in Uttarakhand offering colonial architecture, beautiful waterfalls, and panoramic views of the Himalayan ranges.',
-    location: 'Uttarakhand, India',
-    bestTime: 'March to June, September to February',
-    culture: {
-      title: 'Colonial & Himalayan Heritage',
-      description: "Mussoorie's culture is influenced by Garhwali traditions, colonial history, and modern tourism. The town's heritage buildings, churches, old libraries, and local markets reflect its rich significance as a British-era hill station.",
-      highlights: [
-        'Traditional Garhwali hospitality',
-        'Colonial-era architecture',
-        'Local handicrafts and souvenirs',
-        'Historic churches and heritage buildings',
-        'Seasonal festivals and cultural events',
-        'Traditional Uttarakhand cuisine'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        { icon: Camera, name: 'Scenic Viewpoints', description: 'Gun Hill, Lal Tibba, and Camel\'s Back Road for panoramic Himalayan views' },
-        { icon: Mountain, name: 'Nature & Adventure', description: 'Ropeway rides, trekking trails, ziplining, and waterfall exploration' },
-        { icon: Utensils, name: 'Cafés & Local Food', description: 'Garhwali thali, Bal Mithai, momos, and cosy Landour cafés' },
-        { icon: Sunrise, name: 'Heritage Walks', description: 'Mall Road, colonial bungalows, old churches, and Landour\'s old-world charm' }
-      ]
-    },
-    gallery: [
-      'https://img.avianexperiences.com/attraction/68948e9d-be4b-4f88-8f61-e42de809c639',
-      'https://s7ap1.scene7.com/is/image/incredibleindia/gun-hill-top-mussourie-uttarakhand-1-attr-hero?qlt=82&ts=1727352381893',
-      'https://media.holidify.com/images/cmsuploads/compressed/uk-mussoorie-camels-back-road-01_20241205154031.jpg',
-      'https://i0.wp.com/stampedmoments.com/wp-content/uploads/2025/07/landour-street.jpg?fit=1024%2C768&ssl=1',
-      'https://mussoorietourism.co.in/images/tourist-places/company-garden-mussoorie/company-garden-mussoorie-tourism-holidays-closed-on-timings.jpg'
-    ],
-    tips: [
-      'Carry warm clothing even during summer evenings.',
-      'Wear comfortable walking shoes — there\'s a lot to explore on foot.',
-      'Book hotels in advance during weekends and holidays.',
-      'Start sightseeing early to avoid traffic congestion.',
-      'Keep cash handy for local purchases.',
-      'Respect local customs and environmental guidelines.',
-      'Avoid peak hours around Mall Road and Kempty Falls.'
-    ],
-    nearbyDestinations: ['Landour', 'Dhanaulti', 'Dehradun', 'Kanatal', 'Chakrata', 'Tehri Lake', 'George Everest Peak', 'Surkanda Devi Temple'],
-    altitude: '~2,000 m above sea level',
-    nearestAirport: 'Jolly Grant, Dehradun (~60 km)',
-    idealDuration: '2 to 3 days',
-    intro: [
-      'Popularly known as the "Queen of the Hills", Mussoorie is one of India\'s most iconic hill stations, nestled in the picturesque Garhwal Himalayas of Uttarakhand. Perched at around 2,000 metres above sea level, this charming mountain town offers breathtaking Himalayan views, colonial-era architecture, scenic walking trails, waterfalls, and a peaceful escape from city life.',
-      'Located just a short drive from Dehradun, Mussoorie attracts honeymooners, families, solo travellers, photographers, and adventure enthusiasts all year round. Whether you want mist-covered mountains, vibrant cafés, nature walks, or stunning viewpoints, Mussoorie delivers an unforgettable Himalayan experience.'
-    ],
-    whyVisit: {
-      text: 'Mussoorie perfectly blends natural beauty, colonial heritage, and modern tourism facilities — panoramic snow-capped peaks, lush green valleys, waterfalls, bustling markets, and charming cafés.',
-      highlights: [
-        'Spectacular Himalayan mountain views',
-        'Famous Mall Road shopping and cafés',
-        'Beautiful waterfalls and nature trails',
-        'Colonial-era architecture and heritage sites',
-        'Ropeway rides and scenic viewpoints',
-        'A romantic getaway for couples',
-        'Pleasant weather most of the year',
-        'Easy access from Delhi and Dehradun'
-      ]
-    },
-    topPlaces: [
-      { name: 'Kempty Falls', description: 'One of Mussoorie\'s most famous attractions, surrounded by scenic hills and lush greenery. About 15 km from town, it\'s a favourite picnic spot for a refreshing mountain experience.', image: 'https://img.avianexperiences.com/attraction/68948e9d-be4b-4f88-8f61-e42de809c639' },
-      { name: 'Gun Hill', description: 'The second-highest peak in Mussoorie, offering stunning panoramic views of the Garhwal Himalayas and Doon Valley. Reach the viewpoint via an exciting ropeway ride from Mall Road.', image: 'https://s7ap1.scene7.com/is/image/incredibleindia/gun-hill-top-mussourie-uttarakhand-1-attr-hero?qlt=82&ts=1727352381893' },
-      { name: 'Lal Tibba', description: 'Located in Landour, Lal Tibba is the highest viewpoint in the region. On clear days you can see snow-covered Himalayan peaks through observation telescopes.', image: 'https://themanorhousehomestays.com/wp-content/uploads/2026/03/scscdw.png' },
-      { name: 'Mall Road', description: 'The heart of Mussoorie — lined with cafés, restaurants, bakeries, and souvenir shops. Perfect for evening strolls, shopping, and soaking up the lively atmosphere.', image: 'https://img.avianexperiences.com/attractions/f7842913-c82c-4be2-b5d5-2841824f7d42' },
-      { name: 'Camel\'s Back Road', description: 'Known for peaceful walking trails and spectacular sunset views, this serene route offers an escape from the crowds with stunning mountain vistas.', image: 'https://media.holidify.com/images/cmsuploads/compressed/uk-mussoorie-camels-back-road-01_20241205154031.jpg' },
-      { name: 'Landour', description: 'A charming colonial town next to Mussoorie, famous for its peaceful atmosphere, heritage buildings, scenic cafés, and old-world charm.', image: 'https://i0.wp.com/stampedmoments.com/wp-content/uploads/2025/07/landour-street.jpg?fit=1024%2C768&ssl=1' },
-      { name: 'Company Garden', description: 'A beautifully maintained garden with colourful flowers, boating, and recreational activities — a popular spot for families.', image: 'https://mussoorietourism.co.in/images/tourist-places/company-garden-mussoorie/company-garden-mussoorie-tourism-holidays-closed-on-timings.jpg' }
-    ],
-    adventure: {
-      text: 'Mussoorie offers plenty of outdoor activities for adventure lovers and nature enthusiasts, plus excellent nature walks and birdwatching in the surrounding hills.',
-      activities: [
-        'Ropeway ride to Gun Hill',
-        'Trekking and hiking trails',
-        'Ziplining and adventure activities',
-        'Nature photography',
-        'Mountain biking',
-        'Camping experiences',
-        'Horse riding',
-        'Waterfall exploration'
-      ]
-    },
-    food: {
-      text: 'A visit to Mussoorie is incomplete without exploring its food culture. The cafés of Mussoorie and Landour are especially loved for their scenic views and cosy atmosphere.',
-      dishes: ['Garhwali Thali', 'Kafuli', 'Aloo Ke Gutke', 'Chainsoo', 'Bal Mithai', 'Momos & Tibetan food', 'Fresh bakery products', 'Local mountain tea']
-    },
-    seasons: [
-      { name: 'Summer', months: 'March to June', points: ['Pleasant weather', 'Ideal for sightseeing', 'Great for family vacations', 'Adventure activities in full swing'] },
-      { name: 'Monsoon', months: 'July to September', points: ['Lush green landscapes', 'Beautiful cloud-covered mountains', 'Fewer crowds', 'Occasional road disruptions'] },
-      { name: 'Winter', months: 'October to February', points: ['Cold temperatures', 'Chance of snowfall', 'Romantic atmosphere', 'Clear Himalayan views'] }
-    ],
-    faqs: [
-      { q: 'Why is Mussoorie called the Queen of the Hills?', a: 'Mussoorie earned the title for its stunning mountain scenery, pleasant climate, colonial charm, and popularity as one of India\'s most beautiful hill stations.' },
-      { q: 'Is 2 days enough for Mussoorie?', a: 'Yes. A 2 to 3-day trip is enough to cover major attractions like Mall Road, Gun Hill, Kempty Falls, Landour, and Lal Tibba.' },
-      { q: 'Does Mussoorie receive snowfall?', a: 'Yes. Snowfall usually occurs during December and January, drawing visitors from across India.' },
-      { q: 'Is Mussoorie suitable for family trips?', a: 'Absolutely. Mussoorie has family-friendly attractions, scenic viewpoints, gardens, waterfalls, and comfortable stays.' },
-      { q: 'What is the nearest airport and railway station?', a: 'The nearest airport is Jolly Grant Airport in Dehradun, and Dehradun Railway Station is the nearest major railhead.' }
-    ]
-  },
-  'kasol': {
-    name: 'Kasol',
-    slug: 'kasol',
-    image: 'https://indotoursadventures.com/public/storage/blogs/165dec86f3683b83a19a09d0345dd8e2.jpg?w=800&h=600&fit=crop',
-    description: 'Kasol is a paradise for trekkers and nature lovers, nestled along the Parvati River. Known as "Mini Israel" for its Israeli influence, it offers stunning landscapes and a laid-back hippie culture.',
-    location: 'Himachal Pradesh, India',
-    bestTime: 'April to June, October to November',
-    culture: {
-      title: 'Hippie Culture & Mountain Traditions',
-      description: 'Kasol is a melting pot of cultures with a strong Israeli backpacker community and traditional Himachali roots. The town has a relaxed, bohemian atmosphere with cafes, music, and spiritual vibes.',
-      highlights: [
-        'Israeli cafes and international cuisine',
-        'Hippie culture and backpacker community',
-        'Traditional Himachali villages nearby',
-        'Music festivals and cultural events',
-        'Spiritual retreats and yoga sessions',
-        'Mix of local and international influences'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        {
-          icon: Mountain,
-          name: 'Trekking',
-          description: 'Kheerganga trek, Malana village, Tosh, Grahan, and Rasol treks'
-        },
-        {
-          icon: Waves,
-          name: 'Riverside Activities',
-          description: 'Camping by Parvati River, bonfires, and riverside cafes'
-        },
-        {
-          icon: Utensils,
-          name: 'Cafe Culture',
-          description: 'Try Israeli food, pancakes, momos, and international cuisine at local cafes'
-        },
-        {
-          icon: Sunrise,
-          name: 'Nature & Spirituality',
-          description: 'Hot springs at Kheerganga, meditation, and nature immersion'
-        }
-      ]
-    },
-    gallery: [
-      'https://indotoursadventures.com/public/storage/blogs/165dec86f3683b83a19a09d0345dd8e2.jpg?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop'
-    ],
-    tips: [
-      'Ideal for backpackers and adventure enthusiasts',
-      'Carry trekking gear if planning treks',
-      'Respect local customs and environment',
-      'Try Israeli cuisine at cafes',
-      'Best for solo travelers and groups',
-      'Carry cash as card facilities are limited'
-    ],
-    nearbyDestinations: ['Tosh', 'Malana', 'Manikaran', 'Manali']
-  },
-  'rishikesh': {
-    name: 'Rishikesh',
-    slug: 'rishikesh',
-    image: 'https://s7ap1.scene7.com/is/image/incredibleindia/1-triveni-ghat-rishikesh-uttarakhand-2-city-hero?',
-    description: 'The "Yoga Capital of the World", Rishikesh is a spiritual hub on the banks of the Ganges River, offering yoga, meditation, adventure sports, and ancient temples.',
-    location: 'Uttarakhand, India',
-    bestTime: 'February to May, September to November',
-    culture: {
-      title: 'Spiritual & Adventure Culture',
-      description: 'Rishikesh is a unique blend of ancient spirituality and modern adventure tourism. It\'s a center for yoga, meditation, and Hindu philosophy, while also attracting adventure enthusiasts from around the world.',
-      highlights: [
-        'Yoga and meditation centers',
-        'Evening Ganga Aarti ceremonies',
-        'Ancient temples and ashrams',
-        'Vegetarian culture and healthy food',
-        'Spiritual festivals and events',
-        'Mix of traditional and modern practices'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        {
-          icon: Sunrise,
-          name: 'Spiritual Experiences',
-          description: 'Yoga classes, meditation, Ganga Aarti, temple visits, and ashram stays'
-        },
-        {
-          icon: Mountain,
-          name: 'Adventure Sports',
-          description: 'River rafting, bungee jumping, rock climbing, and cliff jumping'
-        },
-        {
-          icon: Camera,
-          name: 'Iconic Bridges',
-          description: 'Visit Lakshman Jhula, Ram Jhula, and Triveni Ghat'
-        },
-        {
-          icon: Utensils,
-          name: 'Healthy Cuisine',
-          description: 'Vegetarian food, organic cafes, and healthy eating options'
-        }
-      ]
-    },
-    gallery: [
-      'https://s7ap1.scene7.com/is/image/incredibleindia/1-triveni-ghat-rishikesh-uttarakhand-2-city-hero?',
-      'https://images.unsplash.com/photo-1606811971618-4486c44f78e8?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=800&h=600&fit=crop'
-    ],
-    tips: [
-      'No alcohol or non-vegetarian food in main areas',
-      'Attend evening Ganga Aarti for spiritual experience',
-      'Book rafting and adventure activities in advance',
-      'Carry light cotton clothes for summer',
-      'Respect spiritual atmosphere and local customs'
-    ],
-    nearbyDestinations: ['Haridwar', 'Dehradun', 'Mussoorie', 'Deoprayag']
-  },
-  'dalhousie': {
-    name: 'Dalhousie',
-    slug: 'dalhousie',
-    image: '/images/destinations/dalhousie.webp',
-    description: 'A beautiful colonial hill station in Himachal Pradesh, Dalhousie is known for its old-world charm, pine-clad valleys, and stunning views of the Dhauladhar ranges.',
-    location: 'Himachal Pradesh, India',
-    bestTime: 'March to June, September to October',
-    culture: {
-      title: 'Colonial & Mountain Culture',
-      description: 'Dalhousie retains its colonial character with old British architecture, churches, and peaceful atmosphere. The town blends British heritage with traditional Himachali culture.',
-      highlights: [
-        'British colonial architecture',
-        'Ancient churches and heritage buildings',
-        'Himachali traditions and customs',
-        'Peaceful and serene atmosphere',
-        'Local handicrafts and woolens',
-        'Traditional festivals and celebrations'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        {
-          icon: Camera,
-          name: 'Scenic Views',
-          description: 'Visit Panch Pulla, Satdhara Falls, Dainkund Peak, and Subhash Baoli'
-        },
-        {
-          icon: Mountain,
-          name: 'Nature Walks',
-          description: 'Trekking, nature trails, and peaceful walks through pine forests'
-        },
-        {
-          icon: Utensils,
-          name: 'Local Food',
-          description: 'Himachali cuisine, momos, and Tibetan food'
-        },
-        {
-          icon: Sunrise,
-          name: 'Heritage Sites',
-          description: 'St. John\'s Church, St. Francis Church, and colonial bungalows'
-        }
-      ]
-    },
-    gallery: [
-      '/images/destinations/dalhousie.webp',
-      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop'
-    ],
-    tips: [
-      'Best for peace and tranquility seekers',
-      'Carry warm clothes as it can get cold',
-      'Perfect for nature lovers and photographers',
-      'Visit during off-season for solitude',
-      'Enjoy slow-paced exploration'
-    ],
-    nearbyDestinations: ['Khajjiar', 'Chamba', 'Dharamshala', 'McLeod Ganj']
-  },
-  'spiti': {
-    name: 'Spiti',
-    slug: 'spiti',
-    image: 'https://4cornersoftheworld.blog/wp-content/uploads/2020/08/920d8-1512812465_maxresdefault.jpg.jpg?w=800&h=600&fit=crop',
-    description: 'A cold desert mountain valley in Himachal Pradesh, Spiti is a remote and pristine destination offering Buddhist monasteries, rugged landscapes, and unique culture.',
-    location: 'Himachal Pradesh, India',
-    bestTime: 'May to October',
-    culture: {
-      title: 'Tibetan Buddhist Culture',
-      description: 'Spiti is deeply influenced by Tibetan Buddhism with ancient monasteries, prayer flags, and traditional Tibetan lifestyle. The region has preserved its unique culture and traditions for centuries.',
-      highlights: [
-        'Buddhist monasteries (gompas)',
-        'Tibetan architecture and art',
-        'Prayer wheels and prayer flags',
-        'Traditional Tibetan festivals',
-        'Ancient Buddhist manuscripts',
-        'Unique Spitian dialect and customs'
-      ]
-    },
-    bestThings: {
-      title: 'Best Things to Do',
-      items: [
-        {
-          icon: Sunrise,
-          name: 'Monastery Visits',
-          description: 'Key Monastery, Tabo Monastery, Dhankar Monastery, and Komic Monastery'
-        },
-        {
-          icon: Camera,
-          name: 'Stunning Landscapes',
-          description: 'Chandratal Lake, Pin Valley, Kunzum Pass, and Langza fossil village'
-        },
-        {
-          icon: Mountain,
-          name: 'Adventure',
-          description: 'Trekking, camping, and exploring high-altitude villages'
-        },
-        {
-          icon: Star,
-          name: 'Stargazing',
-          description: 'One of the best places for stargazing in India due to clear skies'
-        }
-      ]
-    },
-    gallery: [
-      'https://4cornersoftheworld.blog/wp-content/uploads/2020/08/920d8-1512812465_maxresdefault.jpg.jpg?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop'
-    ],
-    tips: [
-      'Requires inner line permit for foreigners',
-      'Carry warm clothes as temperatures are extreme',
-      'Limited accommodation, book in advance',
-      'Best explored by experienced travelers',
-      'Respect local customs and monasteries',
-      'Carry necessary medications for altitude'
-    ],
-    nearbyDestinations: ['Kaza', 'Kibber', 'Hikkim', 'Kunzum Pass']
-  }
-};
+import SafeImage from '@/components/SafeImage';
+import { destinationsData, getDestination, nearbySlug } from '@/lib/destinations';
+import { photoCredits } from '@/lib/photo-credits';
 
 // Pre-render every destination page at build time (SSG). The content is 100%
 // static hardcoded data, so there is no reason to render it on the client —
@@ -507,7 +15,7 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const dest = destinationsData[params.slug?.toLowerCase()];
+  const dest = getDestination(params.slug);
   if (!dest) return {};
   return {
     title: `${dest.name} Travel Guide — Best Things to Do, Culture & Tips`,
@@ -522,12 +30,21 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default function DestinationDetailPage({ params }: { params: { slug: string } }) {
-  // `any` mirrors the previous `useState<any>` typing exactly, so the JSX below
-  // is unchanged and no new type constraints are introduced.
-  const destination: any = destinationsData[params.slug?.toLowerCase()];
+  const destination = getDestination(params.slug);
 
   // Unknown slug → home, preserving the previous router.push('/') behaviour.
   if (!destination) redirect('/');
+  // Old or alternative spelling → canonical URL.
+  if (params.slug !== destination.slug) redirect(`/destinations/${destination.slug}`);
+
+  // Every self-hosted Commons photo shown on this page, credited once each.
+  const credits = Array.from(new Set([
+    destination.image,
+    ...(destination.topPlaces ?? []).map((p) => p.image),
+    ...destination.gallery.map((g) => g.src),
+  ]))
+    .filter((src): src is string => !!src && src in photoCredits)
+    .map((src) => photoCredits[src]);
 
   return (
     <div className="min-h-screen pt-16 md:pt-20 bg-gradient-to-b from-purple-50/30 via-white to-purple-50/30">
@@ -549,7 +66,7 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
         />
       )}
       {/* Hero Section */}
-      <div className="relative h-96 md:h-[500px] lg:h-[600px] overflow-hidden">
+      <div className="relative h-96 md:h-[500px] lg:h-[600px] overflow-hidden bg-purple-950">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${destination.image})` }}
@@ -568,7 +85,7 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
             <h1 className="text-4xl md:text-5xl lg:text-7xl font-light text-white mb-4 tracking-tight">
               {destination.name}
             </h1>
-            <div className="flex items-center space-x-6 text-white/90 text-sm md:text-base">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-white/90 text-sm md:text-base">
               <div className="flex items-center">
                 <MapPin className="h-5 w-5 mr-2" />
                 <span>{destination.location}</span>
@@ -659,7 +176,7 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
                 <div key={i} className="bg-white rounded-2xl border border-purple-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group">
                   {place.image && (
                     <div className="h-48 overflow-hidden">
-                      <img src={place.image} alt={place.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <SafeImage src={place.image} alt={place.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     </div>
                   )}
                   <div className="p-5 sm:p-6">
@@ -800,17 +317,18 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {destination.gallery.map((image, index) => (
-                <div
+                <figure
                   key={index}
-                  className="relative h-64 rounded-xl overflow-hidden group cursor-pointer"
+                  className="relative h-64 rounded-xl overflow-hidden group"
                 >
-                  <img
-                    src={image}
-                    alt={`${destination.name} ${index + 1}`}
+                  <SafeImage
+                    src={image.src}
+                    alt={image.alt}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <figcaption className="absolute bottom-0 inset-x-0 p-3 text-sm font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">{image.alt}</figcaption>
+                </figure>
               ))}
             </div>
           </ScrollAnimation>
@@ -840,18 +358,30 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
                 Nearby Destinations
               </h2>
               <div className="space-y-3">
-                {destination.nearbyDestinations.map((dest, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group cursor-pointer"
-                  >
+                {destination.nearbyDestinations.map((dest, index) => {
+                  const slug = nearbySlug(dest);
+                  const label = (
                     <div className="flex items-center space-x-3">
                       <MapPin className="h-5 w-5 text-purple-600" />
                       <span className="text-gray-900 font-medium">{dest}</span>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-purple-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-                  </div>
-                ))}
+                  );
+                  // Only places with their own guide page are links.
+                  return slug ? (
+                    <Link
+                      key={index}
+                      href={`/destinations/${slug}`}
+                      className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group"
+                    >
+                      {label}
+                      <ArrowRight className="h-4 w-4 text-purple-600 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  ) : (
+                    <div key={index} className="flex items-center p-3 bg-purple-50 rounded-lg">
+                      {label}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </ScrollAnimation>
@@ -902,6 +432,22 @@ export default function DestinationDetailPage({ params }: { params: { slug: stri
             </div>
           </div>
         </ScrollAnimation>
+
+        {/* Photo credits for the Wikimedia Commons images on this page */}
+        {credits.length > 0 && (
+          <p className="mt-10 text-xs text-gray-400 leading-relaxed">
+            Photos via Wikimedia Commons:{' '}
+            {credits.map((c, i) => (
+              <span key={c.source}>
+                {i > 0 && ' · '}
+                <a href={c.source} target="_blank" rel="noopener noreferrer" className="hover:text-purple-600 underline-offset-2 hover:underline">
+                  {c.author}
+                </a>{' '}
+                ({c.license})
+              </span>
+            ))}
+          </p>
+        )}
       </div>
     </div>
   );

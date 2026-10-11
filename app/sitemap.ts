@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSiteUrl } from '@/lib/site-url';
+import { destinationsData } from '@/lib/destinations';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
@@ -17,6 +18,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/auth/signup`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.3 },
   ];
 
+  const destinationPages: MetadataRoute.Sitemap = Object.keys(destinationsData).map((slug) => ({
+    url: `${siteUrl}/destinations/${slug}`,
+    lastModified: new Date('2026-10-11'),
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }));
+
   try {
     const supabase = createAdminClient();
     const { data: trips } = await supabase
@@ -31,8 +39,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: trip.is_active ? 0.8 : 0.4,
     }));
 
-    return [...staticPages, ...tripPages];
+    return [...staticPages, ...destinationPages, ...tripPages];
   } catch {
-    return staticPages;
+    return [...staticPages, ...destinationPages];
   }
 }
