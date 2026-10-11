@@ -383,7 +383,7 @@ const destinationsData: Record<string, {
   'dalhousie': {
     name: 'Dalhousie',
     slug: 'dalhousie',
-    image: 'https://skysafar.in/wp-content/uploads/2024/09/Untitled-design-10.png?w=800&h=600&fit=crop',
+    image: '/images/destinations/dalhousie.webp',
     description: 'A beautiful colonial hill station in Himachal Pradesh, Dalhousie is known for its old-world charm, pine-clad valleys, and stunning views of the Dhauladhar ranges.',
     location: 'Himachal Pradesh, India',
     bestTime: 'March to June, September to October',
@@ -425,7 +425,7 @@ const destinationsData: Record<string, {
       ]
     },
     gallery: [
-      'https://skysafar.in/wp-content/uploads/2024/09/Untitled-design-10.png?w=800&h=600&fit=crop',
+      '/images/destinations/dalhousie.webp',
       'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&h=600&fit=crop',
       'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop'
     ],

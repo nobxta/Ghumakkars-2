@@ -29,7 +29,7 @@ const destinations = [
   {
     name: 'Dalhousie',
     slug: 'dalhousie',
-    image: 'https://skysafar.in/wp-content/uploads/2024/09/Untitled-design-10.png?w=800&h=600&fit=crop',
+    image: '/images/destinations/dalhousie.webp',
   },
   {
     name: 'Spiti',
