@@ -22,7 +22,7 @@ export default function Footer() {
               thoughtfully curated, budget-friendly group trips.
             </p>
             <div className="flex space-x-3">
-              <a href="https://instagram.com/ghumakkars.in" target="_blank" rel="noopener noreferrer"
+              <a href="https://www.instagram.com/ghumakkars_in" target="_blank" rel="noopener noreferrer"
                  className="w-9 h-9 rounded-full bg-purple-100 hover:bg-purple-600 hover:text-white text-purple-700 flex items-center justify-center transition-colors" aria-label="Instagram">
                 <Instagram className="h-4 w-4" />
               </a>

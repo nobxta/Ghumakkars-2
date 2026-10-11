@@ -54,8 +54,8 @@ export default function ContactPage() {
           <ContactCard
             icon={<Instagram className="h-5 w-5 text-pink-600" />}
             label="Instagram"
-            value="@ghumakkars.in"
-            href="https://instagram.com/ghumakkars.in"
+            value="@ghumakkars_in"
+            href="https://www.instagram.com/ghumakkars_in"
             iconBg="bg-pink-100"
           />
           <ContactCard

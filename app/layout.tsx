@@ -112,7 +112,7 @@ export default function RootLayout({
       addressCountry: "IN",
     },
     sameAs: [
-      "https://instagram.com/ghumakkars",
+      "https://www.instagram.com/ghumakkars_in",
     ],
     priceRange: "₹₹",
     areaServed: { "@type": "Country", name: "India" },

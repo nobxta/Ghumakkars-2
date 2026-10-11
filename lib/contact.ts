@@ -22,7 +22,7 @@ export const CONTACT = {
   contactEmail: 'Contact@ghumakkars.in',
   bookingsEmail: 'bookings@ghumakkars.in',
   /** Social */
-  instagram: 'https://instagram.com/ghumakkars.in',
+  instagram: 'https://www.instagram.com/ghumakkars_in',
   /** Location */
   address: 'Mathura, Uttar Pradesh, India',
   /** Brand */

@@ -12,7 +12,7 @@ const BRAND = {
   supportEmail: 'support@ghumakkars.in',
   whatsapp: '+91 82180 20972',
   whatsappLink: 'https://wa.me/918218020972',
-  instagram: 'https://instagram.com/ghumakkars.in',
+  instagram: 'https://www.instagram.com/ghumakkars_in',
   tagline: 'Group trips across India',
 };
 
