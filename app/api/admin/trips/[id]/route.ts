@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { revalidatePublicTrips } from '@/lib/revalidate-trips';
+import { paidOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -101,17 +102,9 @@ export async function GET(
       !['cancelled', 'rejected'].includes(b.booking_status)
     ) || [];
 
-    const verifiedPayments = earningBookings.flatMap((booking: any) =>
-      booking.payment_transactions?.filter((pt: any) => pt.payment_status === 'verified') || []
-    );
-
-    const offlineRevenue = earningBookings
-      .filter((b: any) => b.is_offline_booking || !b.user_id)
-      .reduce((sum: number, b: any) => sum + parseFloat(String(b.amount_paid || 0)), 0);
-
-    const totalRevenue = verifiedPayments.reduce((sum: number, pt: any) =>
-      sum + parseFloat(String(pt.amount || 0)), 0
-    ) + offlineRevenue;
+    // Money actually kept: ledger minus refunds (legacy offline rows fall back to
+    // amount_paid). Offline bookings with a ledger row are counted once.
+    const totalRevenue = earningBookings.reduce((sum: number, b: any) => sum + paidOf(b), 0);
 
     const totalParticipants = bookings?.reduce((sum: number, b: any) => 
       sum + (parseInt(String(b.number_of_participants || 1))), 0

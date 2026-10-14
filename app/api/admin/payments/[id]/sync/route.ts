@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import Razorpay from 'razorpay';
+import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,6 +102,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   }
 
   await admin.from('payment_transactions').update(update).eq('id', pt.id);
+  // Refund status + the booking's paid/payment-status mirrors follow the synced refunds.
+  if (refundCount > 0) await syncRazorpayRefundTotals(admin, pt.id);
 
   return NextResponse.json({ synced: true, razorpay: p, refunds_synced: refundCount });
 }

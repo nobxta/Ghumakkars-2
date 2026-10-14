@@ -124,14 +124,33 @@ export default function AdminBookingDetailsPage() {
     setManaging(true);
     try {
       if (refundMethod === 'razorpay') {
-        const rzp = (booking.payment_transactions || []).find((t: any) => t.payment_mode === 'razorpay' && ['verified', 'partially_refunded'].includes(t.payment_status));
-        if (!rzp) throw new Error('No Razorpay payment found to refund online. Use a cash refund instead.');
-        const res = await fetch(`/api/admin/payments/${rzp.id}/refund`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: amt, reason: refundNotes }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Razorpay refund failed');
+        // A booking can have several Razorpay payments (seat lock + balance). Spread
+        // the refund across them, newest first, each up to what it still has.
+        const rzps = (booking.payment_transactions || [])
+          .filter((t: any) => t.payment_mode === 'razorpay' && ['verified', 'partially_refunded'].includes(t.payment_status))
+          .map((t: any) => ({ id: t.id, left: Math.max(0, Number(t.amount || 0) - Number(t.amount_refunded || 0)), at: t.created_at }))
+          .filter((t: any) => t.left > 0.001)
+          .sort((a: any, b: any) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime());
+        if (rzps.length === 0) throw new Error('No Razorpay payment found to refund online. Use a cash refund instead.');
+        const refundable = rzps.reduce((s: number, t: any) => s + t.left, 0);
+        if (amt > refundable + 0.001) throw new Error(`Only ₹${refundable.toLocaleString('en-IN')} can be refunded online via Razorpay.`);
+        let left = amt;
+        let done = 0;
+        for (const t of rzps) {
+          if (left <= 0.001) break;
+          const part = Math.round(Math.min(left, t.left) * 100) / 100;
+          const res = await fetch(`/api/admin/payments/${t.id}/refund`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: part, reason: refundNotes }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            const msg = data.error || 'Razorpay refund failed';
+            throw new Error(done > 0 ? `₹${done.toLocaleString('en-IN')} was refunded, but the rest failed: ${msg}` : msg);
+          }
+          left -= part;
+          done += part;
+        }
       } else {
         const res = await fetch(`/api/admin/bookings/${(params as any).id}/manage`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -145,6 +164,7 @@ export default function AdminBookingDetailsPage() {
       alert('Refund recorded.');
     } catch (e: any) {
       alert(e.message || 'Refund failed');
+      fetchBooking();
     } finally {
       setManaging(false);
     }

@@ -4,11 +4,12 @@ import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
 import { fullOwed, owedOf, derivePaymentStatus } from '@/lib/booking-money';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
+import { SEAT_STATUSES } from '@/lib/booking-admin-sync';
 
 export const runtime = 'nodejs';
 
 // Booking statuses that occupy a seat on the trip.
-const COUNTED = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
+const COUNTED = SEAT_STATUSES;
 // Statuses an admin may set from the Change-Status modal (+ hidden `pending`).
 const ALLOWED_STATUS = ['pending', 'seat_locked', 'confirmed', 'on_trip', 'completed', 'cancelled', 'referred'];
 const PAYMENT_MODES = ['cash', 'upi', 'card', 'bank', 'online', 'razorpay'];

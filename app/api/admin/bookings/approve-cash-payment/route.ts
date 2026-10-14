@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
+import { adjustTripSeats, seatDelta, syncBookingPaymentMirrors } from '@/lib/booking-admin-sync';
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Fetch booking
     const { data: booking, error: fetchError } = await adminClient
       .from('bookings')
-      .select('id, final_amount, total_price, coupon_discount, wallet_amount_used, waived_amount, addons_total, payment_method, payment_mode, payment_status, booking_status, number_of_participants, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
+      .select('id, trip_id, payment_method, payment_mode, payment_status, booking_status, number_of_participants')
       .eq('id', bookingId)
       .single();
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Record the cash money in the ledger (authoritative).
     const referenceId = `CASH_${Date.now()}`;
-    await adminClient
+    const { error: insertError } = await adminClient
       .from('payment_transactions')
       .insert([
         {
@@ -50,20 +51,22 @@ export async function POST(request: NextRequest) {
         },
       ]);
 
-    // Payment Status is DERIVED from money; Booking Status is independent. We only
-    // activate a brand-new (pending) booking to seat_locked — never auto-confirm.
-    const { derivePaymentStatus, fullOwed } = await import('@/lib/booking-money');
-    const owed = fullOwed(booking as any, (booking as any).trips);
-    const paid = parseFloat(amountPaid);
-    const newPaymentStatus = derivePaymentStatus(paid, owed, false);
+    if (insertError) {
+      console.error('Error recording cash payment:', insertError);
+      return NextResponse.json({ error: insertError.message || 'Failed to record cash payment' }, { status: 500 });
+    }
+
+    // Payment Status is DERIVED from the whole ledger (so a second cash instalment
+    // adds to the first instead of replacing it). Booking Status is independent:
+    // we only activate a brand-new (pending) booking.
+    const money = await syncBookingPaymentMirrors(adminClient, bookingId);
+    const newPaymentStatus = money?.status || 'partial';
     const activated = booking.booking_status === 'pending';
     const newBookingStatus = activated
       ? (newPaymentStatus === 'paid' && booking.payment_method !== 'seat_lock' ? 'confirmed' : 'seat_locked')
       : booking.booking_status;
 
     const updateData: any = {
-      payment_status: newPaymentStatus,
-      amount_paid: paid,
       booking_status: newBookingStatus,
       reference_id: referenceId,
       payment_reviewed_at: new Date().toISOString(),
@@ -79,6 +82,15 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       console.error('Error updating booking:', updateError);
       return NextResponse.json({ error: updateError.message || 'Failed to approve cash payment' }, { status: 500 });
+    }
+
+    // Activation takes seats on the trip.
+    if (activated) {
+      try {
+        await adjustTripSeats(adminClient, booking.trip_id, seatDelta(booking.booking_status, newBookingStatus, Number(booking.number_of_participants) || 1));
+      } catch (tripError) {
+        console.error('Error updating trip participants:', tripError);
+      }
     }
 
     // Process referral reward if this is user's first confirmed booking

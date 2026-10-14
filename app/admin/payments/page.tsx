@@ -79,25 +79,57 @@ export default function AdminPaymentsPage() {
   const [detail, setDetail] = useState<{ payment: Payment; refunds: Refund[]; razorpay_raw: any } | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  // Lightweight rows for EVERY matching payment, so the totals aren't limited to
+  // the page of rows currently shown in the table.
+  const [summaryRows, setSummaryRows] = useState<Payment[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const buildParams = (offset = 0) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (status) params.set('status', status);
     if (method) params.set('method', method);
-    const r = await fetch(`/api/admin/payments?${params}`);
-    const j = await r.json();
-    if (r.ok) {
-      setPayments(j.payments || []);
-      setTotal(j.total || 0);
-    } else {
-      setToast({ type: 'error', msg: j.error || 'Failed to load payments' });
+    if (offset) params.set('offset', String(offset));
+    return params;
+  };
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/admin/payments?${buildParams()}`);
+      const j = await r.json();
+      if (r.ok) {
+        setPayments(j.payments || []);
+        setSummaryRows(j.summaryRows || j.payments || []);
+        setTotal(j.total || 0);
+      } else {
+        setToast({ type: 'error', msg: j.error || 'Failed to load payments' });
+      }
+    } catch {
+      setToast({ type: 'error', msg: 'Failed to load payments' });
     }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const r = await fetch(`/api/admin/payments?${buildParams(payments.length)}`);
+      const j = await r.json();
+      if (r.ok) {
+        setPayments((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...(j.payments || []).filter((p: Payment) => !seen.has(p.id))];
+        });
+      } else {
+        setToast({ type: 'error', msg: j.error || 'Failed to load more payments' });
+      }
+    } catch {
+      setToast({ type: 'error', msg: 'Failed to load more payments' });
+    }
+    setLoadingMore(false);
+  };
+
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [q, status, method]);
 
   const totals = useMemo(() => {
@@ -112,7 +144,7 @@ export default function AdminPaymentsPage() {
     const methodCounts: Record<string, number> = {};
     const tripRevenue: Record<string, { name: string; amount: number }> = {};
 
-    payments.forEach(p => {
+    summaryRows.forEach(p => {
       const amt = Number(p.amount || 0);
       const refAmt = Number(p.amount_refunded || 0);
       const paidAt = p.paid_at ? new Date(p.paid_at).getTime() : new Date(p.created_at).getTime();
@@ -147,7 +179,7 @@ export default function AdminPaymentsPage() {
       .sort((a, b) => b.n - a.n);
 
     return { collected, pending, refunded, failed, today, yesterday, thisMonth, lastMonth, topTrips, methodPct };
-  }, [payments]);
+  }, [summaryRows]);
 
   // Net = collected − refunded
   const net = totals.collected - totals.refunded;
@@ -227,7 +259,7 @@ export default function AdminPaymentsPage() {
             <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search payment ID, order ID, name, email, trip…"
+              placeholder="Search payment ID, name, email, phone, trip…"
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
             />
           </div>
@@ -372,6 +404,17 @@ export default function AdminPaymentsPage() {
                   );
                 })}
               </div>
+              {payments.length < total && (
+                <div className="border-t border-gray-100 p-3 text-center">
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:border-purple-300 disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Loading…' : `Load more (${payments.length} of ${total} shown)`}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

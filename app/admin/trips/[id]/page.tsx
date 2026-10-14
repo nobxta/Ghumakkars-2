@@ -29,6 +29,11 @@ import { nextOccurrences, formatDeparture, toDateString } from '@/lib/recurrence
 import { moneyOf } from '@/lib/booking-money';
 import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 
+// Byte-order mark so Excel opens UTF-8 CSVs correctly (otherwise ₹ shows as â‚¹).
+const BOM = '\uFEFF';
+// Bookings whose travellers are actually going on the trip (incl. partner bookings).
+const TRAVELLING_STATUSES = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
+
 export default function AdminTripDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -270,7 +275,7 @@ export default function AdminTripDetailsPage() {
     seatLockedBookings: seatLockedBookings.length,
     pendingBookings: pendingBookings.length,
     totalParticipants: bookings
-      .filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status))
+      .filter((b: any) => TRAVELLING_STATUSES.includes(b.booking_status))
       .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0),
     // Revenue counts only money we are actually keeping: cancelled/rejected
     // bookings are treated as refunded and drop out of earnings.
@@ -286,7 +291,7 @@ export default function AdminTripDetailsPage() {
   const genericCSV = (rows: any[][], headers: string[], filename: string) => {
     if (rows.length === 0) { alert('No data to export.'); return; }
     const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${(trip?.title || 'trip').replace(/[^a-z0-9]/gi, '-')}-${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -294,16 +299,18 @@ export default function AdminTripDetailsPage() {
     URL.revokeObjectURL(link.href);
   };
 
-  const _displayName = (b: any) => {
-    if (b.is_offline_booking || !b.user_id) return b.primary_passenger_name || '—';
+  // The traveller's name as entered on the booking (may differ from the account
+  // holder when someone books for a friend/parent); account name is the fallback.
+  const _accountName = (b: any) => {
     const u = b.profiles;
-    return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
+    return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '';
   };
+  const _displayName = (b: any) => String(b.primary_passenger_name || '').trim() || _accountName(b) || '—';
   const _displayPhone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
   /** Operational export: Passenger Manifest — what trip captains need on board */
   const exportPassengerManifest = () => {
     const headers = ['#', 'Name', 'Age', 'Gender', 'Phone', 'Emergency Name', 'Emergency Phone', 'Booking ID', 'Pickup'];
-    const list = confirmedBookings.concat(bookings.filter((b: any) => b.booking_status === 'seat_locked'));
+    const list = bookings.filter((b: any) => TRAVELLING_STATUSES.includes(b.booking_status));
     const rows: any[][] = [];
     let i = 1;
     list.forEach((b: any) => {
@@ -326,7 +333,8 @@ export default function AdminTripDetailsPage() {
   /** Operational export: Paid Customers — for finance */
   const exportPaidCustomers = () => {
     const headers = ['Name', 'Phone', 'Email', 'Paid (₹)', 'Full cost (₹)', 'Payment Method', 'Payment Date', 'Booking ID'];
-    const rows = confirmedBookings.map((b: any) => [
+    // Everyone who has actually paid us something (incl. fully-paid seat locks).
+    const rows = bookings.filter((b: any) => !['cancelled', 'rejected'].includes(b.booking_status) && bookingPaid(b) > 0).map((b: any) => [
       _displayName(b), _displayPhone(b), b.profiles?.email || '',
       bookingPaid(b).toFixed(0), bookingFull(b).toFixed(0),
       getPaymentMethodLabel(b.payment_method),
@@ -400,7 +408,7 @@ export default function AdminTripDetailsPage() {
       ];
     });
     const csv = [headers.join(','), ...rows.map((r: string[]) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${trip?.title || 'trip'}-bookings-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -411,11 +419,7 @@ export default function AdminTripDetailsPage() {
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    const displayName = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return b.primary_passenger_name || '—';
-      const u = b.profiles;
-      return (u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—');
-    };
+    const displayName = _displayName;
     const displayPhone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
     const paymentLabel = (b: any) => b.is_offline_booking ? 'Offline' : getPaymentMethodLabel(b.payment_method);
 
@@ -548,11 +552,7 @@ export default function AdminTripDetailsPage() {
     });
     if (list.length === 0) { alert('No bookings match the selected status.'); return; }
 
-    const _name = (b: any) => {
-      if (b.is_offline_booking || !b.user_id) return b.primary_passenger_name || '—';
-      const u = b.profiles;
-      return u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : u?.email || '—';
-    };
+    const _name = _displayName;
     const _phone = (b: any) => b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—';
     const cols: { key: string; label: string; get: (b: any) => string }[] = [
       { key: 'name', label: 'Name', get: _name },
@@ -665,17 +665,19 @@ export default function AdminTripDetailsPage() {
   };
 
   // Shared PDF helpers (discount-aware money + display).
-  const _pdfName = (b: any, n = 24) => {
-    if (b.is_offline_booking || !b.user_id) return (b.primary_passenger_name || '—').substring(0, n);
-    const u = b.profiles;
-    return (u?.first_name && u?.last_name ? `${u.first_name} ${u.last_name}` : (b.primary_passenger_name || u?.email || '—')).substring(0, n);
-  };
+  const _pdfName = (b: any, n = 24) => _displayName(b).substring(0, n);
   const _pdfPhone = (b: any) => (b.primary_passenger_phone || b.contact_phone || b.profiles?.phone || '—').substring(0, 14);
   const _pdfGender = (b: any) => {
     const g = b.primary_passenger_gender || '';
     return g && String(g).toUpperCase().startsWith('F') ? 'F' : (g && String(g).toUpperCase().startsWith('M') ? 'M' : '—');
   };
-  const _pdfStatus = (b: any) => b.booking_status === 'seat_locked' ? 'Seat lock' : (b.booking_status || 'pending').charAt(0).toUpperCase() + (b.booking_status || 'pending').slice(1);
+  const _pdfStatus = (b: any) => {
+    const st = b.booking_status || 'pending';
+    if (st === 'seat_locked') return 'Seat lock';
+    if (st === 'referred') return 'Partner';
+    const label = st.replace(/_/g, ' ');
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
   const _pdfDeparture = () => {
     if (!trip?.is_recurring) return `${trip?.start_date || '—'} to ${trip?.end_date || '—'}`;
     if (selectedBatch !== 'all' && selectedBatch !== 'unscheduled') return formatDeparture(selectedBatch, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -762,8 +764,8 @@ export default function AdminTripDetailsPage() {
   // at all, so it is safe to print and hand to a trip captain. Names, age,
   // gender, phone, pickup and every co-passenger.
   const downloadCarryPDF = async () => {
-    const list = bookings.filter((b: any) => ['confirmed', 'seat_locked'].includes(b.booking_status));
-    if (list.length === 0) { alert('No travelling guests yet (need confirmed or seat-locked bookings).'); return; }
+    const list = bookings.filter((b: any) => TRAVELLING_STATUSES.includes(b.booking_status));
+    if (list.length === 0) { alert('No travelling guests yet (need confirmed, seat-locked or partner bookings).'); return; }
     const { jsPDF, autoTable } = await loadPdfLibs();
     const pageW = 297, pageH = 210, margin = 16;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
+import { moneyOf } from '@/lib/booking-money';
 
 interface Trip {
   id: string;
@@ -89,13 +90,9 @@ export default function AdminTripsPage() {
       const totalRevenue = info.metrics?.totalRevenue || 0;
 
       // Compute pending amount (booked but not yet fully paid)
-      const pendingAmount = (info.bookings || []).reduce((sum: number, b: any) => {
-        const total = parseFloat(String(b.total_price || 0));
-        const paid = (b.payment_transactions || [])
-          .filter((p: any) => p.payment_status === 'verified')
-          .reduce((s: number, p: any) => s + parseFloat(String(p.amount || 0)), 0);
-        return sum + Math.max(0, total - paid);
-      }, 0);
+      const pendingAmount = (info.bookings || [])
+        .filter((b: any) => !['cancelled', 'rejected', 'referred'].includes(b.booking_status))
+        .reduce((sum: number, b: any) => sum + moneyOf(b, info.trip).remaining, 0);
 
       let message: string;
       if (totalBookings === 0) {

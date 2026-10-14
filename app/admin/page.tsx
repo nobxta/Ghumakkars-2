@@ -21,7 +21,9 @@ export default function AdminDashboard() {
   const resolveRange = (): { from: string; to: string } => {
     const now = new Date();
     const start = new Date(); start.setHours(0, 0, 0, 0);
-    if (range === 'custom' && customFrom && customTo) return { from: new Date(customFrom).toISOString(), to: new Date(customTo).toISOString() };
+    // Parse the picked dates as LOCAL days ("YYYY-MM-DD" alone parses as UTC, which
+    // shifted the custom range by 5½ hours in India).
+    if (range === 'custom' && customFrom && customTo) return { from: new Date(`${customFrom}T00:00:00`).toISOString(), to: new Date(`${customTo}T23:59:59.999`).toISOString() };
     if (range === '1d') { /* today */ }
     else if (range === '1w') start.setDate(start.getDate() - 6);
     else if (range === '1m') start.setDate(start.getDate() - 29);
@@ -156,6 +158,9 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1"><span>{pct}% collected</span><span>{inr(d.collected)}/{inr(expected)}</span></div>
                     <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-600" style={{ width: `${pct}%` }} /></div>
                   </div>
+                  {(d.partnerCommission || 0) > 0 && (
+                    <p className="text-[11px] text-purple-700 mt-2">+ {inr(d.partnerCommission)} partner commission</p>
+                  )}
                 </div>
               </div>
             );

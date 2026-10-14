@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { adjustTripSeats, occupiesSeat } from '@/lib/booking-admin-sync';
 
 export const runtime = "nodejs";
 
@@ -181,18 +182,41 @@ export async function DELETE(
     if (auth instanceof NextResponse) return auth;
 
     const id = params.id;
+    if (id === auth.user.id) {
+      return NextResponse.json({ error: 'You cannot delete your own admin account.' }, { status: 400 });
+    }
     const admin = createAdminClient();
-    const safe = async (fn: () => any) => { try { await fn(); } catch { /* table may not exist */ } };
+    // Supabase returns errors instead of throwing — surface real failures, but
+    // ignore "table doesn't exist" (42P01) for optional tables.
+    const check = (label: string, res: { error: any }) => {
+      if (res.error && res.error.code !== '42P01') throw new Error(`Failed to delete ${label}: ${res.error.message}`);
+    };
+
+    const { data: bks, error: bksErr } = await admin
+      .from('bookings')
+      .select('id, trip_id, booking_status, number_of_participants')
+      .eq('user_id', id);
+    if (bksErr) throw new Error(`Failed to load bookings: ${bksErr.message}`);
+    const bookingIds = (bks || []).map((b: any) => b.id);
 
     // Payment transactions for this user's bookings first.
-    const { data: bks } = await admin.from('bookings').select('id').eq('user_id', id);
-    const bookingIds = (bks || []).map((b: any) => b.id);
-    if (bookingIds.length) await safe(() => admin.from('payment_transactions').delete().in('booking_id', bookingIds));
+    if (bookingIds.length) check('payment records', await admin.from('payment_transactions').delete().in('booking_id', bookingIds));
+    check('coupon usage', await admin.from('coupon_usages').delete().eq('user_id', id));
+    check('bookings', await admin.from('bookings').delete().eq('user_id', id));
 
-    await safe(() => admin.from('coupon_usages').delete().eq('user_id', id));
-    await safe(() => admin.from('bookings').delete().eq('user_id', id));
+    // Free the seats those bookings were holding.
+    const seatsByTrip = new Map<string, number>();
+    (bks || []).forEach((b: any) => {
+      if (b.trip_id && occupiesSeat(b.booking_status)) {
+        seatsByTrip.set(b.trip_id, (seatsByTrip.get(b.trip_id) || 0) + (Number(b.number_of_participants) || 1));
+      }
+    });
+    for (const [tripId, pax] of Array.from(seatsByTrip.entries())) {
+      await adjustTripSeats(admin, tripId, -pax);
+    }
+
     // profiles delete cascades referrals + wallet_transactions.
-    await safe(() => admin.from('profiles').delete().eq('id', id));
+    check('profile', await admin.from('profiles').delete().eq('id', id));
 
     const { error } = await admin.auth.admin.deleteUser(id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

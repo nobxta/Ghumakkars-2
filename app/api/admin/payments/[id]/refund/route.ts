@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import Razorpay from 'razorpay';
+import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,8 +59,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
+  // Refundable = paid minus refunds already processed AND still in flight, so the
+  // same money can't be refunded twice while Razorpay is processing.
+  const { data: existingRefunds } = await admin
+    .from('payment_refunds')
+    .select('amount, status')
+    .eq('payment_id', payment.id);
   const paid = Number(payment.amount);
-  const alreadyRefunded = Number(payment.amount_refunded || 0);
+  const lockedByRefunds = (existingRefunds || [])
+    .filter((r: any) => r.status !== 'failed')
+    .reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+  const alreadyRefunded = Math.max(Number(payment.amount_refunded || 0), lockedByRefunds);
   const remaining = paid - alreadyRefunded;
   if (amount > remaining + 0.001) {
     return NextResponse.json(
@@ -99,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Insert refund record
   const status = rzpRefund.status === 'processed' ? 'processed' : 'pending';
-  const { data: refundRow, error: rErr } = await admin
+  let { data: refundRow, error: rErr } = await admin
     .from('payment_refunds')
     .insert([{
       payment_id: payment.id,
@@ -115,6 +125,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .select()
     .single();
 
+  // The refund.created webhook can land before this insert — that row is fine.
+  if (rErr && (rErr as any).code === '23505') {
+    const { data: existing } = await admin.from('payment_refunds').select('*').eq('razorpay_refund_id', rzpRefund.id).single();
+    refundRow = existing;
+    rErr = null;
+  }
   if (rErr) {
     // Refund was created on Razorpay but we couldn't store it — surface clearly
     return NextResponse.json(
@@ -123,18 +139,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  // Update payment_transactions running totals
-  const newRefunded = alreadyRefunded + (status === 'processed' ? amount : 0);
-  // Even if pending, mark the running total optimistically so duplicate refunds are blocked
-  const lockedTotal = alreadyRefunded + amount;
-  const newStatus = lockedTotal >= paid - 0.001 ? 'refunded' : 'partially_refunded';
-  await admin
-    .from('payment_transactions')
-    .update({
-      amount_refunded: status === 'processed' ? newRefunded : alreadyRefunded,
-      payment_status: newStatus,
-    })
-    .eq('id', payment.id);
+  // Recompute the payment's refund totals from payment_refunds (the webhook does
+  // the same, so a refund is never counted twice) and resync the booking.
+  await syncRazorpayRefundTotals(admin, payment.id);
 
   return NextResponse.json({ refund: refundRow, razorpay: rzpRefund });
 }

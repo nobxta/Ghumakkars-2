@@ -6,18 +6,27 @@ import { paidOf, owedOf as fullOf } from '@/lib/booking-money';
 export const runtime = 'nodejs';
 
 const isActive = (b: any) => !['cancelled', 'rejected'].includes(b.booking_status);
-// Revenue rule: a referred booking earns our commission/profit, NOT the trip
-// collection (we settle the trip amount with the partner). Everyone else earns the
-// cash actually collected.
-const revenueOf = (b: any): number =>
-  b.booking_status === 'referred' ? parseFloat(String(b.referral_commission || 0)) || 0 : paidOf(b);
+// Same rule as the Bookings page: "Collected" is customer money on our own
+// (non-partner) bookings. Referred bookings are settled with the partner; what we
+// earn on them is the commission, reported separately (partnerCommission).
+const isPartner = (b: any) => b.booking_status === 'referred';
+const revenueOf = (b: any): number => (isPartner(b) ? 0 : paidOf(b));
+const commissionOf = (b: any): number => (isPartner(b) ? parseFloat(String(b.referral_commission || 0)) || 0 : 0);
+
+// The business runs on India time, but the server runs in UTC. "Today" must start
+// at midnight IST, not 05:30 IST.
+const IST_OFFSET_MS = 330 * 60000;
+const startOfTodayIST = () => {
+  const ist = new Date(Date.now() + IST_OFFSET_MS);
+  return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - IST_OFFSET_MS);
+};
 
 export async function GET(req: Request) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
   const admin = createAdminClient();
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = startOfTodayIST();
   const todayIso = today.toISOString();
   const weekAgoIso = new Date(today.getTime() - 7 * 86400000).toISOString();
 
@@ -27,9 +36,9 @@ export async function GET(req: Request) {
   const toParam = url.searchParams.get('to');
   const rangeStart = fromParam ? new Date(fromParam) : new Date(today.getTime() - 30 * 86400000);
   if (Number.isNaN(rangeStart.getTime())) rangeStart.setTime(today.getTime() - 30 * 86400000);
+  // The client sends exact instants (start of its first day, end of its last day).
   const rangeEnd = toParam ? new Date(toParam) : new Date();
   if (Number.isNaN(rangeEnd.getTime())) rangeEnd.setTime(Date.now());
-  rangeEnd.setHours(23, 59, 59, 999);
   const inRange = (iso?: string) => { if (!iso) return false; const t = new Date(iso).getTime(); return t >= rangeStart.getTime() && t <= rangeEnd.getTime(); };
 
   const [usersCountRes, verifiedCountRes, usersTodayRes, usersRangeRes, adminProfileRes, tripsRes, bookingsRes] = await Promise.all([
@@ -51,6 +60,7 @@ export async function GET(req: Request) {
   const active = bookings.filter(isActive);
 
   const collected = active.reduce((s, b) => s + revenueOf(b), 0);
+  const partnerCommission = active.reduce((s, b) => s + commissionOf(b), 0);
   // Referred bookings have no outstanding balance owed to us (the customer settles
   // the trip cost; we only book the commission).
   const outstanding = active.reduce((s, b) => s + (b.booking_status === 'referred' ? 0 : Math.max(0, fullOf(b) - paidOf(b))), 0);
@@ -89,7 +99,7 @@ export async function GET(req: Request) {
     .slice(0, 8);
 
   // ── movement / today / attention ──
-  const sumTxns = (since: string) => active.reduce((s: number, b: any) =>
+  const sumTxns = (since: string) => active.filter((b: any) => !isPartner(b)).reduce((s: number, b: any) =>
     s + (b.payment_transactions || []).filter((t: any) => t.payment_status === 'verified' && t.created_at && t.created_at >= since).reduce((x: number, t: any) => x + parseFloat(String(t.amount || 0)), 0), 0);
   const collectedToday = sumTxns(todayIso);
   const collectedThisWeek = sumTxns(weekAgoIso);
@@ -102,7 +112,7 @@ export async function GET(req: Request) {
   const nextTripDays = nextDated ? Math.round((new Date(nextDated.start_date).setHours(0, 0, 0, 0) - today.getTime()) / 86400000) : null;
 
   // ── Period-scoped "activity" (controlled by the date-range selector) ──
-  const periodCollected = active.reduce((s: number, b: any) =>
+  const periodCollected = active.filter((b: any) => !isPartner(b)).reduce((s: number, b: any) =>
     s + (b.payment_transactions || []).filter((t: any) => t.payment_status === 'verified' && inRange(t.created_at)).reduce((x: number, t: any) => x + parseFloat(String(t.amount || 0)), 0), 0);
   const periodBookingsArr = active.filter((b: any) => inRange(b.created_at));
   const periodTravellers = periodBookingsArr
@@ -128,7 +138,7 @@ export async function GET(req: Request) {
     newUsersToday: usersTodayRes.count || 0,
     activeBookings: active.length,
     confirmed, seatLocked, pending,
-    travellers, collected, outstanding,
+    travellers, collected, outstanding, partnerCommission,
     activeTrips: tripsData.filter((t: any) => t.is_active !== false && t.status !== 'cancelled').length,
     collectedToday, collectedThisWeek, newBookingsToday,
     pendingApproval, seatLockWithBalance, nextTripDays,

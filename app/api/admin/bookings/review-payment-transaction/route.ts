@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, isInternalRequest, internalFetchHeaders } from '@/lib/auth-helpers';
-import { revalidateTripById } from '@/lib/revalidate-trips';
+import { adjustTripSeats, seatDelta } from '@/lib/booking-admin-sync';
 
 export const runtime = "nodejs";
 
@@ -133,31 +133,21 @@ export async function POST(request: NextRequest) {
         await markBookingAddonsPaid(adminClient, bookingId).catch(() => {});
       }
 
-      // When the booking first activates (pending → seat_locked), hold the seat.
-      const activated = currentStatus === 'pending' && bookingStatus === 'seat_locked';
-      if (activated && booking.trip_id) {
+      // Keep the trip's seat count in step with the status change: hold seats when
+      // the booking activates (pending → seat_locked OR confirmed), free them if a
+      // seated booking ends up rejected.
+      const pax = Number(booking?.number_of_participants) || 1;
+      const delta = seatDelta(currentStatus, bookingStatus, pax);
+      if (delta !== 0 && booking?.trip_id) {
         try {
-          const { data: trip } = await adminClient
-            .from('trips')
-            .select('current_participants')
-            .eq('id', booking.trip_id)
-            .single();
-
-          if (trip) {
-            await adminClient
-              .from('trips')
-              .update({
-                current_participants: (trip.current_participants || 0) + (booking.number_of_participants || 1),
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', booking.trip_id);
-          }
-          // Seat held on activation — refresh this trip's public pages.
-          await revalidateTripById(booking.trip_id);
+          await adjustTripSeats(adminClient, booking.trip_id, delta);
         } catch (tripError) {
-          console.error('Error incrementing trip participants:', tripError);
+          console.error('Error updating trip participants:', tripError);
         }
+      }
 
+      const activated = currentStatus === 'pending' && delta > 0;
+      if (activated) {
         // Process referral reward on first confirmed/seat_locked booking
         try {
           const { count: previousBookings } = await adminClient

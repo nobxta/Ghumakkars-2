@@ -6,6 +6,7 @@ import { getRazorpayWebhookSecret } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { derivePaymentStatus, owedOf } from '@/lib/booking-money';
+import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
 
 export const runtime = "nodejs";
 
@@ -322,13 +323,8 @@ async function handleRefundEvent(event: string, refund: any, adminClient: any) {
     }]);
   }
 
-  // Update payment_transactions.amount_refunded if processed
-  if (status === 'processed') {
-    const totalRefunded = Number(pt.amount_refunded || 0) + amount;
-    const newStatus = totalRefunded >= Number(pt.amount) ? 'refunded' : 'partially_refunded';
-    await adminClient.from('payment_transactions').update({
-      amount_refunded: totalRefunded,
-      payment_status: newStatus,
-    }).eq('id', pt.id);
-  }
+  // Recompute totals from payment_refunds instead of adding — webhooks can be
+  // redelivered and the admin refund route may already have counted this refund.
+  // Also reverts the payment's status if the refund failed.
+  await syncRazorpayRefundTotals(adminClient, pt.id);
 }

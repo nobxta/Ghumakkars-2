@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
-import { revalidateTripById } from '@/lib/revalidate-trips';
+import { adjustTripSeats, occupiesSeat } from '@/lib/booking-admin-sync';
 
 export const runtime = 'nodejs';
 
@@ -88,7 +88,7 @@ export async function PATCH(
 /**
  * DELETE: permanently remove a booking (spam / test data).
  * Cascades payment_transactions and decrements trip participant count
- * if the booking had been counted (confirmed / seat_locked).
+ * if the booking had been counted (any seat-holding status).
  */
 export async function DELETE(
   request: NextRequest,
@@ -132,26 +132,8 @@ export async function DELETE(
     }
 
     // If this booking was occupying seats, free them
-    if (booking.trip_id && ['confirmed', 'seat_locked'].includes(booking.booking_status)) {
-      const { data: trip } = await adminClient
-        .from('trips')
-        .select('current_participants')
-        .eq('id', booking.trip_id)
-        .single();
-      if (trip) {
-        await adminClient
-          .from('trips')
-          .update({
-            current_participants: Math.max(
-              0,
-              (trip.current_participants || 0) - (booking.number_of_participants || 1)
-            ),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', booking.trip_id);
-      }
-      // Freed seats — refresh this trip's public pages immediately.
-      await revalidateTripById(booking.trip_id);
+    if (booking.trip_id && occupiesSeat(booking.booking_status)) {
+      await adjustTripSeats(adminClient, booking.trip_id, -(Number(booking.number_of_participants) || 1));
     }
 
     return NextResponse.json({ success: true });

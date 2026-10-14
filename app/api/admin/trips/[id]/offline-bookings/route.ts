@@ -232,15 +232,20 @@ export async function POST(
       }
     }
 
-    await adminClient
-      .from('trips')
-      .update({
-        current_participants: ((Number(trip.current_participants) || 0) + numParticipants),
-      })
-      .eq('id', tripId);
+    // Only a paid (confirmed) offline booking takes seats. An unpaid one stays
+    // `pending` and takes its seats later when an admin confirms it — counting it
+    // here too would double count.
+    if (paid > 0) {
+      await adminClient
+        .from('trips')
+        .update({
+          current_participants: ((Number(trip.current_participants) || 0) + numParticipants),
+        })
+        .eq('id', tripId);
 
-    // Seat availability changed — refresh this trip's public pages immediately.
-    await revalidateTripById(tripId);
+      // Seat availability changed — refresh this trip's public pages immediately.
+      await revalidateTripById(tripId);
+    }
     return NextResponse.json(booking);
   } catch (error: any) {
     console.error('Error in POST offline-bookings:', error);
