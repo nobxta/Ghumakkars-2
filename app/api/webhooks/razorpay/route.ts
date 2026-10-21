@@ -7,10 +7,11 @@ import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { derivePaymentStatus, owedOf } from '@/lib/booking-money';
 import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
+import { withErrorLog, logError } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     // Get webhook signature from headers
     const signature = request.headers.get('X-Razorpay-Signature');
@@ -205,8 +206,9 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     }
 
     // Send confirmation email
+    const notifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/bookings/send-notification`;
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/bookings/send-notification`, {
+      const notifyRes = await fetch(notifyUrl, {
         method: 'POST',
         headers: internalFetchHeaders(),
         body: JSON.stringify({
@@ -214,8 +216,26 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
           status: 'confirmed',
         }),
       });
+      if (!notifyRes.ok) {
+        const body = await notifyRes.json().catch(() => null);
+        await logError({
+          category: 'booking',
+          process: 'Booking confirmed notification',
+          message: body?.error || `Notification call returned HTTP ${notifyRes.status}`,
+          code: notifyRes.status,
+          bookingId: booking.id,
+          details: { url: notifyUrl, internalSecretSet: !!process.env.INTERNAL_API_SECRET },
+        });
+      }
     } catch (emailError) {
       console.error('Error sending confirmation email:', emailError);
+      await logError({
+        category: 'booking',
+        process: 'Booking confirmed notification',
+        error: emailError,
+        bookingId: booking.id,
+        details: { url: notifyUrl, hint: 'Could not reach the notification URL. Set NEXT_PUBLIC_APP_URL to https://ghumakkars.in' },
+      });
     }
 
     // Telegram heads-up: Razorpay auto-verified, no action needed.
@@ -230,6 +250,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     console.log('Payment success processed for booking:', booking.id);
   } catch (error: any) {
     console.error('Error handling payment success:', error);
+    await logError({ category: 'webhook', process: 'Razorpay: record successful payment', error, userEmail: payment?.email, details: { razorpay_payment_id: payment?.id, razorpay_order_id: payment?.order_id } });
   }
 }
 
@@ -246,6 +267,30 @@ async function handlePaymentFailed(payment: any, adminClient: any) {
       .limit(1);
 
     const booking = bookings?.[0];
+
+    await logError({
+      category: 'payment',
+      process: 'Razorpay payment failed',
+      message: payment.error_description || 'Payment failed',
+      code: payment.error_code,
+      userEmail: payment.email,
+      bookingId: booking?.id,
+      details: {
+        reason: payment.error_reason,
+        source: payment.error_source,
+        step: payment.error_step,
+        method: payment.method,
+        bank: payment.bank,
+        wallet: payment.wallet,
+        upi: payment.vpa,
+        amount: (payment.amount || 0) / 100,
+        currency: payment.currency,
+        contact: payment.contact,
+        razorpay_payment_id: razorpayPaymentId,
+        razorpay_order_id: razorpayOrderId,
+        bookingFound: !!booking,
+      },
+    });
 
     if (bookingError || !booking) {
       console.error('Booking not found for failed payment:', razorpayPaymentId);
@@ -266,6 +311,7 @@ async function handlePaymentFailed(payment: any, adminClient: any) {
     }
   } catch (error: any) {
     console.error('Error handling payment failed:', error);
+    await logError({ category: 'webhook', process: 'Razorpay: record failed payment', error, details: { razorpay_payment_id: payment?.id } });
   }
 }
 
@@ -282,6 +328,16 @@ async function handleRefundEvent(event: string, refund: any, adminClient: any) {
   const rzpRefundId = refund.id;
   const amount = (refund.amount || 0) / 100;
   const status = event === 'refund.processed' ? 'processed' : event === 'refund.failed' ? 'failed' : (refund.status || 'pending');
+
+  if (status === 'failed') {
+    await logError({
+      category: 'payment',
+      process: 'Refund failed',
+      message: refund.error_description || refund.notes?.reason || 'Razorpay could not process the refund',
+      code: refund.error_code,
+      details: { amount, razorpay_refund_id: rzpRefundId, razorpay_payment_id: rzpPaymentId, speed: refund.speed_processed || refund.speed_requested },
+    });
+  }
 
   // Find the payment_transaction
   const { data: pt } = await adminClient
@@ -328,3 +384,5 @@ async function handleRefundEvent(event: string, refund: any, adminClient: any) {
   // Also reverts the payment's status if the refund failed.
   await syncRazorpayRefundTotals(adminClient, pt.id);
 }
+
+export const POST = withErrorLog('webhook', 'Razorpay webhook', handlePOST, { alsoLog: [401] });

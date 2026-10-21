@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateOTP, storeOTP, verifyOTP } from '@/lib/otp-store';
 import { sendLoginOTPEmail } from '@/lib/email';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { action, email, otp, newPassword } = await request.json();
 
@@ -112,3 +113,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('auth', 'Change password', handlePOST);

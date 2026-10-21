@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { code, amount, tripId, userId } = await request.json();
 
@@ -198,3 +199,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('payment', 'Validate coupon', handlePOST, { log4xx: false });

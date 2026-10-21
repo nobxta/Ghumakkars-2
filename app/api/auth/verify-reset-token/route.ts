@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getResetTokenEmail } from '@/lib/reset-token-store';
+import { withErrorLog } from '@/lib/error-log';
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { token } = await request.json();
 
@@ -33,3 +34,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('auth', 'Verify reset link', handlePOST);

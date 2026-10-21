@@ -5,10 +5,11 @@ import { generateOTP, storeOTP } from '@/lib/otp-store';
 import { storePendingSignup } from '@/lib/pending-signup-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'signup', AUTH_LIMITS.signup);
     if (limit.ok === false) {
@@ -240,3 +241,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('auth', 'Sign up', handlePOST);

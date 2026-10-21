@@ -6,10 +6,11 @@ import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { getSiteUrl } from '@/lib/site-url';
 import crypto from 'crypto';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'sendPasswordReset', AUTH_LIMITS.sendPasswordReset);
     if (limit.ok === false) {
@@ -80,3 +81,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('auth', 'Send password reset', handlePOST);

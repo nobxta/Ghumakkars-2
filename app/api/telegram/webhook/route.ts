@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
+import { withErrorLog } from '@/lib/error-log';
 import {
   getTelegramSettings,
   answerCallbackQuery,
@@ -285,7 +286,7 @@ async function createCoupon(admin: AdminClient, argStr: string): Promise<string>
 }
 
 // ───────────────────────── webhook ─────────────────────────
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const settings = await getTelegramSettings();
   if (!settings?.enabled || !settings.bot_token) return NextResponse.json({ ok: true });
 
@@ -416,3 +417,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withErrorLog('webhook', 'Telegram webhook', handlePOST);

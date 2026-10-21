@@ -7,10 +7,11 @@ import { getRazorpayConfig } from '@/lib/razorpay';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { derivePaymentStatus, owedOf, payableNowOf } from '@/lib/booking-money';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -220,3 +221,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('payment', 'Verify Razorpay payment', handlePOST);

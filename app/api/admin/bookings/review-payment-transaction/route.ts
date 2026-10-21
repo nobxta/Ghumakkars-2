@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, isInternalRequest, internalFetchHeaders } from '@/lib/auth-helpers';
 import { adjustTripSeats, seatDelta } from '@/lib/booking-admin-sync';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const body = await request.json();
     const { transactionId, status, reviewNotes, rejectionReason } = body;
@@ -195,3 +196,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('admin', 'Review payment', handlePOST);

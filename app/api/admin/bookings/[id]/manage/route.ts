@@ -5,6 +5,7 @@ import { fullOwed, owedOf, derivePaymentStatus } from '@/lib/booking-money';
 import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { SEAT_STATUSES } from '@/lib/booking-admin-sync';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,7 @@ const PAYMENT_MODES = ['cash', 'upi', 'card', 'bank', 'online', 'razorpay'];
  *   set_referral        — saves partner/commission/notes and marks status referred.
  *   save_internal_notes — admin-only operational notes.
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
@@ -295,3 +296,5 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withErrorLog('admin', 'Manage booking', handlePOST);

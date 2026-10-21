@@ -10,10 +10,11 @@ import {
 } from '@/lib/email';
 import { notifyPaymentForApproval } from '@/lib/telegram';
 import { sendWhatsApp } from '@/lib/whatsapp';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const body = await request.json();
     const { bookingId, status, rejectionReason, tripDetails, userEmail: bodyUserEmail, userName: bodyUserName } = body;
@@ -358,3 +359,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('booking', 'Booking notification', handlePOST, { alsoLog: [401, 403] });

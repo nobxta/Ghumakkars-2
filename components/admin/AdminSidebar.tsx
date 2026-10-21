@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift, CreditCard } from 'lucide-react';
+import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift, CreditCard, Bug } from 'lucide-react';
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -11,6 +12,15 @@ interface AdminSidebarProps {
 
 export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
+  const [openErrors, setOpenErrors] = useState(0);
+
+  // Badge: unresolved errors in the last 24h. Re-checked on navigation.
+  useEffect(() => {
+    fetch('/api/admin/error-logs?summary=1', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setOpenErrors(data?.unresolved || 0))
+      .catch(() => {});
+  }, [pathname]);
 
   const menuItems = [
     { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -21,6 +31,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
     { href: '/admin/coupons', icon: Tag, label: 'Coupons' },
     { href: '/admin/referrals', icon: Gift, label: 'Referrals' },
     { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+    { href: '/admin/error-logs', icon: Bug, label: 'Error Logs', badge: openErrors },
     { href: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
@@ -75,6 +86,11 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
               >
                 <Icon className={`h-5 w-5 ${active ? 'text-purple-600' : ''}`} />
                 <span className="font-medium">{item.label}</span>
+                {!!item.badge && (
+                  <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#E5484D] px-1.5 text-[11px] font-bold tabular-nums text-white">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth-helpers';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import Razorpay from 'razorpay';
 import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * Re-fetch the payment from Razorpay and backfill all rich fields.
  * Useful for old payments created before the rich capture was added.
  */
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(_req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -107,3 +108,5 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   return NextResponse.json({ synced: true, razorpay: p, refunds_synced: refundCount });
 }
+
+export const POST = withErrorLog('admin', 'Sync payment', handlePOST);

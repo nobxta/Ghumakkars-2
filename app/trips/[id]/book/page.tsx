@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, 
 import { nextOccurrences, formatDeparture } from '@/lib/recurrence';
 import UpiPayButton from '@/components/UpiPayButton';
 import { upiNote } from '@/lib/upi';
+import { reportClientError } from '@/lib/report-error';
 import CustomizeTripStep from '@/components/booking/CustomizeTripStep';
 import {
   computeSelections,
@@ -791,11 +792,35 @@ export default function BookTripPage() {
         }, PAYMENT_TIMEOUT_MS);
 
         razorpay.on('payment.failed', function (response: any) {
+          const rzpError = response?.error || {};
+          reportClientError({
+            category: 'payment',
+            process: 'Razorpay checkout',
+            message: rzpError.description || 'Payment failed',
+            code: rzpError.code,
+            bookingId: bookingData.id,
+            details: {
+              reason: rzpError.reason,
+              source: rzpError.source,
+              step: rzpError.step,
+              amount: chargeNow,
+              razorpay_payment_id: rzpError.metadata?.payment_id,
+              razorpay_order_id: rzpError.metadata?.order_id,
+            },
+          });
           clearPaymentTimeout();
           setPaymentOverlay('idle');
           setProcessingRazorpay(false);
           abandonRazorpayBooking(bookingData.id);
           showToast('Payment failed. Booking cancelled.', 'error');
+        });
+      };
+      script.onerror = () => {
+        reportClientError({
+          category: 'payment',
+          process: 'Load Razorpay checkout',
+          message: 'Razorpay checkout script failed to load (network, ad blocker or firewall)',
+          bookingId: bookingData.id,
         });
       };
       document.body.appendChild(script);

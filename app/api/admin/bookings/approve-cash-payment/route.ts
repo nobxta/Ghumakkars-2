@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin, internalFetchHeaders } from '@/lib/auth-helpers';
 import { adjustTripSeats, seatDelta, syncBookingPaymentMirrors } from '@/lib/booking-admin-sync';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
@@ -156,3 +157,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('admin', 'Approve cash payment', handlePOST);

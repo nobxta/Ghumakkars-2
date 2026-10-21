@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 import type { SupabaseUser } from '@/lib/types/supabase';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'verifyOtp', AUTH_LIMITS.verifyOtp);
     if (limit.ok === false) {
@@ -116,3 +117,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('otp', 'Verify login OTP', handlePOST);

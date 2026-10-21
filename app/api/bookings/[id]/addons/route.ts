@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth-helpers';
 import { validateAndPriceAddons, writeBookingAddons, passengerNameMap } from '@/lib/addons-server';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +11,7 @@ export const runtime = 'nodejs';
  * flow (which inserts the booking client-side and can't write booking_addons
  * under RLS). Re-prices authoritatively from the DB — the client total is ignored.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -57,3 +58,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({ success: true, addonsTotal: priced.addonsTotal });
 }
+
+export const POST = withErrorLog('booking', 'Add booking add-ons', handlePOST);

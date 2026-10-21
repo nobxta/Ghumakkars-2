@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth, requireAdmin, isInternalRequest } from '@/lib/auth-helpers';
 import { renderTicketBuffer } from '@/lib/ticket-pdf';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 
 // GET /api/bookings/:id/ticket → the trip ticket as a PDF.
 // Same generator the WhatsApp attachment uses, so they're identical.
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+async function handleGET(request: NextRequest, { params }: { params: { id: string } }) {
   const bookingId = params.id;
 
   // Access: internal call, admin, or the booking's owner.
@@ -38,3 +39,5 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     },
   });
 }
+
+export const GET = withErrorLog('booking', 'Download ticket', handleGET);

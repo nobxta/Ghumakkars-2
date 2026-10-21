@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,7 @@ export const runtime = 'nodejs';
  * the payment window without paying or when payment times out.
  * Keeps abandoned attempts out of the main booking list (no spam).
  */
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -80,3 +81,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('booking', 'Cancel unpaid booking', handlePOST);

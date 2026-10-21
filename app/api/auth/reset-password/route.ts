@@ -3,10 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getResetTokenEmail, removeResetToken } from '@/lib/reset-token-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'resetPassword', AUTH_LIMITS.resetPassword);
     if (limit.ok === false) {
@@ -81,3 +82,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withErrorLog('auth', 'Reset password', handlePOST);

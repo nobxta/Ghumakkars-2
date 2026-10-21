@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth-helpers';
 import { getRazorpayConfig } from '@/lib/razorpay';
 import Razorpay from 'razorpay';
 import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * Calls Razorpay refund API server-side and inserts a payment_refunds row.
  * The webhook (refund.processed) eventually updates status to 'processed'.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function handlePOST(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
   const adminUserId = (auth as any).user?.id;
@@ -145,3 +146,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({ refund: refundRow, razorpay: rzpRefund });
 }
+
+export const POST = withErrorLog('admin', 'Refund payment', handlePOST);

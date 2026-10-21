@@ -3,10 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/auth-helpers';
 import { isValidDeparture } from '@/lib/recurrence';
 import { validateAndPriceAddons, writeBookingAddons, passengerNameMap } from '@/lib/addons-server';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
@@ -357,3 +358,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('booking', 'Create booking', handlePOST);

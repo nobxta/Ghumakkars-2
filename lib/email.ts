@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { renderEmail, renderPlainText, BRAND } from './email-templates';
 import { getSiteUrl } from './site-url';
+import { logError } from './error-log';
 
 const smtpPort = parseInt(process.env.SMTP_PORT || '465');
 const transporter = nodemailer.createTransport({
@@ -512,6 +513,21 @@ async function send(mailOptions: { from: string; to: string; subject: string; ht
       response: error?.response,
       message: error?.message,
       hint: smtpErrorHint(error),
+    });
+    await logError({
+      category: 'email',
+      process: `Email: ${mailOptions.subject.replace(/\b\d{4,8}\b/g, '••••••')}`,
+      error,
+      code: error?.responseCode ?? error?.code,
+      userEmail: mailOptions.to,
+      details: {
+        hint: smtpErrorHint(error),
+        from: mailOptions.from,
+        smtpHost: process.env.SMTP_HOST || 'smtp.hostinger.com',
+        smtpUser: process.env.SMTP_USER || '(not set)',
+        smtpCommand: error?.command,
+        smtpResponse: error?.response,
+      },
     });
     throw new Error('Failed to send email. Please try again in a few minutes.');
   }

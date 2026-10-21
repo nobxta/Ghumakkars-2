@@ -5,10 +5,11 @@ import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
+import { withErrorLog } from '@/lib/error-log';
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const limit = checkRateLimit(request, 'resendSignupOtp', AUTH_LIMITS.resendSignupOtp);
     if (limit.ok === false) {
@@ -92,3 +93,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withErrorLog('otp', 'Resend signup OTP', handlePOST);
