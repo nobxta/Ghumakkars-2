@@ -501,7 +501,28 @@ async function send(mailOptions: { from: string; to: string; subject: string; ht
     const info = await transporter.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
-    console.error(`Error sending email to ${mailOptions.to}:`, error?.message || error);
-    throw new Error('Failed to send email');
+    console.error(`[Email] Failed to send "${mailOptions.subject}" to ${mailOptions.to}`, {
+      from: mailOptions.from,
+      smtpHost: process.env.SMTP_HOST || 'smtp.hostinger.com',
+      smtpUser: process.env.SMTP_USER || '(not set)',
+      smtpPassSet: !!process.env.SMTP_PASS,
+      code: error?.code, // e.g. EAUTH, ECONNECTION, ETIMEDOUT, EENVELOPE
+      command: error?.command,
+      responseCode: error?.responseCode,
+      response: error?.response,
+      message: error?.message,
+      hint: smtpErrorHint(error),
+    });
+    throw new Error('Failed to send email. Please try again in a few minutes.');
   }
+}
+
+function smtpErrorHint(error: any): string {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return 'SMTP_USER / SMTP_PASS env vars are missing on this server';
+  if (error?.code === 'EAUTH' || error?.responseCode === 535) return 'SMTP login rejected: check SMTP_USER / SMTP_PASS';
+  if (error?.code === 'EENVELOPE' || [550, 553, 554].includes(error?.responseCode)) {
+    return 'Sender or recipient rejected: the "from" address may not be allowed for SMTP_USER (add it as an alias in Hostinger)';
+  }
+  if (['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS'].includes(error?.code)) return 'Could not reach SMTP server: check SMTP_HOST / SMTP_PORT';
+  return 'Unknown SMTP error';
 }

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateOTP, storeOTP, verifyOTP } from '@/lib/otp-store';
 import { sendLoginOTPEmail } from '@/lib/email';
-import type { SupabaseUser } from '@/lib/types/supabase';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 
 export const runtime = "nodejs";
 
@@ -34,21 +34,9 @@ export async function POST(request: NextRequest) {
 
       // Check if email is already in use
       const adminClient = createAdminClient();
-      const { data, error } = await adminClient.auth.admin.listUsers();
+      const existingUser = await findAuthUserByEmail(adminClient, normalizedEmail);
 
-      if (error || !data?.users) {
-        return NextResponse.json(
-          { error: 'Unable to fetch users' },
-          { status: 500 }
-        );
-      }
-
-      const users = data.users as SupabaseUser[];
-      const emailExists = users.some(
-        (u) => u.email?.toLowerCase() === normalizedEmail
-      );
-
-      if (emailExists) {
+      if (existingUser) {
         return NextResponse.json(
           { error: 'This email is already registered' },
           { status: 400 }

@@ -246,7 +246,7 @@ Admin UI is protected only in `app/admin/layout.tsx` (client-side); admin APIs a
 
 ### 8.1 All API Endpoints (from `app/api`)
 
-- **Auth:** signup, send-otp, verify-otp, verify-signup-otp, resend-signup-otp, send-password-reset, verify-reset-token, reset-password, check-email  
+- **Auth:** signup, send-otp, verify-otp, verify-signup-otp, resend-signup-otp, send-password-reset, verify-reset-token, reset-password  
 - **Profile:** change-password, change-email, upload-avatar  
 - **Payment:** create-razorpay-order, verify-razorpay-payment, validate-coupon, settings  
 - **Bookings:** send-notification, submit-remaining-payment  
@@ -262,7 +262,7 @@ Admin UI is protected only in `app/admin/layout.tsx` (client-side); admin APIs a
 
 ### 8.2 Unused / Duplicate / Wrong Status / Inconsistent Errors
 
-- **Unused:** Not determined without usage search; check-email and some referral endpoints may be low-traffic.  
+- **Unused:** Not determined without usage search; some referral endpoints may be low-traffic.  
 - **Duplicate:** review-payment vs review-payment-transaction (different flows; not duplicate).  
 - **Status codes:** Most return 400/401/404/500 appropriately; ensure 403 for forbidden.  
 - **Error handling:** Some routes return generic 500 with message; standardize JSON shape and codes.

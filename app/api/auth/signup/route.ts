@@ -4,7 +4,7 @@ import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
 import { storePendingSignup } from '@/lib/pending-signup-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
-import type { SupabaseUser } from '@/lib/types/supabase';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 
 export const runtime = "nodejs";
 
@@ -83,21 +83,16 @@ export async function POST(request: NextRequest) {
     // Check if user already exists by email
     const adminClient = createAdminClient();
     
-    // Check in auth.users - look for all users (including deleted/inactive)
-    const { data, error: listUsersError } = await adminClient.auth.admin.listUsers();
-    
-    if (listUsersError || !data?.users) {
-      console.error('Error listing users:', listUsersError);
+    let existingUserByEmail;
+    try {
+      existingUserByEmail = await findAuthUserByEmail(adminClient, normalizedEmail);
+    } catch (lookupError) {
+      console.error('Error looking up user:', lookupError);
       return NextResponse.json(
         { error: 'Unable to verify account. Please try again.' },
         { status: 500 }
       );
     }
-    
-    const users = data.users as SupabaseUser[];
-    const existingUserByEmail = users.find(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
     
     if (existingUserByEmail) {
       // Log detailed info about the existing user for debugging

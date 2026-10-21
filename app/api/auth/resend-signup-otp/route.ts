@@ -4,7 +4,7 @@ import { getPendingSignup } from '@/lib/pending-signup-store';
 import { sendSignupOTPEmail } from '@/lib/email';
 import { generateOTP, storeOTP } from '@/lib/otp-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
-import type { SupabaseUser } from '@/lib/types/supabase';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 
 export const runtime = "nodejs";
 
@@ -51,15 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Case 2: Existing user not yet verified – legacy resend
-    const { data, error } = await adminClient.auth.admin.listUsers();
-    if (error || !data?.users) {
-      return NextResponse.json(
-        { error: 'Unable to verify. Please try again.' },
-        { status: 500 }
-      );
-    }
-    const users = data.users as SupabaseUser[];
-    const user = users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+    const user = await findAuthUserByEmail(adminClient, normalizedEmail);
     if (!user) {
       return NextResponse.json(
         { error: 'No pending signup found. Please start signup again.' },

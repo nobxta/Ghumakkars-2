@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyOTP } from '@/lib/otp-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
@@ -55,19 +56,7 @@ export async function POST(request: NextRequest) {
 
     // Get user from Supabase Auth using admin client
     const adminClient = createAdminClient();
-    const { data, error: userError } = await adminClient.auth.admin.listUsers();
-
-    if (userError || !data?.users) {
-      return NextResponse.json(
-        { error: 'Failed to verify user' },
-        { status: 500 }
-      );
-    }
-
-    const users = data.users as SupabaseUser[];
-    const user = users.find(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
+    const user = await findAuthUserByEmail(adminClient, normalizedEmail);
 
     if (!user) {
       return NextResponse.json(

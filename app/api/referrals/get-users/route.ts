@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { listAllAuthUsers } from '@/lib/supabase/find-user';
 import type { SupabaseUser } from '@/lib/types/supabase';
 
 export const runtime = "nodejs";
@@ -28,16 +29,17 @@ export async function POST(request: NextRequest) {
 
     // Use admin client to access auth.users
     const adminClient = createAdminClient();
-    const { data, error: usersError } = await adminClient.auth.admin.listUsers();
-
-    if (usersError || !data?.users) {
+    let users: SupabaseUser[];
+    try {
+      users = await listAllAuthUsers(adminClient);
+    } catch (usersError) {
+      console.error('Error listing users:', usersError);
       return NextResponse.json(
         { error: 'Failed to fetch users' },
         { status: 500 }
       );
     }
 
-    const users = data.users as SupabaseUser[];
     // Filter to only requested user IDs
     const filteredUsers = users.filter(u => userIds.includes(u.id));
 

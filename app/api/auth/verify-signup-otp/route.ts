@@ -3,7 +3,7 @@ import { verifyOTP } from '@/lib/otp-store';
 import { getPendingSignup, deletePendingSignup } from '@/lib/pending-signup-store';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
-import type { SupabaseUser } from '@/lib/types/supabase';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 
 export const runtime = "nodejs";
 
@@ -66,9 +66,7 @@ export async function POST(request: NextRequest) {
 
     // Fallback: existing auth user without profile (orphan) or legacy flow – just mark verified
     if (!pending) {
-      const { data: listData } = await adminClient.auth.admin.listUsers();
-      const users = (listData?.users || []) as SupabaseUser[];
-      const existingUser = users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+      const existingUser = await findAuthUserByEmail(adminClient, normalizedEmail);
       if (existingUser) {
         await adminClient.auth.admin.updateUserById(existingUser.id, { email_confirm: true });
         await adminClient.from('profiles').update({ email_verified: true }).eq('id', existingUser.id);

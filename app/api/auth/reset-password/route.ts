@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getResetTokenEmail, removeResetToken } from '@/lib/reset-token-store';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
-import type { SupabaseUser } from '@/lib/types/supabase';
+import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 
 export const runtime = "nodejs";
 
@@ -43,19 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Update password using admin client
     const adminClient = createAdminClient();
-    const { data, error } = await adminClient.auth.admin.listUsers();
-
-    if (error || !data?.users) {
-      return NextResponse.json(
-        { error: 'Unable to fetch users' },
-        { status: 500 }
-      );
-    }
-
-    const users = data.users as SupabaseUser[];
-    const user = users.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
+    const user = await findAuthUserByEmail(adminClient, email);
 
     if (!user) {
       return NextResponse.json(

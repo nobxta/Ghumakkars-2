@@ -471,11 +471,6 @@ Resend signup OTP
 - Body: `{ email: string }`
 - Response: `{ success: boolean, message: string }`
 
-#### `POST /api/auth/check-email`
-Check if email exists
-- Body: `{ email: string }`
-- Response: `{ exists: boolean }`
-
 #### `POST /api/auth/send-password-reset`
 Send password reset email
 - Body: `{ email: string }`
