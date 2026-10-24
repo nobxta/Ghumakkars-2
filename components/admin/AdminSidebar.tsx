@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift, CreditCard, Bug } from 'lucide-react';
+import { LayoutDashboard, MapPin, Calendar, Users, Settings, BarChart3, X, Tag, Gift, CreditCard, Bug, BookUser } from 'lucide-react';
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -28,6 +28,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
     { href: '/admin/bookings', icon: Calendar, label: 'Bookings' },
     { href: '/admin/payments', icon: CreditCard, label: 'Payments' },
     { href: '/admin/users', icon: Users, label: 'Users' },
+    { href: '/admin/contacts', icon: BookUser, label: 'Contacts' },
     { href: '/admin/coupons', icon: Tag, label: 'Coupons' },
     { href: '/admin/referrals', icon: Gift, label: 'Referrals' },
     { href: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
