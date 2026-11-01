@@ -329,7 +329,7 @@ export default function AdminBookingDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
           <p className="text-purple-600 font-medium">Loading booking details...</p>
@@ -340,7 +340,7 @@ export default function AdminBookingDetailsPage() {
 
   if (error && !booking) {
     return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30 px-4">
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
@@ -396,7 +396,7 @@ export default function AdminBookingDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen pb-8 bg-[#FAFAFA] tabular-nums print:bg-white print:pt-0 print:pb-0">
+    <div className="pb-8 tabular-nums print:bg-white print:pt-0 print:pb-0">
       {/* Print-only header */}
       <div className="hidden print:block max-w-4xl mx-auto px-6 pt-6 pb-4 border-b border-gray-300">
         <div className="flex items-center justify-between">
@@ -412,7 +412,7 @@ export default function AdminBookingDetailsPage() {
       </div>
 
       {/* Sticky top header — the only place booking status appears */}
-      <div className="sticky top-16 z-30 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
+      <div className="sticky top-12 sm:top-14 md:top-16 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
         <div className="w-full h-14 flex items-center gap-3">
           <Link href="/admin/bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
@@ -842,7 +842,7 @@ export default function AdminBookingDetailsPage() {
           <div className="absolute right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-[toast-in_0.2s_ease-out]" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-[#ECECEE] px-5 py-4 flex items-center gap-3 z-10">
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${drawerMode === 'payment' ? 'bg-green-50 text-green-600' : drawerMode === 'status' ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                {drawerMode === 'payment' ? <IndianRupee className="h-4.5 w-4.5" /> : drawerMode === 'status' ? <Shield className="h-4.5 w-4.5" /> : <Gift className="h-4.5 w-4.5" />}
+                {drawerMode === 'payment' ? <IndianRupee className="h-[18px] w-[18px]" /> : drawerMode === 'status' ? <Shield className="h-[18px] w-[18px]" /> : <Gift className="h-[18px] w-[18px]" />}
               </span>
               <h2 className="text-base font-bold text-gray-900 flex-1">{drawerMode === 'payment' ? 'Record a payment' : drawerMode === 'status' ? 'Change booking status' : 'Refer to a partner'}</h2>
               <button onClick={() => setDrawerMode(null)} className="p-1.5 rounded-lg hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><X className="h-5 w-5 text-gray-600" /></button>

@@ -183,6 +183,7 @@ export default function BookTripPage() {
     qrUrl?: string; 
     upiId?: string; 
     paymentMode?: 'manual' | 'razorpay' | 'both';
+    allowCashPayment?: boolean;
     manualMethods?: Array<{
       id: string;
       upi_id: string;
@@ -493,6 +494,7 @@ export default function BookTripPage() {
         qrUrl: data.qrUrl ?? data.payment_qr_url ?? undefined,
         upiId: data.upiId ?? data.payment_upi_id ?? undefined,
         paymentMode: mode,
+        allowCashPayment: data.allowCashPayment !== false,
         manualMethods,
       });
     } catch (error) {
@@ -836,6 +838,10 @@ export default function BookTripPage() {
   const handleCashPaymentConfirm = async () => {
     setShowCashConfirm(false);
     if (!trip || !user) return;
+    if (paymentSettings.allowCashPayment === false) {
+      setError('Pay in Person is currently not available. Please choose another payment option.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -949,6 +955,10 @@ export default function BookTripPage() {
 
   const handleCashPayment = () => {
     if (!trip || !user) return;
+    if (paymentSettings.allowCashPayment === false) {
+      setError('Pay in Person is currently not available. Please choose another payment option.');
+      return;
+    }
     // Ensure every data-entry step (passenger, customize, id) is valid first.
     for (const k of stepKeys) {
       if (k === 'payment') break;
@@ -2117,24 +2127,26 @@ export default function BookTripPage() {
                 )}
 
                 {/* Pay in Person — offline/cash */}
-                <button
-                  type="button"
-                  onClick={handleCashPayment}
-                  disabled={submitting || paymentOverlay !== 'idle'}
-                  className="w-full px-4 md:px-8 py-3 md:py-4 bg-white border-2 border-green-600 text-green-700 rounded-xl font-bold text-sm md:text-lg hover:bg-green-50 transition-all shadow-sm hover:shadow flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {submitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-green-600 border-t-transparent"></div>
-                      <span>Creating booking…</span>
-                    </>
-                  ) : (
-                    <>
-                      <IndianRupee className="h-4 w-4 md:h-6 md:w-6" />
-                      <span>Pay in Person</span>
-                    </>
-                  )}
-                </button>
+                {paymentSettings.allowCashPayment !== false && (
+                  <button
+                    type="button"
+                    onClick={handleCashPayment}
+                    disabled={submitting || paymentOverlay !== 'idle'}
+                    className="w-full px-4 md:px-8 py-3 md:py-4 bg-white border-2 border-green-600 text-green-700 rounded-xl font-bold text-sm md:text-lg hover:bg-green-50 transition-all shadow-sm hover:shadow flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-2 border-green-600 border-t-transparent"></div>
+                        <span>Creating booking…</span>
+                      </>
+                    ) : (
+                      <>
+                        <IndianRupee className="h-4 w-4 md:h-6 md:w-6" />
+                        <span>Pay in Person</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
               {error && (
                 <div className="mt-3 md:mt-4 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">

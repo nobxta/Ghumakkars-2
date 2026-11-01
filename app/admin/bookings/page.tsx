@@ -689,7 +689,7 @@ export default function AdminBookingsPage() {
   );
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50/70 px-3.5 pb-[calc(96px+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-8 lg:p-6">
+    <div className="w-full overflow-x-hidden">
       <div className="mx-auto w-full max-w-[1680px] space-y-4 overflow-x-hidden">
         <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="min-w-0">

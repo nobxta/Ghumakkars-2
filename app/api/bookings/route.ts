@@ -236,6 +236,21 @@ async function handlePOST(request: NextRequest) {
 
     let manualPaymentSnapshot: Record<string, unknown> | null = null;
     let verifiedManualMethodId: string | null = null;
+    if (payment_mode === 'cash') {
+      const { data: paySettings } = await adminClient
+        .from('payment_settings')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (paySettings && paySettings.allow_cash_payment === false) {
+        return NextResponse.json(
+          { error: 'Pay in Person is currently disabled. Please choose an online payment method.' },
+          { status: 400 }
+        );
+      }
+    }
+
     if (payment_mode === 'manual') {
       const selectedId = String(manual_payment_method_id || '').trim();
       const methodQuery = adminClient

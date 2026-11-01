@@ -133,7 +133,7 @@ export default function AdminBookingAddons({
               <div key={row.id} className={`px-5 py-3.5 ${cancelled ? 'opacity-60' : ''}`}>
                 <div className="flex items-start gap-3">
                   <span className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 shrink-0">
-                    <AddonIcon iconKey={row.icon_key} className="w-4.5 h-4.5" />
+                    <AddonIcon iconKey={row.icon_key} className="w-[18px] h-[18px]" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">

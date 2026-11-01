@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const TRIP_COLUMNS =
-  'id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,created_at,updated_at';
+  'id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,is_recurring,recurrence_day,recurrence_weeks_ahead,created_at,updated_at';
 
 const PAST_STATUSES = ['completed', 'cancelled', 'postponed'];
 
@@ -48,15 +48,14 @@ export default async function TripsPage() {
   );
 
   return (
-    <div className="min-h-screen pt-16 pb-8 bg-gradient-to-b from-white via-purple-50/30 to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Header Section */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-3 sm:mb-4 tracking-tight">
-            Upcoming Trips
+    <div className="min-h-screen bg-white pt-16 pb-24 md:pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-8">
+        <div className="mb-3 sm:mb-6">
+          <h1 className="text-2xl sm:text-[32px] font-bold text-slate-900 tracking-tight leading-tight">
+            Explore Trips
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
-            Pick a date, pay or lock your seat, show up. We&apos;ll handle the rest.
+          <p className="hidden sm:block mt-1 text-[15px] text-slate-500">
+            Discover amazing destinations and book your next adventure.
           </p>
         </div>
 

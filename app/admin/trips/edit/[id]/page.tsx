@@ -558,9 +558,9 @@ export default function EditTripPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen pt-16 md:pt-20 flex items-center justify-center bg-gradient-to-b from-purple-50/30 to-white">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 md:h-16 md:w-16 border-3 border-purple-200 border-t-purple-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 md:h-16 md:w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
           <p className="mt-4 text-sm md:text-base text-purple-600 tracking-wide uppercase font-medium">Loading trip data...</p>
         </div>
       </div>
@@ -568,8 +568,8 @@ export default function EditTripPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50/30 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+    <div>
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <Link
@@ -587,13 +587,13 @@ export default function EditTripPage() {
         <StepIndicator />
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 animate-in slide-in-from-top-5 duration-300">
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 animate-slide-down">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 animate-in slide-in-from-top-5 duration-300">
+          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 animate-slide-down">
             Trip updated successfully! Redirecting...
           </div>
         )}

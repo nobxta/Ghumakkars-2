@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     // Fetch the latest payment settings
     const { data, error } = await adminClient
       .from('payment_settings')
-      .select('payment_qr_url, payment_upi_id, payment_mode, seat_lock_due_days_before')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       upiId: data?.payment_upi_id || null,
       paymentMode,
       dueDaysBefore: data?.seat_lock_due_days_before ?? 5,
+      allowCashPayment: data?.allow_cash_payment !== false,
       manualMethods,
     });
   } catch (error: any) {

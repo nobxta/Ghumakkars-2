@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS payment_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   payment_qr_url TEXT,
   payment_upi_id VARCHAR(255),
+  allow_cash_payment BOOLEAN NOT NULL DEFAULT true,
   updated_by UUID REFERENCES auth.users(id),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

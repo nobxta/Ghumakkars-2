@@ -137,7 +137,7 @@ export default function IconPicker({
                 return (
                   <button key={name} type="button" onClick={() => pick(name)}
                     className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300">
-                    <Ico className="w-4.5 h-4.5" />
+                    <Ico className="w-[18px] h-[18px]" />
                   </button>
                 );
               })}

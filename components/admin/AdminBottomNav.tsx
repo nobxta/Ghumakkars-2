@@ -36,7 +36,7 @@ export default function AdminBottomNav() {
       {/* More menu overlay */}
       {showMore && (
         <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setShowMore(false)}>
-          <div className="absolute bottom-[4.5rem] left-0 right-0 bg-white border-t-2 border-purple-200 rounded-t-2xl shadow-2xl p-3 animate-slide-up"
+          <div className="absolute bottom-14 left-0 right-0 bg-white border-t-2 border-purple-200 rounded-t-2xl shadow-2xl p-3 animate-slide-up"
             onClick={e => e.stopPropagation()}
           >
             <div className="grid grid-cols-4 gap-2">
@@ -65,7 +65,7 @@ export default function AdminBottomNav() {
       )}
 
       {/* Bottom nav bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white/95 backdrop-blur-md border-t border-purple-200 shadow-[0_-2px_10px_rgba(168,85,247,0.1)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/95 backdrop-blur-md border-t border-purple-200 shadow-[0_-2px_10px_rgba(168,85,247,0.1)]">
         <div className="flex items-center justify-around h-14 px-1 max-w-lg mx-auto">
           {primaryItems.map(item => {
             const Icon = item.icon;

@@ -513,8 +513,8 @@ export default function CreateTripPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50/30 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+    <div>
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <Link
@@ -532,13 +532,13 @@ export default function CreateTripPage() {
         <StepIndicator />
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 animate-in slide-in-from-top-5 duration-300">
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 animate-slide-down">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 animate-in slide-in-from-top-5 duration-300">
+          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 animate-slide-down">
             Trip created successfully! Redirecting...
           </div>
         )}

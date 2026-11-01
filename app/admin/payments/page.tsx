@@ -218,8 +218,8 @@ export default function AdminPaymentsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-16 pb-20 bg-gradient-to-b from-purple-50/40 via-white to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div>
+      <div className="max-w-7xl mx-auto">
         <div className="mb-5 sm:mb-6 flex items-center justify-between gap-3">
           <div>
             <Link href="/admin" className="inline-flex items-center text-purple-700 hover:text-purple-900 text-sm font-semibold mb-2">
@@ -442,7 +442,7 @@ export default function AdminPaymentsPage() {
 
             {!detail ? (
               <div className="p-10 text-center text-gray-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-3 border-purple-200 border-t-purple-600 mx-auto mb-3"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-purple-200 border-t-purple-600 mx-auto mb-3"></div>
                 Loading details…
               </div>
             ) : (

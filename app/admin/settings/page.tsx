@@ -186,6 +186,7 @@ export default function AdminSettingsPage() {
     referral_reward_amount: 100,
     referral_friend_reward_amount: 50,
     seat_lock_due_days_before: 5,
+    allow_cash_payment: true,
     updated_at: null as string | null,
     razorpay: { status: 'missing_configuration', configured: false, webhookConfigured: false },
   });
@@ -245,6 +246,7 @@ export default function AdminSettingsPage() {
         referral_reward_amount: settings.payment.referral_reward_amount,
         referral_friend_reward_amount: settings.payment.referral_friend_reward_amount,
         seat_lock_due_days_before: settings.payment.seat_lock_due_days_before,
+        allow_cash_payment: settings.payment.allow_cash_payment !== false,
       }));
       setMethods(manual.methods || []);
       setWa(whatsapp);
@@ -276,6 +278,7 @@ export default function AdminSettingsPage() {
       referral_reward_amount: payment.referral_reward_amount,
       referral_friend_reward_amount: payment.referral_friend_reward_amount,
       seat_lock_due_days_before: payment.seat_lock_due_days_before,
+      allow_cash_payment: payment.allow_cash_payment,
     });
     const hasUnsavedPayment = savedPayment && currentPayment !== savedPayment;
     if (!hasUnsavedGeneral && !hasUnsavedPayment) return;
@@ -330,6 +333,7 @@ export default function AdminSettingsPage() {
         referral_reward_amount: data.payment.referral_reward_amount,
         referral_friend_reward_amount: data.payment.referral_friend_reward_amount,
         seat_lock_due_days_before: data.payment.seat_lock_due_days_before,
+        allow_cash_payment: data.payment.allow_cash_payment !== false,
       }));
       showToast('Payment settings saved');
     } catch (error: any) {
@@ -607,6 +611,14 @@ export default function AdminSettingsPage() {
                       <span className="mt-1 block text-xs leading-relaxed text-slate-500">{option.detail}</span>
                     </button>
                   ))}
+                </div>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <Toggle
+                    checked={payment.allow_cash_payment}
+                    onChange={(v) => setPayment({ ...payment, allow_cash_payment: v })}
+                    label="Allow Pay in Person (Cash on arrival)"
+                    description="When enabled, customers can choose to book offline and pay in person. When disabled, only online payment (Razorpay / Pay UPI) is offered."
+                  />
                 </div>
               </Card>
 

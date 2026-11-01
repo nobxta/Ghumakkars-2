@@ -903,7 +903,7 @@ export default function AdminTripDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
           <p className="text-purple-600 font-medium">Loading trip details...</p>
@@ -914,7 +914,7 @@ export default function AdminTripDetailsPage() {
 
   if (error && !trip) {
     return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30 px-4">
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-2">Error</h2>
@@ -936,8 +936,8 @@ export default function AdminTripDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen pt-16 pb-24 bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div>
+      <div className="max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="mb-6">
           <Link 
@@ -1140,7 +1140,7 @@ export default function AdminTripDetailsPage() {
                 {exportMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                    <div className="absolute right-0 mt-1 w-80 max-h-[80vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-20">
+                    <div className="absolute right-0 mt-1 w-80 max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-20">
                       <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-gray-500 bg-gray-50 border-b border-gray-100">PDF — print ready</div>
                       <button onClick={() => { setExportMenuOpen(false); downloadCarryPDF(); }} className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-start gap-3">
                         <UsersIcon className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -1237,7 +1237,7 @@ export default function AdminTripDetailsPage() {
               cancelled: statusCount('cancelled'),
             };
             return (
-              <div className="sticky top-16 z-10 flex flex-col sm:flex-row sm:items-center gap-2 mb-3 bg-white/95 backdrop-blur-sm py-2 -mx-4 sm:-mx-5 px-4 sm:px-5 border-b border-gray-100">
+              <div className="sticky top-12 sm:top-14 md:top-16 z-10 flex flex-col sm:flex-row sm:items-center gap-2 mb-3 bg-white/95 backdrop-blur-sm py-2 -mx-4 sm:-mx-5 px-4 sm:px-5 border-b border-gray-100">
                 <div className="relative w-full sm:w-72">
                   <input
                     value={bookingSearch}
