@@ -1,0 +1,49 @@
+/* Scoped styles strictly for the Registered Users page (.admin-users-page) */
+.pageRoot {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #171923;
+  background-color: #F8F9FC;
+}
+
+.tableScrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.tableScrollbar::-webkit-scrollbar-track {
+  background: #F8F9FC;
+}
+
+.tableScrollbar::-webkit-scrollbar-thumb {
+  background: #E8EAF0;
+  border-radius: 9999px;
+}
+
+.tableScrollbar::-webkit-scrollbar-thumb:hover {
+  background: #CBD5E1;
+}
+
+/* Refined SaaS card shadow */
+.cardShadow {
+  box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.04), 0 1px 2px -1px rgba(16, 24, 40, 0.04);
+}
+
+/* Refined dropdown / menu shadow */
+.popoverShadow {
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
+/* Focus styles */
+.focusable:focus-visible {
+  outline: 2px solid #7C3AED;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pageRoot,
+  .pageRoot * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
