@@ -78,6 +78,16 @@ const BOOK_LABEL = 'block text-sm font-semibold text-[#0F172A] mb-1.5';
 const BOOK_SECTION_TITLE = 'text-sm font-semibold text-[#0F172A] mb-3 uppercase tracking-wide';
 const BOOK_INPUT = 'w-full h-11 pr-4 text-sm rounded-[14px] bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] placeholder-[#94a3b8] outline-none transition-all focus:border-[#7C3AED] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.1)]';
 
+// Normalise an Indian mobile number to its 10 digits. Profiles / pasted values
+// often carry a country code or trunk prefix ("+91 98765 43210", "09876543210"),
+// which otherwise failed the 10-digit check or got truncated to the wrong number.
+function normalizePhone(raw: string | null | undefined): string {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d.slice(0, 10);
+}
+
 // Labelled input with an optional leading icon (mockup "Field").
 function BookField({ label, value, onChange, placeholder, type = 'text', Icon, maxLength, inputMode }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
@@ -264,16 +274,20 @@ export default function BookTripPage() {
       prefilledRef.current = true;
       fillIfEmpty(primaryName, `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.full_name || '', setPrimaryName);
       fillIfEmpty(primaryEmail, profile.email || user?.email || '', setPrimaryEmail);
-      fillIfEmpty(primaryPhone, profile.phone || profile.phone_number || '', setPrimaryPhone);
+      fillIfEmpty(primaryPhone, normalizePhone(profile.phone || profile.phone_number), setPrimaryPhone);
       // Normalise gender so it matches the <select> option values (male/female/…).
-      if (profile.gender) fillIfEmpty(primaryGender, String(profile.gender).toLowerCase(), setPrimaryGender);
+      if (profile.gender) {
+        const g = String(profile.gender).trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const mapped = g === 'm' ? 'male' : g === 'f' ? 'female' : g;
+        if (['male', 'female', 'other', 'prefer_not_to_say'].includes(mapped)) fillIfEmpty(primaryGender, mapped, setPrimaryGender);
+      }
       if (profile.date_of_birth) {
         const age = calculateAge(profile.date_of_birth);
         if (age) fillIfEmpty(primaryAge, age, setPrimaryAge);
       }
       if (profile.aadhaar_id) fillIfEmpty(aadhaarId, profile.aadhaar_id, setAadhaarId);
       if (profile.emergency_contact_name) fillIfEmpty(emergencyContactName, profile.emergency_contact_name, setEmergencyContactName);
-      if (profile.emergency_contact) fillIfEmpty(emergencyContactPhone, profile.emergency_contact, setEmergencyContactPhone);
+      if (profile.emergency_contact) fillIfEmpty(emergencyContactPhone, normalizePhone(profile.emergency_contact), setEmergencyContactPhone);
     } else if (user?.email) {
       // Profile not loaded yet — only seed the email; keep the guard open so the
       // full pre-fill still runs once the profile arrives.
@@ -318,15 +332,18 @@ export default function BookTripPage() {
       const d = parsed.data || {};
       if (d.primaryName) setPrimaryName(d.primaryName);
       if (d.primaryEmail) setPrimaryEmail(d.primaryEmail);
-      if (d.primaryPhone) setPrimaryPhone(d.primaryPhone);
+      if (d.primaryPhone) setPrimaryPhone(normalizePhone(d.primaryPhone));
       if (d.primaryGender) setPrimaryGender(d.primaryGender);
       if (d.primaryAge) setPrimaryAge(d.primaryAge);
       if (d.emergencyContactName) setEmergencyContactName(d.emergencyContactName);
-      if (d.emergencyContactPhone) setEmergencyContactPhone(d.emergencyContactPhone);
+      if (d.emergencyContactPhone) setEmergencyContactPhone(normalizePhone(d.emergencyContactPhone));
       if (d.aadhaarId) setAadhaarId(d.aadhaarId);
-      if (d.departureDate) setDepartureDate(d.departureDate);
-      if (d.pickupPoint) setPickupPoint(d.pickupPoint);
-      if (Array.isArray(d.passengers)) setPassengers(d.passengers.map((p: any) => ({ ...p, pid: p.pid || makePid() })));
+      // Only restore a date / pickup that is still offered — a saved draft can
+      // outlive its departure (or the admin may have edited the list), and a
+      // stale value is invisible in the UI but rejected on submit.
+      if (d.departureDate && tripDepartures(trip).includes(d.departureDate)) setDepartureDate(d.departureDate);
+      if (d.pickupPoint && (trip.pickup_points || []).includes(d.pickupPoint)) setPickupPoint(d.pickupPoint);
+      if (Array.isArray(d.passengers)) setPassengers(d.passengers.map((p: any) => ({ ...p, phone: normalizePhone(p.phone), pid: p.pid || makePid() })));
       if (Array.isArray(d.addonSelections)) setAddonSelections(d.addonSelections);
       if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
       // Stop the profile pre-fill from overriding what we just restored.
@@ -1011,11 +1028,13 @@ export default function BookTripPage() {
     }
     switch (key) {
       case 'passenger':
-        if (trip?.is_recurring && !departureDate) {
+        if (trip?.is_recurring && (!departureDate || !tripDepartures(trip).includes(departureDate))) {
+          if (departureDate) setDepartureDate('');
           setError('Please choose a departure date for this trip');
           return false;
         }
-        if (trip?.pickup_points && trip.pickup_points.length > 0 && !pickupPoint) {
+        if (trip?.pickup_points && trip.pickup_points.length > 0 && (!pickupPoint || !trip.pickup_points.includes(pickupPoint))) {
+          if (pickupPoint) setPickupPoint('');
           setError('Please choose a pickup point');
           return false;
         }
@@ -1666,7 +1685,7 @@ export default function BookTripPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2"><BookField label="Full Name" value={primaryName} onChange={setPrimaryName} placeholder="Rahul Sharma" Icon={User} /></div>
                   <BookField label="Email Address" value={primaryEmail} onChange={setPrimaryEmail} placeholder="rahul@example.com" type="email" Icon={Mail} />
-                  <BookField label="Mobile Number" value={primaryPhone} onChange={(v) => setPrimaryPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" Icon={Phone} maxLength={10} inputMode="numeric" />
+                  <BookField label="Mobile Number" value={primaryPhone} onChange={(v) => setPrimaryPhone(normalizePhone(v))} placeholder="98765 43210" Icon={Phone} maxLength={16} inputMode="tel" />
                   <BookSelect label="Gender" value={primaryGender} onChange={setPrimaryGender}>
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
@@ -1689,7 +1708,7 @@ export default function BookTripPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <BookField label="Contact Name" value={emergencyContactName} onChange={setEmergencyContactName} placeholder="Contact name" Icon={User} />
-                  <BookField label="Contact Number" value={emergencyContactPhone} onChange={(v) => setEmergencyContactPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit number" Icon={Phone} maxLength={10} inputMode="numeric" />
+                  <BookField label="Contact Number" value={emergencyContactPhone} onChange={(v) => setEmergencyContactPhone(normalizePhone(v))} placeholder="10-digit number" Icon={Phone} maxLength={16} inputMode="tel" />
                 </div>
               </div>
             </section>
@@ -1730,7 +1749,7 @@ export default function BookTripPage() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="sm:col-span-2"><BookField label="Full Name" value={passenger.name} onChange={(v) => updatePassenger(index, 'name', v)} placeholder="Full name" Icon={User} /></div>
-                        <BookField label="Mobile Number" value={passenger.phone} onChange={(v) => updatePassenger(index, 'phone', v.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit number" Icon={Phone} maxLength={10} inputMode="numeric" />
+                        <BookField label="Mobile Number" value={passenger.phone} onChange={(v) => updatePassenger(index, 'phone', normalizePhone(v))} placeholder="10-digit number" Icon={Phone} maxLength={16} inputMode="tel" />
                         <BookSelect label="Gender" value={passenger.gender} onChange={(v) => updatePassenger(index, 'gender', v)}>
                           <option value="">Select gender</option>
                           <option value="male">Male</option>
