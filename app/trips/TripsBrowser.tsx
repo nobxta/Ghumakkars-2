@@ -9,7 +9,7 @@ import { formatDeparture } from '@/lib/recurrence';
 import { upcomingDepartures, todayInIndia } from '@/lib/trip-dates';
 import {
   MapPin, Clock, Users, Search, Calendar, CheckCircle, XCircle,
-  SlidersHorizontal, ChevronDown, ChevronRight, ArrowUpDown, ArrowRight, X,
+  SlidersHorizontal, ChevronDown, ChevronRight, ArrowUpDown, ArrowRight, X, Star,
 } from 'lucide-react';
 
 interface Trip {
@@ -44,6 +44,7 @@ interface Trip {
   recurrence_day?: number | null;
   recurrence_weeks_ahead?: number | null;
   custom_dates?: string[] | null;
+  is_featured?: boolean;
   created_at?: string;
 }
 
@@ -135,6 +136,10 @@ export default function TripsBrowser({
         filtered.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
         break;
     }
+
+    // Admin-pinned (Featured) trips always come first; sort is stable, so the
+    // chosen order is kept within the featured and non-featured groups.
+    filtered.sort((a, b) => Number(!!b.is_featured) - Number(!!a.is_featured));
 
     return filtered;
   }, [trips, searchQuery, selectedDestination, sortBy]);
@@ -377,6 +382,12 @@ function TripCard({
           <MapPin className="h-3.5 w-3.5 shrink-0 text-purple-600" aria-hidden />
           <span className="truncate">{trip.destination}</span>
         </span>
+        {trip.is_featured && (
+          <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-xs font-semibold text-amber-950 shadow-sm">
+            <Star className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
+            Featured
+          </span>
+        )}
         {trip.discount_percentage > 0 && (
           <span className="absolute top-3 right-3 rounded-full bg-purple-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
             {trip.discount_percentage}% OFF

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X, Eye, EyeOff, Star } from 'lucide-react';
 import Link from 'next/link';
 import { moneyOf } from '@/lib/booking-money';
 
@@ -28,6 +28,7 @@ interface Trip {
   completed_at?: string;
   actual_participants?: number;
   show_on_user_side?: boolean;
+  is_featured?: boolean;
 }
 
 export default function AdminTripsPage() {
@@ -196,6 +197,22 @@ export default function AdminTripsPage() {
     }
   };
 
+  const handleToggleFeatured = async (tripId: string, featured: boolean) => {
+    // Optimistic: flip the star immediately, roll back on failure.
+    setTrips((prev) => prev.map((t) => (t.id === tripId ? { ...t, is_featured: featured } : t)));
+    try {
+      const response = await fetch(`/api/admin/trips/${tripId}/featured`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: featured }),
+      });
+      if (!response.ok) throw new Error('Failed to update featured status');
+    } catch (error: any) {
+      setTrips((prev) => prev.map((t) => (t.id === tripId ? { ...t, is_featured: !featured } : t)));
+      alert('Error: ' + error.message);
+    }
+  };
+
   // Categorize trips by status (ongoing = active and today within start_date..end_date)
   const getTripStatus = (trip: Trip): string => {
     if (trip.status && !['active'].includes(trip.status)) return trip.status;
@@ -256,6 +273,17 @@ export default function AdminTripsPage() {
             </div>
           </Link>
           <div className="flex items-center space-x-1 ml-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => handleToggleFeatured(trip.id, !trip.is_featured)}
+              className={`p-1.5 rounded-lg transition-colors ${
+                trip.is_featured ? 'text-amber-500 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500'
+              }`}
+              title={trip.is_featured ? 'Unpin from top of trips page' : 'Pin to top of trips page (Featured)'}
+              aria-pressed={!!trip.is_featured}
+            >
+              <Star className="h-4 w-4" fill={trip.is_featured ? 'currentColor' : 'none'} />
+            </button>
             <Link
               href={`/admin/trips/edit/${trip.id}`}
               className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
@@ -419,6 +447,11 @@ export default function AdminTripsPage() {
           }`}>
             {status.charAt(0).toUpperCase() + status.slice(1)}
           </span>
+          {trip.is_featured && (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold">
+              <Star className="h-3 w-3" fill="currentColor" /> Featured
+            </span>
+          )}
           {trip.booking_disabled && (
             <span className="text-xs text-red-600 font-medium">Bookings Disabled</span>
           )}
