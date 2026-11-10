@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info, Sparkles } from 'lucide-react';
-import { nextOccurrences, formatDeparture } from '@/lib/recurrence';
+import { tripDepartures, formatDeparture } from '@/lib/recurrence';
 import UpiPayButton from '@/components/UpiPayButton';
 import { upiNote } from '@/lib/upi';
 import { reportClientError } from '@/lib/report-error';
@@ -60,6 +60,7 @@ interface Trip {
   current_participants: number;
   is_recurring?: boolean;
   recurrence_day?: number;
+  custom_dates?: string[] | null;
   recurrence_weeks_ahead?: number;
   duration_days?: number;
   pickup_points?: string[];
@@ -456,7 +457,7 @@ export default function BookTripPage() {
     try {
       const idOrSlug = String(params.id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, pickup_points, addons_enabled');
+      const query = supabase.from('trips').select('id, title, destination, discounted_price, seat_lock_price, max_participants, current_participants, early_bird_price, early_bird_conditions, is_recurring, recurrence_day, recurrence_weeks_ahead, custom_dates, duration_days, pickup_points, addons_enabled');
       const { data, error } = isUuid
         ? await query.eq('id', idOrSlug).single()
         : await query.eq('slug', idOrSlug).single();
@@ -1587,11 +1588,14 @@ export default function BookTripPage() {
           <div className="max-w-[680px] mx-auto space-y-6">
 
             {/* Departure date — horizontal cards */}
-            {trip?.is_recurring && typeof trip.recurrence_day === 'number' && (
+            {trip?.is_recurring && (
               <section>
                 <h2 className={BOOK_SECTION_TITLE}>Select Departure Date</h2>
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                  {nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).map((d) => {
+                  {tripDepartures(trip).length === 0 && (
+                    <p className="col-span-full text-sm text-gray-500">No upcoming departures are open right now.</p>
+                  )}
+                  {tripDepartures(trip).map((d) => {
                     const selected = departureDate === d;
                     return (
                       <button

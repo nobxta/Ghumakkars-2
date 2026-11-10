@@ -25,7 +25,7 @@ import {
   CheckCircle, XCircle, Clock, Package, CreditCard, TrendingUp,
   DollarSign, User, Mail, Phone, Eye, AlertCircle, Download, Printer, FileText, Plus, UserPlus, ChevronDown, X, Users as UsersIcon, IndianRupee as IndianRupeeIcon, Clock as ClockIcon, Lock as LockIcon
 } from 'lucide-react';
-import { nextOccurrences, formatDeparture, toDateString } from '@/lib/recurrence';
+import { tripDepartures, scheduleLabel, formatDeparture, toDateString } from '@/lib/recurrence';
 import { moneyOf } from '@/lib/booking-money';
 import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 
@@ -198,11 +198,9 @@ export default function AdminTripDetailsPage() {
       map[b.departure_date] = (map[b.departure_date] || 0) + (Number(b.number_of_participants) || 1);
     });
     // scheduled upcoming departures (even with 0 bookings) so admins can see "next batch"
-    if (typeof trip.recurrence_day === 'number') {
-      nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4).forEach((d) => {
-        if (!(d in map)) map[d] = 0;
-      });
-    }
+    tripDepartures(trip).forEach((d) => {
+      if (!(d in map)) map[d] = 0;
+    });
     return Object.entries(map)
       .map(([date, count]) => ({ date, count, past: date < todayStr }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -681,7 +679,7 @@ export default function AdminTripDetailsPage() {
   const _pdfDeparture = () => {
     if (!trip?.is_recurring) return `${trip?.start_date || '—'} to ${trip?.end_date || '—'}`;
     if (selectedBatch !== 'all' && selectedBatch !== 'unscheduled') return formatDeparture(selectedBatch, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-    return `Every ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][trip.recurrence_day]} (all departures)`;
+    return `${scheduleLabel(trip, true)} (all departures)`;
   };
   const _pdfHeader = (doc: any, pageW: number, margin: number, title: string, subtitle: string) => {
     doc.setFillColor(94, 53, 177);
@@ -966,7 +964,7 @@ export default function AdminTripDetailsPage() {
               <p className="text-sm text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="inline-flex items-center text-gray-600"><MapPin className="h-4 w-4 mr-1 text-purple-600" />{trip.destination}</span>
                 <span className="text-gray-300">•</span>
-                <span>{trip.is_recurring ? `Every ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][trip.recurrence_day]}` : `${trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – ${trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}`}</span>
+                <span>{trip.is_recurring ? scheduleLabel(trip, true) : `${trip.start_date ? new Date(trip.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'} – ${trip.end_date ? new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}`}</span>
                 <span className="text-gray-300">•</span>
                 <span>{trip.duration_text || `${trip.duration_days || 0} days`}</span>
                 <span className="text-gray-300">•</span>
@@ -1305,13 +1303,13 @@ export default function AdminTripDetailsPage() {
                         <td className="py-2.5 px-3 text-gray-700 whitespace-nowrap">{displayPhone}</td>
                         <td className="py-2.5 px-3 text-center font-semibold text-gray-900">{booking.number_of_participants || 1}</td>
                         <td className="py-2.5 px-3 whitespace-nowrap">
-                          {trip.is_recurring && typeof trip.recurrence_day === 'number' ? (
+                          {trip.is_recurring ? (
                             editingDateId === booking.id ? (
                               <select autoFocus disabled={savingDate} defaultValue={booking.departure_date || ''}
                                 onChange={(e) => handleChangeDeparture(booking.id, e.target.value)} onBlur={() => setEditingDateId(null)}
                                 className="text-xs px-1.5 py-1 border border-purple-300 rounded bg-white text-gray-900">
                                 <option value="">— No date —</option>
-                                {(() => { const opts = nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4); if (booking.departure_date && !opts.includes(booking.departure_date)) opts.unshift(booking.departure_date); return opts.map((d) => <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: '2-digit', month: 'short' })}</option>); })()}
+                                {(() => { const opts = tripDepartures(trip); if (booking.departure_date && !opts.includes(booking.departure_date)) opts.unshift(booking.departure_date); return opts.map((d) => <option key={d} value={d}>{formatDeparture(d, { weekday: 'short', day: '2-digit', month: 'short' })}</option>); })()}
                               </select>
                             ) : (
                               <button onClick={() => setEditingDateId(booking.id)} className="font-semibold text-gray-900 hover:text-purple-700 hover:underline flex items-center gap-1" title="Change departure">
@@ -1453,7 +1451,7 @@ export default function AdminTripDetailsPage() {
                         </div>
                         <div className="bg-blue-50 rounded-md p-2">
                           <p className="text-xs text-gray-600 mb-0.5">{trip.is_recurring ? 'Departs' : (booking.departure_date ? 'Departs' : 'Booked')}</p>
-                          {trip.is_recurring && typeof trip.recurrence_day === 'number' ? (
+                          {trip.is_recurring ? (
                             editingDateId === booking.id ? (
                               <select
                                 autoFocus
@@ -1465,7 +1463,7 @@ export default function AdminTripDetailsPage() {
                               >
                                 <option value="">— No date —</option>
                                 {(() => {
-                                  const opts = nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4);
+                                  const opts = tripDepartures(trip);
                                   // keep the current value selectable even if it's a past date
                                   if (booking.departure_date && !opts.includes(booking.departure_date)) opts.unshift(booking.departure_date);
                                   return opts.map((d) => (

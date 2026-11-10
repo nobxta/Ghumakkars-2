@@ -43,6 +43,7 @@ interface Trip {
   is_recurring?: boolean;
   recurrence_day?: number | null;
   recurrence_weeks_ahead?: number | null;
+  custom_dates?: string[] | null;
   created_at?: string;
 }
 

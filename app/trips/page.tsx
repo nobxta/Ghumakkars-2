@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const TRIP_COLUMNS =
-  'id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,is_recurring,recurrence_day,recurrence_weeks_ahead,created_at,updated_at';
+  'id,slug,title,short_description,description,destination,original_price,discounted_price,discount_percentage,duration_days,duration_text,max_participants,current_participants,start_date,end_date,image_url,cover_image_url,included_features,highlights,is_active,status,completed_at,postponed_to_date,booking_deadline_date,seat_lock_price,early_bird_price,booking_disabled,is_recurring,recurrence_day,recurrence_weeks_ahead,custom_dates,created_at,updated_at';
 
 const PAST_STATUSES = ['completed', 'cancelled', 'postponed'];
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { IMG } from '@/lib/image';
 import { getSiteUrl } from '@/lib/site-url';
+import { scheduleLabel } from '@/lib/recurrence';
 import { MapPin, Clock, Users, IndianRupee, Tag, ArrowLeft, Calendar, Check, AlertCircle, Star, Shield, Heart, Sparkles, Plane, Hotel, UtensilsCrossed, X, CheckCircle, Lock, Share2, ChevronDown, ChevronUp, MessageCircle, Copy, Image as ImageIcon, Phone } from 'lucide-react';
 
 interface ItineraryDay {
@@ -216,9 +217,8 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
     d ? new Date(d).toLocaleDateString('en-IN', opts) : '';
 
   // Pickup / Return date format — compact for stats card
-  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const isRecurring = !!(trip as any).is_recurring && (trip as any).recurrence_day != null;
-  const recurringLabel = isRecurring ? `Every ${DAY_NAMES[(trip as any).recurrence_day]}` : null;
+  const isRecurring = !!(trip as any).is_recurring;
+  const recurringLabel = isRecurring ? scheduleLabel(trip as any) : null;
   const pickupDay = formatDate(trip.start_date, { day: 'numeric', month: 'short' });
   const returnDay = trip.end_date ? formatDate(trip.end_date, { day: 'numeric', month: 'short' }) : null;
 

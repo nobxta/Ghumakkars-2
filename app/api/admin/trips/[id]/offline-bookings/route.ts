@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { revalidateTripById } from '@/lib/revalidate-trips';
-import { isValidDeparture } from '@/lib/recurrence';
+import { isValidTripDeparture } from '@/lib/recurrence';
 import { moneyOf } from '@/lib/booking-money';
 import { validateAndPriceAddons, writeBookingAddons, markBookingAddonsPaid } from '@/lib/addons-server';
 
@@ -52,7 +52,7 @@ export async function POST(
 
     const { data: trip, error: tripError } = await adminClient
       .from('trips')
-      .select('id, title, max_participants, current_participants, booking_disabled, discounted_price, seat_lock_price, is_recurring, recurrence_day, recurrence_weeks_ahead, duration_days, addons_enabled')
+      .select('id, title, max_participants, current_participants, booking_disabled, discounted_price, seat_lock_price, is_recurring, recurrence_day, recurrence_weeks_ahead, custom_dates, duration_days, addons_enabled')
       .eq('id', tripId)
       .single();
 
@@ -75,9 +75,7 @@ export async function POST(
       if (!departure_date) {
         return NextResponse.json({ error: 'Please choose a departure date for this trip.' }, { status: 400 });
       }
-      const weekday = Number(trip.recurrence_day);
-      const weeksAhead = Number(trip.recurrence_weeks_ahead) || 4;
-      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isValidDeparture(String(departure_date), weekday, weeksAhead)) {
+      if (!isValidTripDeparture(String(departure_date), trip)) {
         return NextResponse.json({ error: 'That departure date is not available. Please pick one of the listed dates.' }, { status: 400 });
       }
       validatedDeparture = String(departure_date);

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft, Save, Plus, X, Trash2, Check, Calendar, DollarSign, Users, MapPin, Image as ImageIcon, FileText, Sparkles, ChevronRight, ChevronLeft } from 'lucide-react';
 import TripAddonsEditor, { type AddonDraft, draftFromRow, draftToPayload } from '@/components/admin/TripAddonsEditor';
+import DepartureScheduleEditor, { validateDepartureSchedule } from '@/components/admin/DepartureScheduleEditor';
+import { normalizeCustomDates } from '@/lib/recurrence';
 
 interface DayItinerary {
   day: number;
@@ -56,6 +58,8 @@ export default function EditTripPage() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceDay, setRecurrenceDay] = useState('5');
   const [recurrenceWeeksAhead, setRecurrenceWeeksAhead] = useState('4');
+  const [weeklyEnabled, setWeeklyEnabled] = useState(true);
+  const [customDates, setCustomDates] = useState<string[]>([]);
   const [recurringDurationDays, setRecurringDurationDays] = useState('3');
   const [paymentDueDaysBefore, setPaymentDueDaysBefore] = useState('');
 
@@ -112,6 +116,8 @@ export default function EditTripPage() {
       setCurrentParticipants(data.current_participants || 0);
       setIsRecurring(!!data.is_recurring);
       if (data.recurrence_day != null) setRecurrenceDay(String(data.recurrence_day));
+      setWeeklyEnabled(data.recurrence_day != null || !(data.custom_dates?.length));
+      setCustomDates(normalizeCustomDates(data.custom_dates));
       if (data.recurrence_weeks_ahead != null) setRecurrenceWeeksAhead(String(data.recurrence_weeks_ahead));
       if (data.payment_due_days_before != null) setPaymentDueDaysBefore(String(data.payment_due_days_before));
       if (data.duration_days != null) setRecurringDurationDays(String(data.duration_days));
@@ -300,8 +306,9 @@ export default function EditTripPage() {
         return true;
       case 3:
         if (isRecurring) {
-          if (!recurringDurationDays || parseInt(recurringDurationDays) < 1) {
-            setError('Please set the trip length in days');
+          const scheduleError = validateDepartureSchedule(weeklyEnabled, customDates, recurringDurationDays);
+          if (scheduleError) {
+            setError(scheduleError);
             return false;
           }
           return true;
@@ -496,8 +503,9 @@ export default function EditTripPage() {
         end_date: isRecurring ? null : endDate,
         booking_deadline_date: isRecurring ? null : bookingDeadline,
         is_recurring: isRecurring,
-        recurrence_day: isRecurring ? parseInt(recurrenceDay) : null,
+        recurrence_day: isRecurring && weeklyEnabled ? parseInt(recurrenceDay) : null,
         recurrence_weeks_ahead: isRecurring ? (parseInt(recurrenceWeeksAhead) || 4) : 4,
+        custom_dates: isRecurring ? normalizeCustomDates(customDates) : [],
         payment_due_days_before: paymentDueDaysBefore.trim() === '' ? null : (parseInt(paymentDueDaysBefore, 10) || null),
         cover_image_url: coverImage,
         image_url: coverImage,
@@ -880,45 +888,20 @@ export default function EditTripPage() {
             </div>
 
             <div className="space-y-5">
-              {/* Recurring toggle */}
-              <div className="p-4 rounded-xl border-2 border-purple-200 bg-purple-50/50">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isRecurring}
-                    onChange={(e) => setIsRecurring(e.target.checked)}
-                    className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-                  />
-                  <div>
-                    <span className="font-bold text-gray-900">🔁 Recurring weekly trip</span>
-                    <p className="text-xs text-gray-600">Departs the same weekday every week. Travellers pick their date at booking; seats count per departure.</p>
-                  </div>
-                </label>
-
-                {isRecurring && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Departs every</label>
-                      <select value={recurrenceDay} onChange={(e) => setRecurrenceDay(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none">
-                        {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d, i) => <option key={i} value={i}>{d}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Bookable weeks ahead</label>
-                      <input type="number" min="1" max="26" value={recurrenceWeeksAhead} onChange={(e) => setRecurrenceWeeksAhead(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">Days on trip (sets return date)</label>
-                      <input type="number" min="1" max="30" value={recurringDurationDays} onChange={(e) => setRecurringDurationDays(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none" />
-                    </div>
-                  </div>
-                )}
-                {isRecurring && (
-                  <p className="text-[11px] text-gray-500 mt-3">
-                    <strong>Days on trip</strong> is just the number used to auto-calculate each return date (e.g. Friday + {recurringDurationDays || 'N'} days). The wording travellers see comes from <strong>Duration Display</strong> below (e.g. &ldquo;6 Days / 5 Nights&rdquo;).
-                  </p>
-                )}
-              </div>
+              <DepartureScheduleEditor
+                isMulti={isRecurring}
+                onIsMultiChange={setIsRecurring}
+                weeklyEnabled={weeklyEnabled}
+                onWeeklyEnabledChange={setWeeklyEnabled}
+                recurrenceDay={recurrenceDay}
+                onRecurrenceDayChange={setRecurrenceDay}
+                weeksAhead={recurrenceWeeksAhead}
+                onWeeksAheadChange={setRecurrenceWeeksAhead}
+                customDates={customDates}
+                onCustomDatesChange={setCustomDates}
+                durationDays={recurringDurationDays}
+                onDurationDaysChange={setRecurringDurationDays}
+              />
 
               {!isRecurring && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

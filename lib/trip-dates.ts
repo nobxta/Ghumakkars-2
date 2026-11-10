@@ -1,4 +1,4 @@
-import { nextOccurrences, toDateString } from './recurrence';
+import { tripDepartures, toDateString } from './recurrence';
 
 /**
  * Upcoming departure dates for the public trips list.
@@ -16,6 +16,7 @@ export interface TripDateFields {
   is_recurring?: boolean | null;
   recurrence_day?: number | null;
   recurrence_weeks_ahead?: number | null;
+  custom_dates?: (string | null)[] | null;
 }
 
 /** Today's calendar date in Asia/Kolkata, as a local-midnight Date. */
@@ -38,8 +39,9 @@ function dateOnly(value?: string | null): string | null {
 }
 
 export function upcomingDepartures(trip: TripDateFields, today: Date = todayInIndia()): string[] {
-  if (trip.is_recurring && typeof trip.recurrence_day === 'number') {
-    return nextOccurrences(trip.recurrence_day, trip.recurrence_weeks_ahead || 4, today);
+  if (trip.is_recurring) {
+    // Weekly rule and/or hand-picked custom dates.
+    return tripDepartures(trip, today);
   }
   const todayStr = toDateString(today);
   const date = dateOnly(trip.postponed_to_date) || dateOnly(trip.start_date);

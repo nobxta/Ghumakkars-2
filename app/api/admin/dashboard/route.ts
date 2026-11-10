@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     admin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', rangeStart.toISOString()).lte('created_at', rangeEnd.toISOString()),
     admin.from('profiles').select('first_name').eq('id', auth.user.id).single(),
     admin.from('trips')
-      .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, duration_days, is_active, status, cover_image_url, image_url')
+      .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, recurrence_weeks_ahead, custom_dates, duration_days, is_active, status, cover_image_url, image_url')
       .order('start_date', { ascending: true }),
     admin.from('bookings')
       .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, referral_commission, is_offline_booking, user_id, created_at, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded, created_at)')
@@ -88,6 +88,7 @@ export async function GET(req: Request) {
     .map((t: any) => ({
       id: t.id, title: t.title, destination: t.destination, max_participants: t.max_participants,
       start_date: t.start_date, is_recurring: t.is_recurring, recurrence_day: t.recurrence_day,
+      recurrence_weeks_ahead: t.recurrence_weeks_ahead, custom_dates: t.custom_dates,
       cover_image_url: t.cover_image_url, image_url: t.image_url,
       booked: perTrip.get(t.id) || { pax: 0, collected: 0, pending: 0 },
     }))

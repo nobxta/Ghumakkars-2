@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { formatDeparture, nextOccurrences } from '@/lib/recurrence';
+import { formatDeparture, tripDepartures } from '@/lib/recurrence';
 import {
   computeSelections,
   formatINR,
@@ -23,6 +23,7 @@ type OfflineTrip = {
   is_recurring?: boolean | null;
   recurrence_day?: number | null;
   recurrence_weeks_ahead?: number | null;
+  custom_dates?: string[] | null;
   pickup_points?: string[] | null;
   addons_enabled?: boolean | null;
   booking_disabled?: boolean | null;
@@ -235,12 +236,12 @@ export default function OfflineBookingForm({
             </select>
           </label>
         )}
-        {selectedTrip?.is_recurring && typeof selectedTrip.recurrence_day === 'number' && (
+        {selectedTrip?.is_recurring && (
           <label className="block">
             <span className={labelClass}>Batch / departure</span>
             <select value={departureDate} onChange={(e) => setDepartureDate(e.target.value)} className={inputClass}>
               <option value="">Choose a departure</option>
-              {nextOccurrences(selectedTrip.recurrence_day, Number(selectedTrip.recurrence_weeks_ahead) || 4).map((date) => (
+              {tripDepartures(selectedTrip).map((date) => (
                 <option key={date} value={date}>{formatDeparture(date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</option>
               ))}
             </select>

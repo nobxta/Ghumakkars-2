@@ -30,6 +30,7 @@ export async function GET() {
         is_recurring,
         recurrence_day,
         recurrence_weeks_ahead,
+        custom_dates,
         pickup_points,
         addons_enabled
       `)

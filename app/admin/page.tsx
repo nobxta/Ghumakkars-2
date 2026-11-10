@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, MapPin, Calendar, Users, TrendingUp, Clock, Package, ArrowRight, AlertTriangle, Activity } from 'lucide-react';
 import Link from 'next/link';
-import { DAY_NAMES } from '@/lib/recurrence';
+import { scheduleLabel } from '@/lib/recurrence';
 
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
 
@@ -235,7 +235,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-500 truncate flex items-center gap-1.5">
                           <MapPin className="h-3 w-3" />{t.destination}
                           <span className="text-gray-300">·</span>
-                          {t.is_recurring ? `Every ${DAY_NAMES[t.recurrence_day] || ''}` : fmtDate(t.start_date)}
+                          {t.is_recurring ? scheduleLabel(t) : fmtDate(t.start_date)}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0 hidden sm:block">
