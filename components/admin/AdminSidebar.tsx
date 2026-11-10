@@ -109,9 +109,9 @@ export default function AdminSidebar({
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7541F5]/40 ${
                   active
-                    ? 'bg-[#F3EEFF] text-[#7541F5] font-semibold border-l-4 border-[#7541F5]'
+                    ? 'bg-[#F3EEFF] text-[#7541F5] font-semibold'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
@@ -136,7 +136,12 @@ export default function AdminSidebar({
           isCollapsed ? 'w-[68px]' : 'w-60'
         }`}
       >
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
+          {!isCollapsed && (
+            <p className="px-3 pb-2 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+              Menu
+            </p>
+          )}
           {menuItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -145,14 +150,17 @@ export default function AdminSidebar({
                 key={item.href}
                 href={item.href}
                 title={isCollapsed ? item.label : undefined}
-                className={`group relative flex items-center rounded-lg text-sm transition-colors ${
-                  isCollapsed ? 'justify-center h-10 px-0' : 'px-3 py-2 justify-between'
+                className={`group relative flex items-center rounded-lg text-[13.5px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7541F5]/40 ${
+                  isCollapsed ? 'justify-center h-10 px-0' : 'h-9 px-3 justify-between'
                 } ${
                   active
-                    ? 'bg-[#F3EEFF] text-[#7541F5] font-semibold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+                    ? 'bg-[#F3EEFF] text-[#7541F5] font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-medium'
                 }`}
               >
+                {active && !isCollapsed && (
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-[#7541F5]" />
+                )}
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'}`}>
                   <Icon
                     className={`h-4 w-4 shrink-0 transition-colors ${

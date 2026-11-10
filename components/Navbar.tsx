@@ -74,6 +74,8 @@ export default function Navbar() {
   if (pathname?.startsWith('/auth')) return null;
   // The booking status page is a focused full-bleed confirmation with its own header.
   if (pathname?.startsWith('/booking-success')) return null;
+  // The admin panel has its own shell (AdminNavbar + AdminSidebar).
+  if (pathname?.startsWith('/admin')) return null;
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
