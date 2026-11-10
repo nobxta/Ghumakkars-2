@@ -539,9 +539,9 @@ export default function AdminSettingsPage() {
 
   const waIsConnecting = !wa.connected && (!!waBusy || !!waQr || !!waPairingCode || ['connecting', 'pairing_required'].includes(String(wa.state || '')));
   const waStatusLabel = !wa.configured
-    ? 'Worker not configured'
+    ? 'Not available'
     : wa.online === false
-      ? 'Worker unavailable'
+      ? 'Unavailable'
       : wa.connected
         ? 'Connected'
         : waIsConnecting
@@ -690,7 +690,7 @@ export default function AdminSettingsPage() {
           )}
 
           {activeTab === 'whatsapp' && (
-            <Card title="WhatsApp worker" description="Status is fetched from the self-hosted worker through the server proxy." icon={MessageCircle} action={<button type="button" onClick={refreshWhatsApp} disabled={!!waBusy} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"><RefreshCw className={`h-4 w-4 ${waBusy === 'refresh' ? 'animate-spin' : ''}`} /> Refresh</button>}>
+            <Card title="WhatsApp" description="WhatsApp runs inside this server. Link a number once; the session survives restarts." icon={MessageCircle} action={<button type="button" onClick={refreshWhatsApp} disabled={!!waBusy} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"><RefreshCw className={`h-4 w-4 ${waBusy === 'refresh' ? 'animate-spin' : ''}`} /> Refresh</button>}>
               <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap gap-2">
@@ -731,6 +731,7 @@ export default function AdminSettingsPage() {
                               <option value="seat_locked">Seat locked</option>
                               <option value="rejected">Rejected</option>
                               <option value="cancelled">Cancelled</option>
+                              <option value="welcome">Welcome (new account)</option>
                               <option value="otp">OTP</option>
                               <option value="custom">Custom</option>
                             </select>

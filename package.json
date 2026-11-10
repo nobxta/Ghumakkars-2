@@ -13,13 +13,15 @@
     "@supabase/ssr": "^0.1.0",
     "@supabase/supabase-js": "^2.86.0",
     "@types/nodemailer": "^7.0.4",
-    "@vercel/analytics": "^2.0.1",
+    "@whiskeysockets/baileys": "^6.7.21",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.344.0",
     "next": "^14.2.5",
     "nodemailer": "^7.0.11",
     "openai": "^6.47.0",
+    "pino": "^9.14.0",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^20.19.27",
     "@types/pg": "^8.16.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
@@ -46,12 +49,6 @@
     "glob": "^11.0.0"
   },
   "optionalDependencies": {
-    "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "^6.7.21",
-    "bufferutil": "^4.1.0",
-    "pino": "^9.14.0",
-    "qrcode": "^1.5.4",
-    "sharp": "^0.33.5",
-    "utf-8-validate": "^6.0.6"
+    "sharp": "^0.33.5"
   }
 }

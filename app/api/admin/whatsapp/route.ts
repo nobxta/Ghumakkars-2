@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
-import { sendWhatsApp } from '@/lib/whatsapp';
+import { sendWhatsApp, welcomeMessage } from '@/lib/whatsapp';
 
 // Sample messages for the Settings tester — mirror the real booking templates
 // (WhatsApp bold uses *single* asterisks). Uses placeholder data.
@@ -21,6 +21,8 @@ function sampleMessage(template: string): string {
       return `Hi ${name},\n\nUnfortunately we couldn't confirm your booking for *${t}* (${id}).\nReason: Payment could not be verified\n\nReply here and our team will help you sort it out. 🙏`;
     case 'cancelled':
       return `Hi ${name},\n\nYour booking for *${t}* (${id}) has been *cancelled*.\n\nReply here if you have any questions — we're happy to help.`;
+    case 'welcome':
+      return welcomeMessage(name);
     case 'otp':
       return `Your Ghumakkars verification code is *${otp}*.\nIt's valid for 10 minutes. Please don't share it with anyone.`;
     default:
@@ -29,25 +31,11 @@ function sampleMessage(template: string): string {
 }
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-// Talks to the self-hosted Baileys worker (VPS) so the browser never sees the
-// secret. The website only needs WHATSAPP_API_URL + VPS_API_SECRET.
-const API_URL = process.env.WHATSAPP_API_URL;
-const API_SECRET = process.env.VPS_API_SECRET || process.env.WHATSAPP_API_SECRET;
+// WhatsApp runs inside this server process (lib/whatsapp/service.ts).
 
-function workerHeaders() {
-  return { 'Content-Type': 'application/json', 'x-api-key': API_SECRET as string };
-}
-
-async function callWorker(path: string, init?: RequestInit) {
-  const base = (API_URL || '').replace(/\/$/, '');
-  const res = await fetch(`${base}${path}`, { ...init, headers: { ...workerHeaders(), ...(init?.headers || {}) }, cache: 'no-store' });
-  const data = await res.json().catch(() => ({}));
-  return { status: res.status, data } as { status: number; data: any };
-}
-
-// Cache the worker's connection state into the DB so the panel can show the
-// linked number even when the VPS is briefly unreachable.
+// Cache the connection state into the DB (shown on other admin screens).
 async function cacheState(connected: boolean, number: string | null) {
   try {
     const admin = createAdminClient();
@@ -59,54 +47,47 @@ async function cacheState(connected: boolean, number: string | null) {
   } catch { /* best-effort */ }
 }
 
-// GET → current status (polled by the admin panel).
-export async function GET() {
+// GET → current status (polled by the admin panel). `?logs=200` adds recent log lines.
+export async function GET(request: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
-  if (!API_URL || !API_SECRET) {
-    return NextResponse.json({ configured: false, connected: false, number: null, error: 'Set WHATSAPP_API_URL and VPS_API_SECRET on the website.' });
-  }
-  try {
-    const { data } = await callWorker('/status', { method: 'GET' });
-    const connected = !!data?.connected;
-    const number = data?.number || null;
-    await cacheState(connected, number);
-    return NextResponse.json({ configured: true, connected, number, qr: data?.qr || null });
-  } catch {
-    // VPS unreachable — fall back to the last cached value.
-    const admin = createAdminClient();
-    const { data } = await admin.from('whatsapp_settings').select('connected, connected_number').eq('id', 1).single();
-    return NextResponse.json({ configured: true, online: false, connected: !!data?.connected, number: data?.connected_number || null, error: 'Worker unreachable — showing last known state.' });
-  }
+  const { getWhatsAppStatus, getWhatsAppLogs } = await import('@/lib/whatsapp/service');
+  const status = await getWhatsAppStatus();
+  await cacheState(status.connected, status.number);
+  const logsParam = request.nextUrl.searchParams.get('logs');
+  return NextResponse.json({
+    configured: true,
+    online: !status.error,
+    ...status,
+    ...(logsParam ? { logs: getWhatsAppLogs(Number(logsParam) || 200) } : {}),
+  });
 }
 
-// POST { action: 'login' | 'logout' }
+// POST { action: 'login' | 'test' | 'logout' }
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
-  if (!API_URL || !API_SECRET) {
-    return NextResponse.json({ error: 'Set WHATSAPP_API_URL and VPS_API_SECRET on the website first.' }, { status: 400 });
-  }
 
   const body = await request.json().catch(() => ({}));
   const action = body.action;
+  const wa = await import('@/lib/whatsapp/service');
 
   try {
     if (action === 'login') {
-      const mode = body.mode === 'qr' ? 'qr' : 'pairing';
-      let payload: Record<string, unknown> = { mode };
-      if (mode === 'pairing') {
+      const forceRelink = body.forceRelink === true;
+      let result: any;
+      if (body.mode === 'qr') {
+        result = await wa.requestQR(forceRelink);
+      } else {
         const phone = String(body.phone || '').replace(/\D/g, '');
         if (!phone) return NextResponse.json({ error: 'Enter the WhatsApp number to link.' }, { status: 400 });
-        payload = { phone };
+        result = await wa.requestPairingCode(phone, forceRelink);
       }
-      const { status, data } = await callWorker('/login', { method: 'POST', body: JSON.stringify(payload) });
-      if (status !== 200 || !data?.ok) return NextResponse.json({ error: data?.error || 'Could not start linking.' }, { status: 400 });
-      if (data.alreadyConnected) {
-        await cacheState(true, data.number || null);
-        return NextResponse.json({ alreadyConnected: true, number: data.number || null });
+      if (result.alreadyConnected) {
+        await cacheState(true, result.number || null);
+        return NextResponse.json({ alreadyConnected: true, number: result.number || null });
       }
-      return NextResponse.json({ pairingCode: data.pairingCode || null, qr: data.qr || null });
+      return NextResponse.json({ pairingCode: result.pairingCode || null, qr: result.qr || null, message: result.message });
     }
 
     if (action === 'test') {
@@ -118,18 +99,17 @@ export async function POST(request: NextRequest) {
       if (!message) return NextResponse.json({ error: 'Nothing to send — pick a template or type a message.' }, { status: 400 });
       const res = await sendWhatsApp({ to: phone, body: message });
       if (!res.ok) return NextResponse.json({ error: res.error || 'Send failed.' }, { status: 400 });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, queued: !!res.queued });
     }
 
     if (action === 'logout') {
-      const { status, data } = await callWorker('/logout', { method: 'POST' });
-      if (status !== 200 || !data?.ok) return NextResponse.json({ error: data?.error || 'Logout failed.' }, { status: 400 });
+      await wa.logoutWhatsApp();
       await cacheState(false, null);
       return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: 'Could not reach the WhatsApp worker. Is the VPS up?' }, { status: 502 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'WhatsApp action failed.' }, { status: 400 });
   }
 }

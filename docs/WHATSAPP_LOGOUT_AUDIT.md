@@ -1,5 +1,7 @@
 # WhatsApp Auto-Logout Audit
 
+> **Historical:** written when WhatsApp ran as a separate worker on Pterodactyl. It now runs inside the Next.js app — see `DEPLOY_VPS.md`. The recovery behaviour described here was kept in `lib/whatsapp/service.ts`.
+
 Date: 2026-07-15
 
 ## Evidence reviewed

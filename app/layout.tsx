@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/next";
 import Navbar from "@/components/Navbar";
 import ScrollToTop from "@/components/ScrollToTop";
 import ConditionalFooter from "@/components/ConditionalFooter";
@@ -140,7 +139,6 @@ export default function RootLayout({
         <main className="min-h-screen pb-16 md:pb-0">{children}</main>
         <ConditionalFooter />
         <ScrollToTop />
-        <Analytics />
       </body>
     </html>
   );

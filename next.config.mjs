@@ -14,6 +14,11 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ['lucide-react'],
+    // Boots WhatsApp when the server starts (see instrumentation.ts).
+    instrumentationHook: true,
+    // Node-only libs used by the in-process WhatsApp service — load them from
+    // node_modules at runtime instead of bundling them.
+    serverComponentsExternalPackages: ['@whiskeysockets/baileys', 'pino', 'qrcode', 'jimp', 'link-preview-js', 'sharp'],
   },
   async headers() {
     return [

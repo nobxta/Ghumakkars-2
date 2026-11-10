@@ -33,14 +33,8 @@ yarn-error.log*
 .env*.local
 .env.claude
 
-# whatsapp worker (VPS) — never commit session creds, env or deps
-whatsapp-worker/node_modules
-whatsapp-worker/auth
-whatsapp-worker/data
-whatsapp-worker/.env
-# cloudflared tunnel runtime (binary + account cert + tunnel creds)
-whatsapp-worker/cloudflared
-whatsapp-worker/.cloudflared
+# WhatsApp session, send queue and logs (lib/whatsapp/service.ts) — never commit
+/data/
 
 # vercel
 .vercel
@@ -49,5 +43,3 @@ whatsapp-worker/.cloudflared
 *.tsbuildinfo
 next-env.d.ts
 
-# whatsapp-web.js session
-.wwebjs_auth/

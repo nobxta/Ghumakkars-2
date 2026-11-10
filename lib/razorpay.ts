@@ -22,7 +22,7 @@ export function getRazorpayConfig(): RazorpayConfig {
   const key_secret = process.env.RAZORPAY_KEY_SECRET;
   if (!key_id || !key_secret) {
     throw new Error(
-      'Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables (Vercel → Project → Settings → Environment Variables).'
+      'Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables (the server .env file).'
     );
   }
   return { key_id, key_secret };

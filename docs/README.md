@@ -22,9 +22,6 @@ code and the main `README.md`.
 
 ## WhatsApp
 
-- `INSTALL_WHATSAPP.md` - WhatsApp installation guide.
 - `WEBHOOK_SETUP.md` - Webhook setup guide.
 - `WHATSAPP_LOGOUT_AUDIT.md` - WhatsApp logout audit.
-- `WHATSAPP_PRODUCTION_AUDIT.md` - WhatsApp production audit.
-- `WHATSAPP_SETUP.md` - WhatsApp setup guide.
-- `WHATSAPP_TECHNICAL_BREAKDOWN.md` - WhatsApp technical breakdown.
+- `DEPLOY_VPS.md` - Running the site on the VPS (incl. WhatsApp, which runs inside the app).

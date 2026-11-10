@@ -1,44 +1,35 @@
 /**
- * WhatsApp client — calls our self-hosted Baileys worker over HTTP.
+ * Send a WhatsApp message from server code.
  *
- * The worker runs on the VPS (e.g. https://api.ghumakkars.in) and holds the
- * WhatsApp session. The website calls it directly; there is no queue/DB in
- * between. Fire-and-forget: a failure never breaks the caller's flow.
- *
- *   WHATSAPP_API_URL=https://api.ghumakkars.in
- *   WHATSAPP_API_SECRET=<shared secret, also set on the worker>
+ * WhatsApp runs inside this Next.js server (see lib/whatsapp/service.ts), so
+ * this is a direct in-process call. Fire-and-forget friendly: it never throws,
+ * so a WhatsApp problem can't break the caller's flow.
  */
-const API_URL = process.env.WHATSAPP_API_URL;
-// Shared VPS internal secret (reusable across self-hosted services).
-// Falls back to the old WHATSAPP_API_SECRET name for compatibility.
-const API_SECRET = process.env.VPS_API_SECRET || process.env.WHATSAPP_API_SECRET;
+import type { SendPayload } from './whatsapp/service';
 
-export interface SendWhatsAppInput {
-  to: string;                 // 10-digit or full; country code added if missing
-  body: string;
-  mediaUrl?: string | null;   // optional public PDF/image URL to attach
-  mediaBase64?: string | null; // OR attach inline (base64) — keeps it private
-  mediaFilename?: string | null;
+export type SendWhatsAppInput = SendPayload;
+
+/** Sent once, right after a new account is created. (WhatsApp bold = *single* asterisks.) */
+export function welcomeMessage(name?: string | null): string {
+  const first = String(name || '').trim().split(/\s+/)[0] || 'there';
+  return (
+    `Hi ${first}! 👋\n\n` +
+    `Welcome to *Ghumakkars!*\n\n` +
+    `Your account has been created successfully.\n\n` +
+    `You can now explore trips, find new places to visit, and plan your next adventure with us.\n\n` +
+    `Happy Travelling! 🌍\n\n` +
+    `*Team Ghumakkars*`
+  );
 }
 
-export async function sendWhatsApp(input: SendWhatsAppInput): Promise<{ ok: boolean; error?: string }> {
-  if (!API_URL || !API_SECRET) return { ok: false, error: 'WhatsApp API not configured' };
+export async function sendWhatsApp(input: SendWhatsAppInput): Promise<{ ok: boolean; queued?: boolean; error?: string }> {
   const digits = String(input.to || '').replace(/\D/g, '');
   if (!digits || !input.body?.trim()) return { ok: false, error: 'missing to/body' };
-  const to = digits.length === 10 ? `91${digits}` : digits;
-
   try {
-    const res = await fetch(`${API_URL.replace(/\/$/, '')}/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': API_SECRET },
-      body: JSON.stringify({ to, body: input.body.trim(), mediaUrl: input.mediaUrl || undefined, mediaBase64: input.mediaBase64 || undefined, mediaFilename: input.mediaFilename || undefined }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => '');
-      return { ok: false, error: `worker ${res.status} ${t}`.trim() };
-    }
-    return { ok: true };
+    const { sendWhatsAppMessage } = await import('./whatsapp/service');
+    const res = await sendWhatsAppMessage({ ...input, to: digits.length === 10 ? `91${digits}` : digits });
+    return { ok: true, queued: res.queued };
   } catch (e: any) {
-    return { ok: false, error: e?.message || 'request failed' };
+    return { ok: false, error: e?.message || 'send failed' };
   }
 }

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { checkRateLimit, AUTH_LIMITS } from '@/lib/rate-limit';
 import { findAuthUserByEmail } from '@/lib/supabase/find-user';
 import { withErrorLog } from '@/lib/error-log';
+import { sendWhatsApp, welcomeMessage } from '@/lib/whatsapp';
 
 export const runtime = "nodejs";
 
@@ -193,6 +194,14 @@ async function handlePOST(request: NextRequest) {
     }
 
     await deletePendingSignup(normalizedEmail);
+
+    // Welcome message on WhatsApp — fire-and-forget so signup never waits on it
+    // (if WhatsApp is briefly down it's queued; sendWhatsApp never throws).
+    if (pending.phone) {
+      void sendWhatsApp({ to: pending.phone, body: welcomeMessage(pending.first_name) }).then((r) => {
+        if (!r.ok) console.warn('Welcome WhatsApp not sent:', r.error);
+      });
+    }
 
     return NextResponse.json({
       success: true,
