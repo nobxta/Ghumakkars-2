@@ -42,7 +42,7 @@ export interface SendPayload {
   mediaFilename?: string | null;
 }
 
-interface QueueItem { id: string; payload: SendPayload; attempts: number; nextAt: number; reason: string }
+interface QueueItem { id: string; payload: SendPayload; attempts: number; nextAt: number; reason: string; createdAt?: number }
 
 interface WAState {
   booted: boolean;
@@ -69,6 +69,11 @@ interface WAState {
   socketId: string | null;
   badSessionAttempts: number;
   pending: QueueItem[];
+  loggedOutStreak: number;   // consecutive 401s
+  replacedStreak: number;    // consecutive 440s (another client on this session)
+  problem: string | null;    // human-readable issue shown in the admin panel
+  lockRetryTimer: NodeJS.Timeout | null;
+  sent: Map<string, any>;    // recent sent messages, for WhatsApp's resend requests
 }
 
 const g = globalThis as unknown as { __ghumakkarsWhatsApp?: WAState };
@@ -79,7 +84,18 @@ const S: WAState = (g.__ghumakkarsWhatsApp ??= {
   reconnectAttempts: 0, stableTimer: null, queueTimer: null, lastDisconnect: null,
   lastConnectedAt: null, lastMessageAt: null, stateLabel: 'not_started', socketSeq: 0,
   socketId: null, badSessionAttempts: 0, pending: [],
+  loggedOutStreak: 0, replacedStreak: 0, problem: null, lockRetryTimer: null, sent: new Map(),
 });
+// Fill fields added after a hot-reload kept an older state object around.
+S.sent ??= new Map();
+S.loggedOutStreak ??= 0;
+S.replacedStreak ??= 0;
+S.problem ??= null;
+
+const QUEUE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const SENT_STORE_MAX = 500;
+const LOGGED_OUT_RETRIES = 2;   // 401s tolerated before asking for a relink
+const REPLACED_RETRIES = 1;     // 440s tolerated before backing off
 
 // Baileys is heavy and Node-only: load it on demand, never at import time.
 async function baileys() {
@@ -89,6 +105,7 @@ async function baileys() {
     DisconnectReason: mod.DisconnectReason ?? mod.default?.DisconnectReason,
     fetchLatestBaileysVersion: mod.fetchLatestBaileysVersion ?? mod.default?.fetchLatestBaileysVersion,
     loadAuthState: mod.useMultiFileAuthState ?? mod.default?.useMultiFileAuthState,
+    cacheableKeys: mod.makeCacheableSignalKeyStore ?? mod.default?.makeCacheableSignalKeyStore,
   };
 }
 let pinoLogger: any = null;
@@ -198,17 +215,32 @@ function loadQueue() {
   try {
     if (!existsSync(QUEUE_FILE)) return;
     const parsed = JSON.parse(readFileSync(QUEUE_FILE, 'utf8') || '{}');
-    S.pending.splice(0, S.pending.length, ...(Array.isArray(parsed?.items) ? parsed.items : []));
+    const saved: QueueItem[] = Array.isArray(parsed?.items) ? parsed.items : [];
+    const known = new Set(S.pending.map((i) => i.id));
+    // Merge: anything queued in this process before boot finished is kept.
+    S.pending.unshift(...saved.filter((i) => !known.has(i.id)));
+    dropExpired();
     log('queue_loaded', { queued: S.pending.length });
   } catch (e) {
     errorLog('queue_load_failed', { error: errMsg(e) });
   }
 }
 
+// Messages older than 48h are stale (e.g. "seat locked" two days later) — drop them.
+function dropExpired() {
+  const cutoff = Date.now() - QUEUE_MAX_AGE_MS;
+  const before = S.pending.length;
+  for (let i = S.pending.length - 1; i >= 0; i--) {
+    if ((S.pending[i].createdAt ?? Date.now()) < cutoff) S.pending.splice(i, 1);
+  }
+  if (S.pending.length !== before) warn('queue_expired_dropped', { dropped: before - S.pending.length });
+}
+
 function enqueue(payload: SendPayload, reason: string) {
+  dropExpired();
   if (S.pending.length >= MAX_QUEUE_SIZE) throw new Error('WhatsApp queue is full');
   const id = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  S.pending.push({ id, payload, attempts: 0, nextAt: Date.now(), reason });
+  S.pending.push({ id, payload, attempts: 0, nextAt: Date.now(), reason, createdAt: Date.now() });
   warn('notification_queued', { id, reason, queued: S.pending.length });
   persistQueue();
   scheduleQueueFlush();
@@ -221,6 +253,7 @@ function scheduleQueueFlush(delay = QUEUE_RETRY_MS) {
 }
 
 async function flushQueue() {
+  dropExpired();
   if (!S.ready || S.pending.length === 0) {
     if (!S.ready && S.pending.length > 0 && !S.loggedOut) scheduleQueueFlush();
     return;
@@ -294,14 +327,20 @@ async function startSockInner() {
   prepareDirs();
   setState(hasAuthFiles() ? 'connecting' : 'disconnected', { authExists: hasAuthFiles() });
 
-  const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, loadAuthState } = await baileys();
+  const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, loadAuthState, cacheableKeys } = await baileys();
+  const logger = await baileysLogger();
   const { state, saveCreds } = await loadAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
   S.socketId = `sock_${Date.now()}_${++S.socketSeq}`;
   const sock = makeWASocket({
     version,
-    auth: state,
-    logger: await baileysLogger(),
+    // Cached key store: fewer disk writes, no half-written key files.
+    auth: { creds: state.creds, keys: cacheableKeys ? cacheableKeys(state.keys, logger) : state.keys },
+    // When a recipient's phone can't decrypt a message it asks us to resend it.
+    // Without this the message (often the ticket PDF) stays stuck on
+    // "Waiting for this message" on their side.
+    getMessage: async (key: any) => S.sent.get(key?.id) ?? undefined,
+    logger,
     printQRInTerminal: false,
     browser: ['Ghumakkars', 'Chrome', '1.0'],
     markOnlineOnConnect: false,
@@ -326,6 +365,9 @@ async function startSockInner() {
       S.badSessionAttempts = 0;
       S.lastQR = null;
       S.lastDisconnect = null;
+      S.loggedOutStreak = 0;
+      S.replacedStreak = 0;
+      S.problem = null;
       S.lastConnectedAt = new Date().toISOString();
       S.currentNumber = numberFromJid(sock.user?.id);
       setState('connected', { number: maskedPhone(S.currentNumber), queued: S.pending.length });
@@ -343,24 +385,46 @@ async function startSockInner() {
     warn('whatsapp_disconnected', { socketId: S.socketId, code, reason, message, authExists: hasAuthFiles() });
     if (S.stableTimer) { clearTimeout(S.stableTimer); S.stableTimer = null; }
 
-    // Only a manual admin logout ends the local session; everything else is
-    // retried with the saved credentials.
+    // 401 = WhatsApp removed this linked device. A blip is retried briefly, but
+    // hammering WhatsApp with a dead session forever gets numbers flagged — so
+    // after a couple of tries we stop and ask the admin to relink.
     if (code === DisconnectReason.loggedOut) {
       S.lastQR = null;
-      warn('remote_logged_out_ignored', { code, reason });
-      scheduleReconnect('recovering_session', { code, reason }, 10_000);
+      S.loggedOutStreak += 1;
+      if (S.loggedOutStreak > LOGGED_OUT_RETRIES || !hasAuthFiles()) {
+        void markRelinkRequired('WhatsApp logged this device out (removed from Linked devices, or the number was flagged). Link it again.', { code, reason });
+        return;
+      }
+      warn('remote_logged_out_retry', { code, attempt: S.loggedOutStreak, maxAttempts: LOGGED_OUT_RETRIES });
+      scheduleReconnect('recovering_session', { code, reason }, 15_000 * S.loggedOutStreak);
       return;
     }
     if (code === DisconnectReason.badSession) {
       S.lastQR = null;
       S.badSessionAttempts += 1;
-      const canRecover = hasAuthFiles() && S.badSessionAttempts <= BAD_SESSION_RECOVERY_ATTEMPTS;
+      if (S.badSessionAttempts > BAD_SESSION_RECOVERY_ATTEMPTS || !hasAuthFiles()) {
+        void markRelinkRequired('The saved WhatsApp session is corrupted. Link it again.', { code, reason });
+        return;
+      }
       warn('bad_session_observed', { code, attempt: S.badSessionAttempts, maxAttempts: BAD_SESSION_RECOVERY_ATTEMPTS });
-      scheduleReconnect('recovering_session', { code, reason }, canRecover ? 2000 * S.badSessionAttempts : MAX_RECONNECT_DELAY_MS);
+      scheduleReconnect('recovering_session', { code, reason }, 2000 * S.badSessionAttempts);
       return;
     }
+    // 440 = another client is using this same session (e.g. the old Pterodactyl
+    // worker with a copied session folder). Fighting over it is what makes
+    // WhatsApp log the device out, so back off and tell the admin.
     if (code === DisconnectReason.connectionReplaced) {
-      warn('connection_replaced_duplicate_client', { code, reason });
+      S.replacedStreak += 1;
+      if (S.replacedStreak > REPLACED_RETRIES) {
+        if (S.reconnectTimer) { clearTimeout(S.reconnectTimer); S.reconnectTimer = null; }
+        destroySocket();
+        S.problem = 'Another server or app is using this same WhatsApp session (old Pterodactyl worker? a second copy of the site?). Stop it, then press QR login here to resume.';
+        setState('duplicate_session', { code, reason });
+        errorLog('connection_replaced_backing_off', { code, streak: S.replacedStreak });
+        void alertAdmins('⚠️ <b>WhatsApp paused</b>\nAnother server is using the same WhatsApp session. Stop the other copy (old Pterodactyl worker?), then press QR login in Admin → Settings → WhatsApp to resume.');
+        return;
+      }
+      warn('connection_replaced_duplicate_client', { code, reason, streak: S.replacedStreak });
       scheduleReconnect('duplicate_session', { code, reason }, 30_000);
       return;
     }
@@ -369,12 +433,41 @@ async function startSockInner() {
   });
 }
 
+/** Best-effort Telegram ping to admins (uses the bot configured in Settings). */
+async function alertAdmins(html: string) {
+  try {
+    const { sendToAdmins } = await import('../telegram');
+    await sendToAdmins(html);
+  } catch { /* ignore */ }
+}
+
+/**
+ * The saved session can no longer connect. Stop retrying, move the dead
+ * session aside (kept as a backup, never deleted here) so the next "Link"
+ * starts clean, and tell the admin. Queued messages are kept and go out once
+ * the number is linked again.
+ */
+async function markRelinkRequired(message: string, data: Record<string, unknown> = {}) {
+  if (S.reconnectTimer) { clearTimeout(S.reconnectTimer); S.reconnectTimer = null; }
+  destroySocket();
+  let backup: string | null = null;
+  if (hasAuthFiles()) {
+    backup = `${AUTH_DIR}-invalid-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    try { renameSync(AUTH_DIR, backup); } catch { backup = null; }
+  }
+  prepareDirs();
+  Object.assign(S, { ready: false, currentNumber: null, lastQR: null, loggedOut: true, problem: message });
+  setState('relink_required', { ...data, backup });
+  errorLog('relink_required', { message, backup, queued: S.pending.length, ...data });
+  await alertAdmins(`⚠️ <b>WhatsApp disconnected</b>\n${message}\nAdmin → Settings → WhatsApp.${S.pending.length ? `\n${S.pending.length} message(s) waiting to send.` : ''}`);
+}
+
 async function freshAuth(reason: string) {
   S.manualLogout = true;
   destroySocket();
   try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
   prepareDirs();
-  Object.assign(S, { ready: false, currentNumber: null, lastQR: null, loggedOut: false, badSessionAttempts: 0, lastDisconnect: null, manualLogout: false });
+  Object.assign(S, { ready: false, currentNumber: null, lastQR: null, loggedOut: false, badSessionAttempts: 0, lastDisconnect: null, manualLogout: false, loggedOutStreak: 0, replacedStreak: 0, problem: null });
   log('fresh_auth_started', { reason });
   await startSock();
 }
@@ -386,7 +479,13 @@ export function bootWhatsApp(): Promise<void> {
   if (S.booted) return S.bootPromise ?? Promise.resolve();
   S.booted = true;
   S.bootPromise = (async () => {
-    if (!acquireLock()) { S.stateLabel = 'disabled'; return; }
+    // Another live process holds the lock (e.g. the old one during a PM2
+    // reload). Keep retrying instead of leaving WhatsApp off until next restart.
+    while (!acquireLock()) {
+      S.stateLabel = 'waiting_for_lock';
+      await sleep(15_000);
+    }
+    S.disabledReason = null;
     loadQueue();
     log('service_startup', { dataDir: DATA_DIR, authExists: hasAuthFiles(), queued: S.pending.length, pid: process.pid });
     if (hasAuthFiles()) {
@@ -399,13 +498,15 @@ export function bootWhatsApp(): Promise<void> {
   return S.bootPromise;
 }
 
+// Never let a request hang on boot (it can wait on the lock): give it a few
+// seconds, then carry on with whatever state we have.
 async function ensureBooted() {
-  await bootWhatsApp();
-  if (S.disabledReason) throw new Error(S.disabledReason);
+  await Promise.race([bootWhatsApp(), sleep(5000)]);
+  if (S.stateLabel === 'waiting_for_lock' && S.disabledReason) throw new Error(S.disabledReason);
 }
 
 export async function getWhatsAppStatus() {
-  await bootWhatsApp();
+  await Promise.race([bootWhatsApp(), sleep(5000)]);
   let qr: string | null = null;
   if (!S.ready && S.lastQR) {
     try { qr = await (await import('qrcode')).toDataURL(S.lastQR, { margin: 1, width: 320 }); } catch { /* ignore */ }
@@ -415,7 +516,7 @@ export async function getWhatsAppStatus() {
     state: S.stateLabel,
     number: S.currentNumber,
     qr,
-    error: S.disabledReason,
+    error: (S.stateLabel === 'waiting_for_lock' ? S.disabledReason : null) || S.problem,
     relinkRequired: S.loggedOut,
     queued: S.pending.length,
     retryAttempt: S.reconnectAttempts,
@@ -429,12 +530,22 @@ export async function getWhatsAppStatus() {
 async function ensureCanCreateNewSession(forceRelink: boolean) {
   await ensureBooted();
   if (S.ready) return { alreadyConnected: true, number: S.currentNumber };
-  if (hasAuthFiles() && !forceRelink) {
+  // Paused because another client used this session: resume with it.
+  if (hasAuthFiles() && !forceRelink && S.stateLabel === 'duplicate_session' && !S.reconnectTimer) {
+    S.replacedStreak = 0;
+    S.problem = null;
+    await startSock();
+    return { recoveringExistingSession: true, state: S.stateLabel, message: 'Reconnecting with the saved session…' };
+  }
+  // A saved session that is still healthy-looking (just reconnecting):
+  // don't throw it away. Anything stuck is replaced by a fresh link.
+  const stuck = S.loggedOut || S.loggedOutStreak > 0 || S.badSessionAttempts > 0 || S.reconnectAttempts >= 3;
+  if (hasAuthFiles() && !forceRelink && !stuck) {
     if (!S.sock && !S.starting) await startSock();
     return {
       recoveringExistingSession: true,
       state: S.stateLabel,
-      message: 'Existing WhatsApp session found. Reconnecting with saved credentials; disconnect first to link a different number.',
+      message: 'Existing WhatsApp session found — reconnecting with it. Press Disconnect first to link a different number.',
     };
   }
   await freshAuth(forceRelink ? 'forced_relink' : 'new_link');
@@ -471,6 +582,7 @@ export async function logoutWhatsApp() {
   destroySocket();
   Object.assign(S, {
     ready: false, currentNumber: null, lastQR: null, loggedOut: true, badSessionAttempts: 0,
+    loggedOutStreak: 0, replacedStreak: 0, problem: null,
     lastDisconnect: { code: 'manual', reason: 'manual_logout', message: 'Disconnected by admin', at: new Date().toISOString() },
   });
   try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
@@ -488,15 +600,26 @@ async function deliver({ to, body, mediaUrl, mediaBase64, mediaFilename }: SendP
   if (!S.ready || !S.sock) throw new Error('WhatsApp not connected yet');
   const digits = String(to || '').replace(/\D/g, '');
   if (!digits || !body?.trim()) throw new Error('to and body are required');
-  const jid = `${digits.length === 10 ? `91${digits}` : digits}@s.whatsapp.net`;
+  let jid = `${digits.length === 10 ? `91${digits}` : digits}@s.whatsapp.net`;
   const sock = S.sock;
 
   try {
     const [res] = await sock.onWhatsApp(jid);
     if (!res?.exists) throw new Error('Number is not on WhatsApp');
+    if (res.jid) jid = res.jid; // use the exact JID WhatsApp knows this number by
   } catch (e) {
     if (errMsg(e).includes('not on WhatsApp')) throw e;
   }
+
+  // Remember what we sent so WhatsApp resend requests (getMessage) can be served.
+  const send = async (content: any) => {
+    const msg = await sock.sendMessage(jid, content);
+    if (msg?.key?.id && msg.message) {
+      S.sent.set(msg.key.id, msg.message);
+      if (S.sent.size > SENT_STORE_MAX) S.sent.delete(S.sent.keys().next().value);
+    }
+    return msg;
+  };
 
   let buf: Buffer | null = null;
   let isPdf = (mediaFilename || '').toLowerCase().endsWith('.pdf');
@@ -514,14 +637,27 @@ async function deliver({ to, body, mediaUrl, mediaBase64, mediaFilename }: SendP
     const content = isPdf
       ? { document: buf, mimetype: 'application/pdf', fileName: mediaFilename || 'document.pdf', caption: text }
       : { image: buf, caption: text };
-    try {
-      await withTimeout(sock.sendMessage(jid, content), 30_000, 'media send');
-    } catch (e) {
-      warn('media_send_failed_fallback_text', { error: errMsg(e) });
-      await sock.sendMessage(jid, { text });
+    // Retry the file once before giving up on it — a single upload hiccup
+    // shouldn't cost the customer their ticket.
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await withTimeout(send(content), 60_000, 'media send');
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        errorLog('media_send_failed', { attempt, bytes: buf.length, isPdf, error: errMsg(e), stack: String((e as any)?.stack || '').split('\n').slice(0, 4).join(' | ') });
+        if (!S.ready) throw e; // connection dropped — let the caller queue it
+        if (attempt === 1) await sleep(3000);
+      }
+    }
+    if (lastErr) {
+      warn('media_send_fallback_text', { error: errMsg(lastErr) });
+      await send({ text });
     }
   } else {
-    await sock.sendMessage(jid, { text });
+    await send({ text });
   }
   S.lastMessageAt = new Date().toISOString();
 }
@@ -534,10 +670,22 @@ export async function sendWhatsAppMessage(payload: SendPayload): Promise<{ queue
   await ensureBooted();
   log('send_requested', { to: maskedPhone(payload.to), hasMedia: !!(payload.mediaUrl || payload.mediaBase64), ready: S.ready });
   if (!S.ready) {
-    if (S.loggedOut || !hasAuthFiles()) throw new Error('WhatsApp is not linked — link it from Admin → Settings → WhatsApp.');
-    return { queued: true, id: enqueue(payload, 'not_ready') };
+    // Never linked at all → nothing will ever send it.
+    if (!hasAuthFiles() && !S.loggedOut) throw new Error('WhatsApp is not linked — link it from Admin → Settings → WhatsApp.');
+    // Reconnecting, or waiting for the admin to relink: keep it and send it
+    // (with its PDF) as soon as WhatsApp is back.
+    return { queued: true, id: enqueue(payload, S.loggedOut ? 'relink_required' : 'not_ready') };
   }
-  await deliver(payload);
+  try {
+    await deliver(payload);
+  } catch (e) {
+    const msg = errMsg(e);
+    errorLog('send_failed', { to: maskedPhone(payload.to), error: msg, ready: S.ready });
+    // Permanent problems are reported; anything else (connection dropped
+    // mid-send, timeouts) is queued for retry instead of being lost.
+    if (/not on WhatsApp|to and body are required/i.test(msg)) throw e;
+    return { queued: true, id: enqueue(payload, 'send_failed') };
+  }
   log('notification_sent', { to: maskedPhone(payload.to) });
   return { queued: false };
 }

@@ -456,7 +456,7 @@ export default function AdminSettingsPage() {
       if (data.pairingCode) setWaPairingCode(data.pairingCode);
       if (data.qr) setWaQr(data.qr);
       await refreshWhatsApp();
-      showToast(action === 'logout' ? 'WhatsApp disconnected' : 'WhatsApp action completed');
+      showToast(action === 'logout' ? 'WhatsApp disconnected' : (data.message || 'WhatsApp action completed'));
     } catch (error: any) {
       showToast(error.message, 'error');
     } finally {
