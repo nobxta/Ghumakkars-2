@@ -1,45 +1,192 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, LogOut, User, Menu } from 'lucide-react';
+import {
+  MapPin,
+  LogOut,
+  Menu,
+  Search,
+  ChevronRight,
+  ChevronDown,
+  ExternalLink,
+  Settings,
+  CornerDownLeft,
+} from 'lucide-react';
+import { ADMIN_NAV, adminBreadcrumb, type AdminNavItem } from '@/components/admin/adminNav';
 
 interface AdminNavbarProps {
   onMenuToggle: () => void;
-  onDesktopCollapseToggle?: () => void;
   isCollapsed?: boolean;
 }
 
-export default function AdminNavbar({
-  onMenuToggle,
-  onDesktopCollapseToggle,
-  isCollapsed = false,
-}: AdminNavbarProps) {
-  const [profile, setProfile] = useState<any>(null);
+/* ───────────────────────── Quick search (Ctrl/⌘ K) ───────────────────────── */
+
+function QuickSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [index, setIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return ADMIN_NAV.flatMap((g) => g.items.map((item) => ({ ...item, group: g.label }))).filter(
+      (i) => !q || `${i.label} ${i.group} ${i.keywords || ''}`.toLowerCase().includes(q)
+    );
+  }, [query]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setIndex(0);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  useEffect(() => setIndex(0), [query]);
+
+  if (!open) return null;
+
+  const go = (item?: AdminNavItem) => {
+    if (!item) return;
+    onClose();
+    router.push(item.href);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      go(results[index]);
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-900/40 px-4 pt-[12vh] backdrop-blur-[2px]" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="Quick search"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4">
+          <Search className="h-4 w-4 shrink-0 text-slate-400" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Jump to a page…"
+            className="h-12 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+          />
+          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">ESC</kbd>
+        </div>
+        <ul className="max-h-80 overflow-y-auto p-2">
+          {results.length === 0 && <li className="px-3 py-8 text-center text-sm text-slate-500">No pages match “{query}”</li>}
+          {results.map((item, i) => {
+            const Icon = item.icon;
+            const active = i === index;
+            return (
+              <li key={item.href}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setIndex(i)}
+                  onClick={() => go(item)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                    active ? 'bg-[#F3EEFF] text-[#5B2BD9]' : 'text-slate-700'
+                  }`}
+                >
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${active ? 'bg-white text-[#7541F5]' : 'bg-slate-100 text-slate-500'}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="flex-1 font-medium">{item.label}</span>
+                  <span className="text-xs text-slate-400">{item.group}</span>
+                  {active && <CornerDownLeft className="h-3.5 w-3.5 text-[#7541F5]" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────────── Navbar ───────────────────────────────── */
+
+export default function AdminNavbar({ onMenuToggle, isCollapsed = false }: AdminNavbarProps) {
+  const [profile, setProfile] = useState<any>(null);
+  const [email, setEmail] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
     let cancelled = false;
-    const loadProfile = async () => {
+    (async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (cancelled || !user) return;
+      setEmail(user.email || '');
       const { data } = await supabase
         .from('profiles')
-        .select('full_name, first_name, last_name, email')
+        .select('full_name, first_name, last_name, email, avatar_url')
         .eq('id', user.id)
         .single();
       if (!cancelled) setProfile(data);
-    };
-    loadProfile();
+    })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent));
+  }, []);
+
+  // Ctrl/⌘ K opens quick search from anywhere in the admin.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Close profile menu on outside click / Escape / navigation.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -47,73 +194,150 @@ export default function AdminNavbar({
     router.refresh();
   };
 
-  const displayName = profile?.full_name || profile?.first_name || 'Admin';
-  const displayInitial = (displayName || 'A').charAt(0).toUpperCase();
+  const fullName =
+    profile?.full_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Admin';
+  const displayEmail = profile?.email || email;
+  const initials =
+    fullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w: string) => w[0]?.toUpperCase())
+      .join('') || 'A';
+
+  const crumbs = adminBreadcrumb(pathname);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200/80 h-14 transition-all">
-      <div className="flex items-center justify-between h-full px-3 sm:px-5">
-        {/* Left: Mobile drawer toggle / Desktop collapse toggle & Logo */}
-        <div className="flex items-center space-x-2.5 sm:space-x-3">
-          {/* Mobile drawer toggle */}
+    <>
+      <header
+        className={`fixed top-0 right-0 left-0 z-30 h-14 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[left] duration-200 ease-out md:h-16 ${
+          isCollapsed ? 'md:left-[72px]' : 'md:left-64'
+        }`}
+      >
+        <div className="flex h-full items-center gap-3 px-3 sm:px-6">
+          {/* Mobile: menu + brand */}
           <button
             onClick={onMenuToggle}
-            className="md:hidden flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
             aria-label="Open navigation menu"
           >
             <Menu className="h-5 w-5" />
           </button>
-
-          {/* Desktop sidebar toggle button */}
-          {onDesktopCollapseToggle && (
-            <button
-              onClick={onDesktopCollapseToggle}
-              className="hidden md:flex items-center justify-center h-8 w-8 rounded-lg border border-slate-200 text-slate-500 hover:text-[#7541F5] hover:bg-purple-50 hover:border-purple-200 transition"
-              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-          )}
-
-          {/* Brand Logo & ADMIN Badge */}
-          <Link href="/admin" className="flex items-center space-x-2 group">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#7541F5] text-white shadow-xs group-hover:bg-[#6332DE] transition">
+          <Link href="/admin" className="flex items-center gap-2 md:hidden">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white">
               <MapPin className="h-4 w-4" />
             </div>
-            <span className="text-base font-bold tracking-tight text-slate-900">
-              Ghumakkars
-            </span>
-            <span className="px-1.5 py-0.5 bg-[#F3EEFF] text-[#7541F5] border border-[#DDD6FE] text-[10px] font-bold rounded uppercase tracking-wider">
-              ADMIN
-            </span>
+            <span className="text-[15px] font-bold tracking-tight text-slate-900">Admin</span>
           </Link>
-        </div>
 
-        {/* Right: Administrator profile and Sign Out */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
-          <div className="hidden sm:flex items-center space-x-2.5 text-sm">
-            <div className="text-right">
-              <div className="font-semibold text-xs sm:text-sm text-slate-900 leading-tight">
-                {displayName}
-              </div>
-              <div className="text-[11px] text-slate-500 font-medium">Administrator</div>
-            </div>
-            <div className="h-8 w-8 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center text-[#7541F5] font-semibold text-xs shadow-xs">
-              {displayInitial || <User className="h-4 w-4 text-[#7541F5]" />}
+          {/* Desktop: breadcrumb */}
+          <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 text-sm md:flex">
+            <Link href="/admin" className="font-medium text-slate-400 transition hover:text-slate-700">
+              Admin
+            </Link>
+            {crumbs.map((c, i) => (
+              <span key={i} className="flex min-w-0 items-center gap-1.5">
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                {c.href ? (
+                  <Link href={c.href} className="truncate font-medium text-slate-400 transition hover:text-slate-700">
+                    {c.label}
+                  </Link>
+                ) : (
+                  <span className="truncate font-semibold text-slate-900">{c.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            {/* Quick search */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden h-9 w-60 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-400 transition hover:border-slate-300 hover:bg-white lg:flex"
+            >
+              <Search className="h-4 w-4" />
+              <span className="flex-1 text-left">Search pages…</span>
+              <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                {isMac ? '⌘' : 'Ctrl'} K
+              </kbd>
+            </button>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+              aria-label="Search pages"
+            >
+              <Search className="h-[18px] w-[18px]" />
+            </button>
+
+            <Link
+              href="/"
+              target="_blank"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 sm:flex"
+              title="View website"
+              aria-label="View website"
+            >
+              <ExternalLink className="h-[18px] w-[18px]" />
+            </Link>
+
+            <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
+
+            {/* Profile menu */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className="flex items-center gap-2.5 rounded-lg py-1 pl-1 pr-1.5 outline-none transition hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#7541F5]/40 sm:pr-2"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                {profile?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-white" />
+                ) : (
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-xs font-bold text-white">
+                    {initials}
+                  </span>
+                )}
+                <span className="hidden text-left leading-tight sm:block">
+                  <span className="block max-w-[140px] truncate text-[13px] font-semibold text-slate-900">{fullName}</span>
+                  <span className="block text-[11px] font-medium text-slate-500">Administrator</span>
+                </span>
+                <ChevronDown className={`hidden h-4 w-4 text-slate-400 transition-transform sm:block ${menuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-64 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl animate-slide-down"
+                >
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-slate-900">{fullName}</p>
+                    {displayEmail && <p className="truncate text-xs text-slate-500">{displayEmail}</p>}
+                  </div>
+                  <div className="p-1.5">
+                    <Link href="/admin/settings" role="menuitem" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100">
+                      <Settings className="h-4 w-4 text-slate-400" /> Settings
+                    </Link>
+                    <Link href="/" target="_blank" role="menuitem" className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100">
+                      <ExternalLink className="h-4 w-4 text-slate-400" /> View website
+                    </Link>
+                  </div>
+                  <div className="border-t border-slate-100 p-1.5">
+                    <button
+                      onClick={handleSignOut}
+                      role="menuitem"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                    >
+                      <LogOut className="h-4 w-4" /> Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-          <button
-            onClick={handleSignOut}
-            className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-slate-200 hover:border-rose-200 text-xs font-semibold"
-            aria-label="Sign Out"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
         </div>
-      </div>
-    </nav>
+      </header>
+
+      <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }
