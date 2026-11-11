@@ -45,14 +45,19 @@ export const PUT = withErrorLog('admin', 'Instagram automation save', async (req
   if (b.dm_mode === 'fixed' || b.dm_mode === 'random') p.dm_mode = b.dm_mode;
   if (b.comment_mode === 'fixed' || b.comment_mode === 'random') p.comment_mode = b.comment_mode;
   if (b.dm_cooldown_hours != null) p.dm_cooldown_hours = Math.min(720, Math.max(0, Math.round(Number(b.dm_cooldown_hours) || 0)));
+  if (typeof b.site_url === 'string') {
+    const u = b.site_url.trim().replace(/\/$/, '');
+    if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(u)) return NextResponse.json({ error: 'Website must be a full https:// address.' }, { status: 400 });
+    p.site_url = u || null;
+  }
   if (b.comment_posts_to_watch != null) p.comment_posts_to_watch = Math.min(25, Math.max(1, Math.round(Number(b.comment_posts_to_watch) || 10)));
 
   // Refuse to switch on with nothing to say.
   if (p.dm_enabled || p.comment_enabled) {
-    const { data: t } = await db.from('instagram_reply_templates').select('kind').eq('is_active', true);
-    const kinds = new Set((t || []).map((x: any) => x.kind));
-    if (p.dm_enabled && !kinds.has('dm')) return NextResponse.json({ error: 'Add at least one DM reply first.' }, { status: 400 });
-    if (p.comment_enabled && !kinds.has('comment')) return NextResponse.json({ error: 'Add at least one comment reply first.' }, { status: 400 });
+    const { data: r } = await db.from('instagram_reply_rules').select('channel').eq('is_active', true);
+    const ch = new Set((r || []).map((x: any) => x.channel));
+    if (p.dm_enabled && !ch.has('dm')) return NextResponse.json({ error: 'Create a message rule first.' }, { status: 400 });
+    if (p.comment_enabled && !ch.has('comment')) return NextResponse.json({ error: 'Create a comment rule first.' }, { status: 400 });
   }
 
   const { error } = await db.from('instagram_automation').update(p).eq('id', 1);

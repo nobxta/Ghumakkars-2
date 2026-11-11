@@ -68,3 +68,21 @@ export interface ReplyTemplate { id: string; kind: 'dm' | 'comment'; text: strin
 
 export const mediaThumb = (m: IgMediaItem) => m.thumbnail_url || m.media_url || '';
 export const isReel = (m: IgMediaItem) => m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
+
+export type ReplyFormat = 'text' | 'card' | 'trips';
+export interface RuleReply {
+  id?: string; kind: 'dm' | 'comment'; format: ReplyFormat; text: string; title: string | null; image_url: string | null;
+  buttons: { title: string; url: string }[]; quick_replies: string[]; options: { trips_limit?: number; trip_button?: string };
+  is_active: boolean; pinned: boolean; use_count?: number;
+}
+export interface ReplyRule {
+  id?: string; channel: 'dm' | 'comment'; name: string; trigger: 'any' | 'keywords'; keywords: string[]; match_type: 'contains' | 'exact';
+  media_ids: string[]; reply_mode: 'random' | 'fixed'; cooldown_hours: number; send_dm: boolean;
+  active_from: number | null; active_to: number | null; is_active: boolean; position?: number;
+  replies: RuleReply[]; stats?: { sent: number; failed: number };
+}
+export interface RulesData {
+  rules: ReplyRule[]; siteUrl: string; siteUrlConfigured: string | null;
+  testTargets: { user_id: string; username: string | null; created_at: string }[];
+}
+export interface TripCardPreview { title: string; subtitle: string; image: string | null; url: string }

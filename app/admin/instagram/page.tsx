@@ -157,7 +157,7 @@ export default function InstagramPage() {
         {tab === 'posts' && <PostsTab media={media} error={errors.media} />}
         {tab === 'followers' && <FollowersTab />}
         {tab === 'inbox' && <InboxTab inbox={inbox} media={media} templates={auto.templates} onChanged={loadInbox} onSync={() => sync()} syncing={syncing} />}
-        {tab === 'automation' && <AutomationTab settings={auto.settings} templates={auto.templates} inbox={inbox} onChanged={loadAuto} onSync={sync} syncing={syncing} />}
+        {tab === 'automation' && <AutomationTab settings={auto.settings} inbox={inbox} media={media?.media || []} profile={p ? { username: p.username, picture: p.profile_picture_url } : undefined} onChanged={() => { loadAuto(); loadInbox(); }} onSync={sync} syncing={syncing} />}
         {tab === 'settings' && <SettingsTab overview={overview} settings={a} />}
       </div>
     </div>

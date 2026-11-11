@@ -1,124 +1,218 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, Star, PauseCircle, AlertTriangle, Info, Check, X, ChevronDown, Send, MessageCircle, ShieldCheck, Bot } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Plus, PauseCircle, AlertTriangle, Check, X, ChevronUp, ChevronDown, Hash, MessagesSquare, MessageCircle, Moon, Map, Link2,
+  ShieldCheck, Bot, Sparkles, Image as ImageIcon, Globe, Pencil,
+} from 'lucide-react';
 import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 import { Skeleton, timeAgo } from '@/components/admin/dashboard/utils';
-import { Banner, Button, Dot, Panel, PanelHeader, Segmented, SettingRow, Switch, cx } from './shared';
-import type { AutomationSettings, InboxData, ReplyTemplate } from './types';
+import RuleEditor, { blankReply, blankRule } from './RuleEditor';
+import { Banner, Button, Dot, IconChip, Panel, PanelHeader, Segmented, Switch, cx } from './shared';
+import type { AutomationSettings, IgMediaItem, InboxData, ReplyRule, RulesData } from './types';
 
-const COOLDOWNS = [
-  { v: 0, l: 'Every message' }, { v: 1, l: 'Once an hour' }, { v: 12, l: 'Once every 12 hours' },
-  { v: 24, l: 'Once a day' }, { v: 168, l: 'Once a week' }, { v: 720, l: 'Once a month' },
-];
 const KIND: Record<string, string> = { dm: 'Message', comment: 'Comment', comment_dm: 'Comment → DM' };
+const hourLabel = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? 'am' : 'pm'}`;
 
-export default function AutomationTab({ settings, templates, inbox, onChanged, onSync, syncing }: {
-  settings: AutomationSettings | null; templates: ReplyTemplate[]; inbox: InboxData | null; onChanged: () => void; onSync: (resume?: boolean) => void; syncing: boolean;
+/** Ready-made rules — one click fills the editor, then tweak and save. */
+function starters(channel: 'dm' | 'comment', site: string): { name: string; desc: string; icon: React.ReactNode; rule: ReplyRule }[] {
+  const trips = site ? `${site}/trips` : 'https://';
+  if (channel === 'dm') {
+    return [
+      {
+        name: 'Price enquiry', desc: 'price, cost, kitna… → prices + button', icon: <Hash />,
+        rule: { ...blankRule('dm'), name: 'Price enquiry', keywords: ['price', 'cost', 'kitna', 'charges', 'fees', 'rate'], replies: [
+          { ...blankReply('dm', true), text: 'Hi {username}! 🙌 Our trips start from ₹2,999 per person. See every trip with dates and prices below 👇', buttons: [{ title: 'View all trips', url: trips }] },
+        ] },
+      },
+      {
+        name: 'Upcoming trips', desc: 'trips, dates, schedule… → live trip cards', icon: <Map />,
+        rule: { ...blankRule('dm'), name: 'Upcoming trips', keywords: ['trips', 'upcoming', 'next trip', 'dates', 'schedule', 'plan'], replies: [
+          { ...blankReply('dm', true), format: 'trips', text: 'Here are our upcoming trips {username} ✨ Swipe to see them all 👉', options: { trips_limit: 5, trip_button: 'View trip' } },
+        ] },
+      },
+      {
+        name: 'Night-time away message', desc: '9 pm – 9 am, once a day', icon: <Moon />,
+        rule: { ...blankRule('dm'), name: 'Night-time away message', trigger: 'any', active_from: 21, active_to: 9, cooldown_hours: 24, replies: [
+          { ...blankReply('dm', true), text: 'Thanks for your message {username}! 🌙 Our team is offline right now and will reply first thing in the morning.', quick_replies: ['Upcoming trips', 'Prices'] },
+        ] },
+      },
+      {
+        name: 'Welcome message', desc: 'Anything else, once a day, with quick replies', icon: <Sparkles />,
+        rule: { ...blankRule('dm'), name: 'Welcome message', trigger: 'any', cooldown_hours: 24, replies: [
+          { ...blankReply('dm', true), text: 'Hey {username}! 👋 Welcome to Ghumakkars. What would you like to know?', quick_replies: ['Upcoming trips', 'Prices', 'Talk to team'] },
+        ] },
+      },
+    ];
+  }
+  return [
+    {
+      name: 'Comment “details” → DM', desc: 'details, info, price → reply + DM with trips', icon: <Hash />,
+      rule: { ...blankRule('comment'), name: 'Comment “details” → DM', keywords: ['details', 'detail', 'info', 'price', 'dm', 'interested'], send_dm: true, replies: [
+        { ...blankReply('comment', true), text: 'Sent you the details in DM {username} 📩' },
+        { ...blankReply('comment'), text: 'Check your DMs {username} ✨' },
+        { ...blankReply('dm', true), format: 'trips', text: 'Hey {username}! Here are the details you asked for 👇', options: { trips_limit: 5, trip_button: 'View trip' } },
+      ] },
+    },
+    {
+      name: 'Thank every comment', desc: 'Random thank-you replies', icon: <MessageCircle />,
+      rule: { ...blankRule('comment'), name: 'Thank every comment', trigger: 'any', replies: [
+        { ...blankReply('comment', true), text: 'Thank you {username} ❤️' },
+        { ...blankReply('comment'), text: 'Means a lot {username} 🙌' },
+        { ...blankReply('comment'), text: 'Glad you liked it {username} ✨' },
+      ] },
+    },
+  ];
+}
+
+export default function AutomationTab({ settings, inbox, media, profile, onChanged, onSync, syncing }: {
+  settings: AutomationSettings | null; inbox: InboxData | null; media: IgMediaItem[]; profile?: { username?: string; picture?: string | null };
+  onChanged: () => void; onSync: (resume?: boolean) => void; syncing: boolean;
 }) {
   const { toast } = useAdminLive();
+  const [channel, setChannel] = useState<'dm' | 'comment'>('dm');
+  const [data, setData] = useState<RulesData | null>(null);
+  const [editing, setEditing] = useState<ReplyRule | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [site, setSite] = useState('');
 
-  if (!settings) return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"><Skeleton className="h-[520px] rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  const load = useCallback(() => fetch('/api/admin/instagram/rules', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!j.error) { setData(j); setSite(j.siteUrlConfigured || ''); } }).catch(() => {}), []);
+  useEffect(() => { load(); }, [load]);
 
-  const save = async (patch: Partial<AutomationSettings>, msg?: string) => {
+  if (!settings || !data) return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"><Skeleton className="h-[520px] rounded-2xl" /><Skeleton className="h-72 rounded-2xl" /></div>;
+
+  const save = async (patch: Record<string, unknown>, msg?: string) => {
     setSaving(Object.keys(patch)[0]);
     try {
       const res = await fetch('/api/admin/instagram/automation', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'Could not save');
       if (msg) toast(msg, 'success');
-    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(null); onChanged(); }
+    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(null); onChanged(); load(); }
   };
 
+  const rules = data.rules.filter((r) => r.channel === channel).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const on = channel === 'dm' ? settings.dm_enabled : settings.comment_enabled;
   const paused = !!settings.paused_until && new Date(settings.paused_until).getTime() > Date.now();
   const stale = !settings.last_sync_at || Date.now() - new Date(settings.last_sync_at).getTime() > 10 * 60_000;
   const recentError = settings.last_error && settings.last_error_at && Date.now() - new Date(settings.last_error_at).getTime() < 6 * 3600_000;
-  const dmT = templates.filter((t) => t.kind === 'dm');
-  const cmT = templates.filter((t) => t.kind === 'comment');
-  const select = 'h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-[13px] text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30';
+
+  const toggleRule = async (r: ReplyRule, v: boolean) => {
+    setData((d) => d && { ...d, rules: d.rules.map((x) => (x.id === r.id ? { ...x, is_active: v } : x)) });
+    const res = await fetch('/api/admin/instagram/rules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, is_active: v }) });
+    if (!res.ok) { toast('Could not update the rule', 'error'); load(); }
+  };
+  const move = async (i: number, dir: -1 | 1) => {
+    const ids = rules.map((r) => r.id!);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setData((d) => d && { ...d, rules: d.rules.map((x) => (ids.includes(x.id!) ? { ...x, position: ids.indexOf(x.id!) * 10 } : x)) });
+    await fetch('/api/admin/instagram/rules', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }) });
+  };
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmented value={channel} onChange={(v) => setChannel(v as any)} options={[
+            { k: 'dm', l: <span className="inline-flex items-center gap-1.5"><Dot tone={settings.dm_enabled ? 'green' : 'gray'} />Messages</span> },
+            { k: 'comment', l: <span className="inline-flex items-center gap-1.5"><Dot tone={settings.comment_enabled ? 'green' : 'gray'} />Comments</span> },
+          ]} />
+          <p className="text-xs text-slate-500">Rules are checked top to bottom — the first one that matches replies.</p>
+        </div>
+
         {paused && (
-          <Banner tone="amber" icon={<PauseCircle className="h-4 w-4" />} title="Paused — Instagram asked us to slow down"
-            action={<Button size="sm" onClick={() => onSync(true)}>Resume now</Button>}>
+          <Banner tone="amber" icon={<PauseCircle className="h-4 w-4" />} title="Paused — Instagram asked us to slow down" action={<Button size="sm" onClick={() => onSync(true)}>Resume now</Button>}>
             Replies restart on their own at {new Date(settings.paused_until!).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.
           </Banner>
         )}
         {recentError && !paused && <Banner tone="rose" icon={<AlertTriangle className="h-4 w-4" />} title={`Something went wrong ${timeAgo(settings.last_error_at)}`}>{settings.last_error}</Banner>}
 
-        {/* Direct messages */}
-        <Panel>
-          <PanelHeader icon={<Send />} gradient title="Reply to messages" description="Answer everyone who sends you a DM."
-            right={<Switch label="Reply to messages" on={settings.dm_enabled} disabled={saving === 'dm_enabled'} onChange={(v) => save({ dm_enabled: v }, v ? 'Message replies are on' : 'Message replies are off')} />} />
-          <div className={cx('divide-y divide-slate-100 transition-opacity', !settings.dm_enabled && 'opacity-60')}>
-            <SettingRow title="Which reply to send" description={settings.dm_mode === 'random' ? 'A different saved reply each time.' : 'The starred reply, for everyone.'}>
-              <Segmented value={settings.dm_mode} onChange={(v) => save({ dm_mode: v as any })} options={[{ k: 'random', l: 'Random' }, { k: 'fixed', l: 'Same for everyone' }]} />
-            </SettingRow>
-            <SettingRow title="How often per person" description="Stops the same person getting the auto reply again and again.">
+        {/* Master switch */}
+        <Panel className={cx('overflow-hidden', on && 'ring-1 ring-emerald-200')}>
+          <div className={cx('flex items-center gap-4 px-5 py-4', on && 'bg-gradient-to-r from-emerald-50/80 to-white')}>
+            <IconChip icon={channel === 'dm' ? <MessagesSquare /> : <MessageCircle />} gradient={on} tone="purple" size={40} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900">{channel === 'dm' ? 'Auto reply to messages' : 'Auto reply to comments'} <span className={cx('ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold', on ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600')}>{on ? 'ON' : 'OFF'}</span></p>
+              <p className="mt-0.5 text-xs text-slate-500">{channel === 'dm' ? 'Answers new DMs using the rules below.' : 'Answers new comments on your latest posts using the rules below.'}</p>
+            </div>
+            <Switch label="Auto reply" on={on} disabled={saving !== null} onChange={(v) => save(channel === 'dm' ? { dm_enabled: v } : { comment_enabled: v }, v ? 'Auto reply is on' : 'Auto reply is off')} />
+          </div>
+          {channel === 'comment' && (
+            <div className="flex items-center justify-between gap-4 border-t border-slate-100 px-5 py-3 text-xs">
+              <span className="text-slate-600">Watch comments on your latest</span>
               <div className="relative">
-                <select value={settings.dm_cooldown_hours} onChange={(e) => save({ dm_cooldown_hours: Number(e.target.value) })} className={select}>
-                  {Array.from(new Set([...COOLDOWNS.map((c) => c.v), settings.dm_cooldown_hours])).map((v) => <option key={v} value={v}>{COOLDOWNS.find((c) => c.v === v)?.l || `Every ${v} hours`}</option>)}
+                <select value={settings.comment_posts_to_watch} onChange={(e) => save({ comment_posts_to_watch: Number(e.target.value) })} className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-xs text-slate-800">
+                  {[3, 5, 10, 15, 25].map((n) => <option key={n} value={n}>{n} posts</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               </div>
-            </SettingRow>
-          </div>
-          <Replies kind="dm" mode={settings.dm_mode} items={dmT} onChanged={onChanged} />
+            </div>
+          )}
         </Panel>
 
-        {/* Comments */}
-        <Panel>
-          <PanelHeader icon={<MessageCircle />} tone="orange" title="Reply to comments" description="Post a public reply under each new comment."
-            right={<Switch label="Reply to comments" on={settings.comment_enabled} disabled={saving === 'comment_enabled'} onChange={(v) => save({ comment_enabled: v }, v ? 'Comment replies are on' : 'Comment replies are off')} />} />
-          <div className={cx('divide-y divide-slate-100 transition-opacity', !settings.comment_enabled && 'opacity-60')}>
-            <SettingRow title="Which reply to send" description={settings.comment_mode === 'random' ? 'A different saved reply each time.' : 'The starred reply, for everyone.'}>
-              <Segmented value={settings.comment_mode} onChange={(v) => save({ comment_mode: v as any })} options={[{ k: 'random', l: 'Random' }, { k: 'fixed', l: 'Same for everyone' }]} />
-            </SettingRow>
-            <SettingRow title="Posts to watch" description="Your most recent posts and reels.">
-              <div className="relative">
-                <select value={settings.comment_posts_to_watch} onChange={(e) => save({ comment_posts_to_watch: Number(e.target.value) })} className={select}>
-                  {[3, 5, 10, 15, 25].map((n) => <option key={n} value={n}>Latest {n}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              </div>
-            </SettingRow>
-            <SettingRow title="Also send them a DM" description="One private message per comment, using your message replies.">
-              <Switch label="Also send a DM" on={settings.comment_dm_enabled} onChange={(v) => save({ comment_dm_enabled: v }, v ? 'Commenters will also get a DM' : 'Commenter DMs are off')} />
-            </SettingRow>
-          </div>
-          <Replies kind="comment" mode={settings.comment_mode} items={cmT} onChanged={onChanged} />
+        {/* Rules */}
+        <Panel className="overflow-hidden">
+          <PanelHeader icon={<Bot />} gradient title="Rules" description={`${rules.filter((r) => r.is_active).length} active · ${rules.reduce((s, r) => s + (r.stats?.sent || 0), 0)} replies sent this week`}
+            right={<Button variant="gradient" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setEditing(blankRule(channel))}>New rule</Button>} />
+          {rules.length === 0 ? (
+            <p className="px-5 py-8 text-center text-[13px] text-slate-500">No rules yet. Start from one of the ideas below.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {rules.map((r, i) => <RuleRow key={r.id} rule={r} index={i} count={rules.length} media={media} onEdit={() => setEditing(r)} onToggle={(v) => toggleRule(r, v)} onMove={(d) => move(i, d)} />)}
+            </ul>
+          )}
         </Panel>
+
+        {/* Starters */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Start from an idea</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {starters(channel, data.siteUrl).map((s) => (
+              <button key={s.name} onClick={() => setEditing(JSON.parse(JSON.stringify(s.rule)))}
+                className="group flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-pink-200 hover:shadow-md hover:shadow-pink-500/5">
+                <IconChip icon={s.icon} tone="pink" />
+                <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold text-slate-900">{s.name}</span><span className="block truncate text-xs text-slate-500">{s.desc}</span></span>
+                <Plus className="h-4 w-4 text-slate-300 group-hover:text-pink-500" />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Side column: status, rules, recent activity */}
-      <aside className="space-y-6 lg:sticky lg:top-20">
+      {/* Side column */}
+      <aside className="space-y-5 lg:sticky lg:top-20">
         <Panel>
           <div className="flex items-center gap-3 px-5 py-4">
             <Dot tone={paused ? 'amber' : stale ? 'gray' : 'green'} />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-slate-900">{paused ? 'Paused' : stale ? 'Not running' : 'Running'}</p>
-              <p className="text-xs text-slate-500">{settings.last_sync_at ? `Last checked ${timeAgo(settings.last_sync_at)}` : 'Never checked'} · every minute</p>
+              <p className="text-[13px] font-semibold text-slate-900">{paused ? 'Paused' : stale ? 'Not running' : 'Running'}</p>
+              <p className="text-xs text-slate-500">{settings.last_sync_at ? `Checked ${timeAgo(settings.last_sync_at)}` : 'Never checked'} · every minute</p>
             </div>
-            <Button size="sm" onClick={() => onSync()} loading={syncing}>Run now</Button>
+            <Button size="sm" variant="soft" onClick={() => onSync()} loading={syncing}>Run now</Button>
           </div>
-          {stale && !paused && (
-            <p className="border-t border-slate-100 px-5 py-3 text-xs leading-relaxed text-slate-500">
-              Replies only go out while the background job runs. In Coolify add a Scheduled Task: <code className="rounded bg-slate-100 px-1 font-mono">npm run ig:cron</code> every minute.
-            </p>
-          )}
+          {stale && !paused && <p className="border-t border-slate-100 px-5 py-3 text-xs leading-relaxed text-slate-500">Replies only go out while the background job runs — in Coolify add a Scheduled Task <code className="rounded bg-slate-100 px-1 font-mono">npm run ig:cron</code> every minute.</p>}
         </Panel>
 
         <Panel>
-          <PanelHeader icon={<ShieldCheck />} tone="green" title="How it behaves" />
+          <PanelHeader icon={<Globe />} tone="blue" title="Your website" description="Used for trip cards and link presets" />
+          <form className="flex gap-2 px-5 py-4" onSubmit={(e) => { e.preventDefault(); save({ site_url: site }, 'Website saved'); }}>
+            <input value={site} onChange={(e) => setSite(e.target.value)} placeholder={data.siteUrl || 'https://yourdomain.com'}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-xs focus:border-pink-300 focus:outline-none focus:ring-4 focus:ring-pink-50" />
+            <Button size="sm" variant="soft" type="submit" loading={saving === 'site_url'}>Save</Button>
+          </form>
+          {!/^https:\/\//.test(data.siteUrl) && <p className="-mt-2 px-5 pb-4 text-[11px] text-amber-600">Instagram buttons need an https:// address.</p>}
+        </Panel>
+
+        <Panel>
+          <PanelHeader icon={<ShieldCheck />} tone="green" title="Built-in safety" />
           <ul className="space-y-2.5 px-5 py-4 text-xs leading-relaxed text-slate-600">
             {[
-              'Only answers messages and comments that arrive after you switch it on.',
-              'Skips chats your team has already answered.',
-              'Messages: Instagram allows replies within 24 hours of their last message.',
-              'Never replies to your own comments or to replies.',
+              'Only replies to new messages and comments after you switch it on.',
+              'Skips chats your team already answered.',
+              'Each person is limited by the rule’s “how often”.',
+              'If Instagram refuses buttons, the message goes as text with links.',
               'At most 15 replies a minute; pauses itself if Instagram pushes back.',
             ].map((t) => <li key={t} className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />{t}</li>)}
           </ul>
@@ -143,77 +237,62 @@ export default function AutomationTab({ settings, templates, inbox, onChanged, o
           )}
         </Panel>
       </aside>
+
+      {editing && (
+        <RuleEditor initial={editing} media={media} data={data} profile={profile}
+          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChanged(); }} />
+      )}
     </div>
   );
 }
 
-function Replies({ kind, mode, items, onChanged }: { kind: 'dm' | 'comment'; mode: 'fixed' | 'random'; items: ReplyTemplate[]; onChanged: () => void }) {
-  const { toast } = useAdminLive();
-  const [adding, setAdding] = useState(false);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
-  const max = kind === 'comment' ? 300 : 1000;
-
-  const call = async (method: string, body?: unknown, query = '') => {
-    const res = await fetch(`/api/admin/instagram/templates${query}`, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error || 'Failed');
-  };
-  const run = async (key: string, fn: () => Promise<unknown>, msg?: string) => {
-    setBusy(key);
-    try { await fn(); if (msg) toast(msg, 'success'); } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(null); onChanged(); }
-  };
-  const add = () => text.trim() && run('add', () => call('POST', { kind, text }).then(() => { setText(''); setAdding(false); }), 'Reply saved');
+function RuleRow({ rule, index, count, media, onEdit, onToggle, onMove }: {
+  rule: ReplyRule; index: number; count: number; media: IgMediaItem[]; onEdit: () => void; onToggle: (v: boolean) => void; onMove: (d: -1 | 1) => void;
+}) {
+  const active = rule.replies.filter((r) => r.is_active);
+  const has = (f: (r: ReplyRule['replies'][number]) => boolean) => active.some(f);
+  const thumbs = rule.media_ids.map((id) => media.find((m) => m.id === id)).filter(Boolean).slice(0, 3) as IgMediaItem[];
+  const when = rule.trigger === 'keywords'
+    ? <>{rule.match_type === 'exact' ? 'Is exactly' : 'Contains'} {rule.keywords.slice(0, 4).map((k) => <span key={k} className="mx-0.5 rounded-md bg-pink-50 px-1.5 py-0.5 font-medium text-pink-700">{k}</span>)}{rule.keywords.length > 4 && <span className="text-slate-400"> +{rule.keywords.length - 4}</span>}</>
+    : <>{rule.channel === 'dm' ? 'Any other message' : 'Any other comment'}</>;
 
   return (
-    <div className="border-t border-slate-200 bg-slate-50/40">
-      <div className="flex items-center justify-between px-5 pb-2 pt-4">
-        <p className="text-[13px] font-medium text-slate-900">Saved replies <span className="font-normal text-slate-400">{items.filter((t) => t.is_active).length} in use</span></p>
-        {!adding && <Button size="sm" variant="soft" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdding(true)}>Add reply</Button>}
+    <li className={cx('group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50/60', !rule.is_active && 'opacity-55')}>
+      <div className="flex flex-col">
+        <button onClick={() => onMove(-1)} disabled={index === 0} className="rounded p-0.5 text-slate-300 hover:text-slate-700 disabled:invisible" aria-label="Move up"><ChevronUp className="h-3.5 w-3.5" /></button>
+        <button onClick={() => onMove(1)} disabled={index === count - 1} className="rounded p-0.5 text-slate-300 hover:text-slate-700 disabled:invisible" aria-label="Move down"><ChevronDown className="h-3.5 w-3.5" /></button>
       </div>
-
-      {items.length === 0 && !adding && (
-        <p className="mx-5 mb-4 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">
-          Add at least one reply to switch this on.
-        </p>
-      )}
-
-      {items.length > 0 && (
-        <ul className="mx-5 mb-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-          {items.map((t) => (
-            <li key={t.id} className="group flex items-start gap-3 px-3.5 py-3">
-              <input type="checkbox" checked={t.is_active} onChange={(e) => run(t.id, () => call('PATCH', { id: t.id, is_active: e.target.checked }))}
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded accent-[#0095f6]" aria-label="Use this reply" title={t.is_active ? 'In use' : 'Not in use'} />
-              <p className={cx('min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed', t.is_active ? 'text-slate-800' : 'text-slate-400 line-through decoration-slate-300')}>{t.text}</p>
-              <span className="shrink-0 pt-0.5 text-[11px] tabular-nums text-slate-400" title="Times sent">{t.use_count} sent</span>
-              {mode === 'fixed' && (
-                <button onClick={() => run(t.id, () => call('PATCH', { id: t.id, pinned: true }), 'Starred reply will be sent to everyone')}
-                  className={cx('shrink-0 pt-0.5', t.pinned ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500')} title={t.pinned ? 'Sent to everyone' : 'Send this one to everyone'} aria-label="Star reply">
-                  <Star className="h-3.5 w-3.5" fill={t.pinned ? 'currentColor' : 'none'} />
-                </button>
-              )}
-              <button onClick={() => { if (window.confirm('Delete this saved reply?')) run(t.id, () => call('DELETE', undefined, `?id=${t.id}`), 'Reply deleted'); }}
-                className="shrink-0 pt-0.5 text-slate-300 opacity-0 transition hover:text-rose-600 focus:opacity-100 group-hover:opacity-100" aria-label="Delete reply">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {adding && (
-        <div className="mx-5 mb-4 rounded-xl border border-pink-200 bg-white p-3 shadow-sm ring-4 ring-pink-50">
-          <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={max}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) add(); if (e.key === 'Escape') setAdding(false); }}
-            placeholder={kind === 'dm' ? 'Hi {username}, thanks for your message! Our team will get back to you shortly.' : 'Thanks {username}! We have sent you the details in DM.'}
-            className="w-full resize-none border-0 p-0 text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0" />
-          <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2">
-            <span className="flex items-center gap-1 text-[11px] text-slate-400"><Info className="h-3 w-3" /><code className="font-mono">{'{username}'}</code> adds their @name · {text.length}/{max}</span>
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => { setAdding(false); setText(''); }}>Cancel</Button>
-            <Button size="sm" variant="primary" onClick={add} loading={busy === 'add'} disabled={!text.trim()}>Save</Button>
-          </div>
+      <IconChip icon={rule.trigger === 'keywords' ? <Hash /> : rule.active_from != null ? <Moon /> : <MessagesSquare />} tone={rule.trigger === 'keywords' ? 'pink' : rule.active_from != null ? 'indigo' : 'purple'} />
+      <button onClick={onEdit} className="min-w-0 flex-1 text-left">
+        <p className="truncate text-[13px] font-semibold text-slate-900 group-hover:text-pink-700">{rule.name}</p>
+        <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{when}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <Tag>{active.length} {active.length === 1 ? 'reply' : 'replies'}{active.length > 1 ? (rule.reply_mode === 'random' ? ' · random' : ' · fixed') : ''}</Tag>
+          {has((r) => r.buttons.length > 0) && <Tag icon={<Link2 className="h-3 w-3" />}>Buttons</Tag>}
+          {has((r) => r.format === 'card') && <Tag icon={<ImageIcon className="h-3 w-3" />}>Card</Tag>}
+          {has((r) => r.format === 'trips') && <Tag icon={<Map className="h-3 w-3" />}>Trip cards</Tag>}
+          {has((r) => r.quick_replies.length > 0) && <Tag>Quick replies</Tag>}
+          {rule.send_dm && <Tag icon={<MessagesSquare className="h-3 w-3" />}>+ DM</Tag>}
+          {rule.active_from != null && <Tag icon={<Moon className="h-3 w-3" />}>{hourLabel(rule.active_from)}–{hourLabel(rule.active_to ?? 0)}</Tag>}
+          {thumbs.length > 0 && (
+            <span className="ml-1 flex -space-x-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {thumbs.map((m) => <img key={m.id} src={m.thumbnail_url || m.media_url} alt="" className="h-5 w-5 rounded-md object-cover ring-2 ring-white" referrerPolicy="no-referrer" />)}
+              {rule.media_ids.length > 3 && <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 text-[9px] font-bold text-slate-500 ring-2 ring-white">+{rule.media_ids.length - 3}</span>}
+            </span>
+          )}
         </div>
-      )}
-    </div>
+      </button>
+      <div className="hidden text-right sm:block">
+        <p className="text-sm font-bold tabular-nums text-slate-900">{rule.stats?.sent || 0}</p>
+        <p className="text-[11px] text-slate-400">this week{rule.stats?.failed ? <span className="text-rose-500"> · {rule.stats.failed} failed</span> : ''}</p>
+      </div>
+      <Switch on={rule.is_active} onChange={onToggle} label={`Turn ${rule.name} ${rule.is_active ? 'off' : 'on'}`} />
+      <button onClick={onEdit} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800" aria-label="Edit rule"><Pencil className="h-4 w-4" /></button>
+    </li>
   );
+}
+
+function Tag({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
+  return <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{icon}{children}</span>;
 }

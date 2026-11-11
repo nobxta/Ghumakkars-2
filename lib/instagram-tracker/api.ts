@@ -188,6 +188,11 @@ export async function getRecentComments(posts = 10) {
   return (r?.data || []) as any[];
 }
 
+/** Send any message object (text, quick replies, button/generic template). */
+export async function sendMessage(recipient: { id: string } | { comment_id: string }, message: Record<string, unknown>) {
+  return igPost(`${ownId()}/messages`, {}, { recipient, message });
+}
+
 export async function sendDm(recipientId: string, text: string) {
   return igPost(`${ownId()}/messages`, {}, { recipient: { id: recipientId }, message: { text } });
 }
