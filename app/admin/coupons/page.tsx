@@ -36,6 +36,15 @@ export default function AdminCouponsPage() {
     max_total_discount: '',
   });
 
+  // Quick add (N → New coupon) links here with ?new=1 — open the form straight away.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('new') === '1') {
+      setShowCouponForm(true);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     fetchCoupons();
     fetchTrips();

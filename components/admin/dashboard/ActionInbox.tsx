@@ -1,7 +1,10 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
+import { isTypingTarget } from '@/components/admin/live/events';
 import {
   Inbox, Receipt, Banknote, Clock, TrendingDown, Bug, CheckCircle2, ChevronDown, Loader2, Send, ArrowRight,
 } from 'lucide-react';
@@ -23,9 +26,10 @@ const COLLAPSED_ROWS = 5;
 
 const rowBtn = 'inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50';
 
-function Row({ icon, tone, title, meta, actions }: { icon: React.ReactNode; tone: string; title: React.ReactNode; meta: React.ReactNode; actions: React.ReactNode }) {
+function Row({ icon, tone, title, meta, actions, selected = false, idx }: { icon: React.ReactNode; tone: string; title: React.ReactNode; meta: React.ReactNode; actions: React.ReactNode; selected?: boolean; idx?: number }) {
   return (
-    <li className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/70">
+    <li data-inbox-idx={idx} className={`relative flex items-center gap-3 px-4 py-2.5 transition-colors ${selected ? 'bg-violet-50/60' : 'hover:bg-slate-50/70'}`}>
+      {selected && <span className="absolute inset-y-0 left-0 w-0.5 bg-violet-500" />}
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone}`}>{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-medium text-slate-900">{title}</p>
@@ -68,13 +72,25 @@ export default function ActionInbox({
     }
   };
 
-  const rows: { key: string; node: React.ReactNode }[] = [];
+  const router = useRouter();
+  const { overlayOpen } = useAdminLive();
+  const [sel, setSel] = useState(-1);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  type RowDef = { key: string; node: React.ReactNode; open: () => void; approve?: () => void; remind?: () => void };
+  const rows: RowDef[] = [];
+  // Row index at push time — used to mark the keyboard selection.
+  const at = () => rows.length;
 
   inbox.approvals.forEach((a) =>
     rows.push({
       key: `a-${a.txnId}`,
+      open: () => onReview(a),
+      approve: () => onReview(a),
       node: (
         <Row
+          idx={at()}
+          selected={sel === at()}
           icon={<Receipt className="h-4 w-4" />}
           tone="bg-amber-50 text-amber-600"
           title={<>{a.name} paid <span className="tabular-nums">{inr(a.amount)}</span>{a.method ? <span className="font-normal text-slate-500"> via {a.method.toUpperCase()}</span> : null}</>}
@@ -88,8 +104,11 @@ export default function ActionInbox({
   inbox.cashPending.forEach((c) =>
     rows.push({
       key: `c-${c.bookingId}`,
+      open: () => router.push(`/admin/bookings/${c.bookingId}`),
       node: (
         <Row
+          idx={at()}
+          selected={sel === at()}
           icon={<Banknote className="h-4 w-4" />}
           tone="bg-amber-50 text-amber-600"
           title={<>{c.name} will pay <span className="tabular-nums">{inr(c.amount)}</span> in person</>}
@@ -104,8 +123,12 @@ export default function ActionInbox({
     const done = reminded.has(d.bookingId);
     rows.push({
       key: `d-${d.bookingId}`,
+      open: () => router.push(`/admin/bookings/${d.bookingId}`),
+      remind: d.phone && !done ? () => remind([d.bookingId], `d-${d.bookingId}`, d.name) : undefined,
       node: (
         <Row
+          idx={at()}
+          selected={sel === at()}
           icon={<Clock className="h-4 w-4" />}
           tone={d.daysAway <= 2 ? 'bg-rose-50 text-rose-600' : 'bg-orange-50 text-orange-600'}
           title={<>{d.name} owes <span className="tabular-nums">{inr(d.amount)}</span></>}
@@ -132,8 +155,11 @@ export default function ActionInbox({
   inbox.lowFill.forEach((l) =>
     rows.push({
       key: `l-${l.tripId}-${l.departure}`,
+      open: () => router.push(`/admin/trips/${l.tripId}`),
       node: (
         <Row
+          idx={at()}
+          selected={sel === at()}
           icon={<TrendingDown className="h-4 w-4" />}
           tone="bg-slate-100 text-slate-500"
           title={<>{l.trip} is only <span className="tabular-nums">{l.pax}/{l.capacity}</span> full</>}
@@ -147,8 +173,11 @@ export default function ActionInbox({
   if (unresolvedErrors > 0)
     rows.push({
       key: 'errors',
+      open: () => router.push('/admin/error-logs'),
       node: (
         <Row
+          idx={at()}
+          selected={sel === at()}
           icon={<Bug className="h-4 w-4" />}
           tone="bg-rose-50 text-rose-600"
           title={<>{unresolvedErrors} unresolved error{unresolvedErrors > 1 ? 's' : ''}</>}
@@ -157,6 +186,40 @@ export default function ActionInbox({
         />
       ),
     });
+
+  // Keyboard: J/K move, Enter opens, A reviews a payment, R sends a reminder.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (overlayOpen || e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+      const list = rowsRef.current;
+      if (list.length === 0) return;
+      const k = e.key.toLowerCase();
+      if (k === 'j' || k === 'k') {
+        e.preventDefault();
+        setSel((i) => {
+          const next = k === 'j' ? Math.min(i + 1, list.length - 1) : Math.max(i - 1, 0);
+          if (next >= COLLAPSED_ROWS) setExpanded(true);
+          return next;
+        });
+        return;
+      }
+      const row = sel >= 0 ? list[sel] : undefined;
+      if (!row) return;
+      if (e.key === 'Enter') { e.preventDefault(); row.open(); }
+      else if (k === 'a' && row.approve) { e.preventDefault(); row.approve(); }
+      else if (k === 'r' && row.remind) { e.preventDefault(); row.remind(); }
+      else if (e.key === 'Escape') setSel(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlayOpen, sel]);
+
+  useEffect(() => {
+    if (sel >= rows.length) setSel(rows.length - 1);
+    if (sel >= 0) listRef.current?.querySelector(`[data-inbox-idx="${sel}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [sel, rows.length]);
 
   // Nothing waiting → one quiet line instead of an empty card.
   if (rows.length === 0) {
@@ -184,6 +247,7 @@ export default function ActionInbox({
         <h2 className="text-[13px] font-semibold text-slate-900">Needs your attention</h2>
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-amber-700">{rows.length}</span>
         {counts.length > 0 && <span className="hidden text-[11px] text-slate-400 sm:inline">{counts.join(' · ')}</span>}
+        <span className="hidden text-[11px] text-slate-300 xl:inline">· <kbd className="font-sans">J</kbd>/<kbd className="font-sans">K</kbd> to move</span>
         <div className="ml-auto flex items-center gap-2">
           {pendingDueIds.length > 1 && (
             <button
@@ -199,7 +263,7 @@ export default function ActionInbox({
           </Link>
         </div>
       </div>
-      <ul className="divide-y divide-slate-100">{shown.map((r) => <Fragment key={r.key}>{r.node}</Fragment>)}</ul>
+      <ul ref={listRef} className="divide-y divide-slate-100">{shown.map((r) => <Fragment key={r.key}>{r.node}</Fragment>)}</ul>
       {rows.length > COLLAPSED_ROWS && (
         <button
           onClick={() => setExpanded((e) => !e)}

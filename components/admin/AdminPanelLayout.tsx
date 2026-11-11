@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import AdminNavbar from '@/components/admin/AdminNavbar';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminBottomNav from '@/components/admin/AdminBottomNav';
+import AdminLiveProvider from '@/components/admin/live/AdminLiveProvider';
 
 const COLLAPSE_KEY = 'gk_admin_sidebar_collapsed';
 
@@ -51,6 +52,7 @@ export default function AdminPanelLayout({
   useEffect(() => setSidebarOpen(false), [pathname]);
 
   return (
+    <AdminLiveProvider>
     <div className="min-h-screen bg-[#F8F9FB] text-slate-900 font-sans antialiased">
       <AdminSidebar
         isOpen={sidebarOpen}
@@ -70,5 +72,6 @@ export default function AdminPanelLayout({
       </main>
       <AdminBottomNav />
     </div>
+    </AdminLiveProvider>
   );
 }

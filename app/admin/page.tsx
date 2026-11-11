@@ -2,19 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Wallet, Clock, Ticket, UserPlus, Activity, BarChart3, ArrowRight, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Plus, RefreshCw, Wallet, Clock, Ticket, UserPlus, Activity, BarChart3, ArrowRight, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, Delta, Sparkline, Skeleton, inr, inrShort, timeAgo } from '@/components/admin/dashboard/utils';
 import ActionInbox, { type InboxData } from '@/components/admin/dashboard/ActionInbox';
 import DeparturesBoard, { type Departure } from '@/components/admin/dashboard/DeparturesBoard';
-import PaymentReviewDialog, { type ApprovalItem } from '@/components/admin/dashboard/PaymentReviewDialog';
+import LiveActivity from '@/components/admin/dashboard/LiveActivity';
+import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 
 type RangePreset = '1d' | '1w' | '1m' | '3m' | 'custom';
 const RANGE_LABELS: Record<RangePreset, string> = { '1d': 'Today', '1w': '7d', '1m': '30d', '3m': '90d', custom: 'Custom' };
 const RANGE_LONG: Record<RangePreset, string> = { '1d': 'today', '1w': 'last 7 days', '1m': 'last 30 days', '3m': 'last 90 days', custom: 'selected range' };
 const RANGE_KEY = 'gk_admin_dash_range';
 const AUTO_REFRESH_MS = 60_000;
-
-type Toast = { id: number; msg: string; tone: 'success' | 'error' };
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -23,8 +22,7 @@ export default function AdminDashboard() {
   const [range, setRange] = useState<RangePreset>('1m');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [reviewing, setReviewing] = useState<ApprovalItem | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toast, openReview, dataVersion, openQuickAdd } = useAdminLive();
   const [, setTick] = useState(0); // re-render "updated Xs ago"
   const reqId = useRef(0);
 
@@ -40,12 +38,6 @@ export default function AdminDashboard() {
     setRange(r);
     try { if (r !== 'custom') localStorage.setItem(RANGE_KEY, r); } catch { /* ignore */ }
   };
-
-  const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-2), { id, msg, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
-  }, []);
 
   const resolveRange = useCallback((): { from: string; to: string } => {
     const now = new Date();
@@ -80,6 +72,13 @@ export default function AdminDashboard() {
   }, [range, customFrom, customTo, resolveRange]);
 
   useEffect(() => { load(); }, [load]);
+
+  // New activity or an action elsewhere (review popup, quick add) → quiet refresh.
+  const firstVersion = useRef(dataVersion);
+  useEffect(() => {
+    if (dataVersion !== firstVersion.current) load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataVersion]);
 
   // Keep it live: quiet refresh every minute and when the tab regains focus.
   useEffect(() => {
@@ -182,14 +181,14 @@ export default function AdminDashboard() {
               <input type="date" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900" aria-label="To" />
             </div>
           )}
-          <Link href="/admin/trips/create" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-violet-700">
-            <Plus className="h-3.5 w-3.5" /> New trip
-          </Link>
+          <button onClick={openQuickAdd} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 sm:hidden">
+            <Plus className="h-3.5 w-3.5" /> New
+          </button>
         </div>
       </div>
 
       {/* ── Action inbox ── */}
-      <ActionInbox inbox={inbox} unresolvedErrors={d.unresolvedErrors || 0} onReview={setReviewing} onRemind={remind} />
+      <ActionInbox inbox={inbox} unresolvedErrors={d.unresolvedErrors || 0} onReview={openReview} onRemind={remind} />
 
       {/* ── KPI strip (period-scoped, with trend vs previous period) ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -263,6 +262,8 @@ export default function AdminDashboard() {
             </div>
           </Card>
 
+          <LiveActivity />
+
           <Card>
             <CardHeader
               icon={<BarChart3 className="h-4 w-4" />}
@@ -282,23 +283,6 @@ export default function AdminDashboard() {
       </div>
 
       <p className="pt-1 text-center text-[11px] text-slate-400">Activity figures cover {rangeLong} and compare with the period just before it. Pending dues are all-time.</p>
-
-      <PaymentReviewDialog
-        item={reviewing}
-        onClose={() => setReviewing(null)}
-        onDone={(msg, tone) => { setReviewing(null); toast(msg, tone); load(true); }}
-      />
-
-      {/* Toasts */}
-      <div className="pointer-events-none fixed bottom-20 right-4 z-[90] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2 md:bottom-6" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border bg-white px-3.5 py-3 text-sm shadow-lg animate-slide-up ${t.tone === 'success' ? 'border-emerald-200' : 'border-rose-200'}`}>
-            {t.tone === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />}
-            <span className="flex-1 text-slate-800">{t.msg}</span>
-            <button onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

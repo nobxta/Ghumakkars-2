@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CalendarDays, MapPin, ArrowRight, Users, Send, Loader2 } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowRight, Users, Send, Loader2, Download } from 'lucide-react';
 import { useState } from 'react';
 import { Card, CardHeader, inrShort, inr, fmtDay } from './utils';
 
@@ -107,8 +107,18 @@ export default function DeparturesBoard({
                   </div>
                 </div>
 
-                {/* Quick action: chase all balances on this departure */}
-                <div className="hidden w-8 shrink-0 justify-end lg:flex">
+                {/* Quick actions: passenger list + chase all balances on this departure */}
+                <div className="hidden w-16 shrink-0 items-center justify-end gap-0.5 lg:flex">
+                  {d.bookings > 0 && (
+                    <a
+                      href={`/api/admin/dashboard/passengers?tripId=${d.tripId}&date=${d.date}`}
+                      download
+                      title="Download passenger list (CSV)"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  )}
                   {d.dueBookingIds.length > 0 && (
                     <button
                       onClick={async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, Copy, ExternalLink, MessageCircle, Phone, X, Loader2 } from 'lucide-react';
 import { inr, fmtDay, timeAgo } from './utils';
@@ -55,6 +55,7 @@ export default function PaymentReviewDialog({
   const [notes, setNotes] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const keyActions = useRef<{ approve: () => void }>({ approve: () => {} });
 
   useEffect(() => {
     setRejecting(false);
@@ -67,11 +68,17 @@ export default function PaymentReviewDialog({
   useEffect(() => {
     if (!item) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onClose();
+      if (busy) return;
+      if (e.key === 'Escape') { onClose(); return; }
+      const el = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const k = e.key.toLowerCase();
+      if (k === 'a' && !rejecting) { e.preventDefault(); keyActions.current.approve(); }
+      else if (k === 'x' && !rejecting) { e.preventDefault(); setRejecting(true); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [item, busy, onClose]);
+  }, [item, busy, rejecting, onClose]);
 
   if (!item) return null;
 
@@ -107,6 +114,8 @@ export default function PaymentReviewDialog({
       setBusy(null);
     }
   };
+
+  keyActions.current.approve = () => submit('verified');
 
   const copyRef = async () => {
     if (!item.reference) return;
@@ -233,9 +242,9 @@ export default function PaymentReviewDialog({
               </>
             ) : (
               <>
-                <button onClick={() => setRejecting(true)} disabled={!!busy} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 hover:border-rose-200 hover:bg-rose-50">Reject</button>
+                <button onClick={() => setRejecting(true)} disabled={!!busy} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 hover:border-rose-200 hover:bg-rose-50">Reject <kbd className="ml-1 hidden rounded border border-rose-200 px-1 text-[10px] sm:inline">X</kbd></button>
                 <button onClick={() => submit('verified')} disabled={!!busy} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-                  {busy === 'verified' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve
+                  {busy === 'verified' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve <kbd className="hidden rounded bg-white/20 px-1 text-[10px] sm:inline">A</kbd>
                 </button>
               </>
             )}
