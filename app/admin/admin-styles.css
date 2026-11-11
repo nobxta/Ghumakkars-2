@@ -229,3 +229,24 @@ html, body {
 .admin-sidebar-scroll:hover::-webkit-scrollbar-thumb {
   background: #cbd5e1;
 }
+
+/* ── Analytics page ─────────────────────────────────────────── */
+@keyframes an-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.an-panel > * > * { animation: an-rise .35s cubic-bezier(.2,.7,.2,1) both; }
+.an-panel > * > *:nth-child(2) { animation-delay: .04s; }
+.an-panel > * > *:nth-child(3) { animation-delay: .08s; }
+.an-panel > * > *:nth-child(4) { animation-delay: .12s; }
+.an-panel > * > *:nth-child(n+5) { animation-delay: .16s; }
+.an-insight { animation: an-rise .35s cubic-bezier(.2,.7,.2,1) both; }
+.an-card::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(147, 51, 234, .045), transparent 60%);
+}
+.an-kpi { isolation: isolate; }
+@media (prefers-reduced-motion: reduce) {
+  .an-panel > * > *, .an-insight { animation: none; }
+}
+@media print {
+  .an-root .an-card, .an-root .an-kpi { break-inside: avoid; box-shadow: none !important; }
+  .an-toolbar { position: static !important; backdrop-filter: none; }
+}
