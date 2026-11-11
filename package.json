@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test-email": "tsx scripts/sendTestEmail.ts"
+    "test-email": "tsx scripts/sendTestEmail.ts",
+    "ig:track": "tsx scripts/instagram-track.ts",
+    "ig:cron": "tsx scripts/instagram-cron.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.1.0",

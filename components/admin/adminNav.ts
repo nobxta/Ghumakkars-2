@@ -10,6 +10,7 @@ import {
   CreditCard,
   Bug,
   BookUser,
+  Instagram,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { href: '/admin/coupons', label: 'Coupons', icon: Tag, keywords: 'discounts promo codes' },
       { href: '/admin/referrals', label: 'Referrals', icon: Gift, keywords: 'rewards wallet invite' },
+      { href: '/admin/instagram', label: 'Instagram', icon: Instagram, keywords: 'followers social growth tracker' },
     ],
   },
   {
