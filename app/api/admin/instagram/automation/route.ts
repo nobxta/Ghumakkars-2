@@ -17,7 +17,11 @@ export const GET = withErrorLog('admin', 'Instagram automation get', async () =>
     db.from('instagram_automation').select('*').eq('id', 1).maybeSingle(),
     db.from('instagram_reply_templates').select('*').order('created_at', { ascending: true }),
   ]);
-  return NextResponse.json({ settings: cfg.data, templates: tpl.data || [] });
+  return NextResponse.json({
+    settings: cfg.data,
+    templates: tpl.data || [],
+    webhook: { configured: Boolean(process.env.INSTAGRAM_APP_SECRET && process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN) },
+  });
 });
 
 /**

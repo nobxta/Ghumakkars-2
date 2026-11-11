@@ -190,16 +190,17 @@ export async function getRecentComments(posts = 10) {
 
 /** Send any message object (text, quick replies, button/generic template). */
 export async function sendMessage(recipient: { id: string } | { comment_id: string }, message: Record<string, unknown>) {
-  return igPost(`${ownId()}/messages`, {}, { recipient, message });
+  // In-window reply to something the person sent (Meta: messaging_type RESPONSE).
+  return igPost(`${ownId()}/messages`, {}, { recipient, messaging_type: 'RESPONSE', message });
 }
 
 export async function sendDm(recipientId: string, text: string) {
-  return igPost(`${ownId()}/messages`, {}, { recipient: { id: recipientId }, message: { text } });
+  return igPost(`${ownId()}/messages`, {}, { recipient: { id: recipientId }, messaging_type: 'RESPONSE', message: { text } });
 }
 
 /** Instagram "private reply": DM the author of a comment (once per comment, within 7 days). */
 export async function sendPrivateReply(commentId: string, text: string) {
-  return igPost(`${ownId()}/messages`, {}, { recipient: { comment_id: commentId }, message: { text } });
+  return igPost(`${ownId()}/messages`, {}, { recipient: { comment_id: commentId }, messaging_type: 'RESPONSE', message: { text } });
 }
 
 export async function replyToComment(commentId: string, text: string) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, ArrowUpRight, Terminal, ShieldCheck, LayoutDashboard, Grid3x3, Users, Send, Bot, Settings2 } from 'lucide-react';
+import { RefreshCw, ArrowUpRight, Terminal, ShieldCheck, LayoutDashboard, Grid3x3, Users, Send, Bot, Settings2, Webhook } from 'lucide-react';
 import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 import { Skeleton, timeAgo } from '@/components/admin/dashboard/utils';
 import OverviewTab from '@/components/admin/instagram/OverviewTab';
@@ -36,7 +36,7 @@ export default function InstagramPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [media, setMedia] = useState<MediaData | null>(null);
   const [inbox, setInbox] = useState<InboxData | null>(null);
-  const [auto, setAuto] = useState<{ settings: AutomationSettings | null; templates: ReplyTemplate[] }>({ settings: null, templates: [] });
+  const [auto, setAuto] = useState<{ settings: AutomationSettings | null; templates: ReplyTemplate[]; webhook?: { configured: boolean } }>({ settings: null, templates: [] });
   const [errors, setErrors] = useState({ overview: '', media: '' });
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -63,7 +63,7 @@ export default function InstagramPage() {
     ]);
   }, []);
   const loadInbox = useCallback(() => getJson<InboxData>('/api/admin/instagram/inbox').then(setInbox).catch(() => {}), []);
-  const loadAuto = useCallback(() => getJson<{ settings: AutomationSettings; templates: ReplyTemplate[] }>('/api/admin/instagram/automation').then(setAuto).catch(() => {}), []);
+  const loadAuto = useCallback(() => getJson<{ settings: AutomationSettings; templates: ReplyTemplate[]; webhook: { configured: boolean } }>('/api/admin/instagram/automation').then(setAuto).catch(() => {}), []);
 
   useEffect(() => { loadInsights(); loadInbox(); loadAuto(); }, [loadInsights, loadInbox, loadAuto]);
   useEffect(() => {
@@ -158,17 +158,42 @@ export default function InstagramPage() {
         {tab === 'followers' && <FollowersTab />}
         {tab === 'inbox' && <InboxTab inbox={inbox} media={media} templates={auto.templates} onChanged={loadInbox} onSync={() => sync()} syncing={syncing} />}
         {tab === 'automation' && <AutomationTab settings={auto.settings} inbox={inbox} media={media?.media || []} profile={p ? { username: p.username, picture: p.profile_picture_url } : undefined} onChanged={() => { loadAuto(); loadInbox(); }} onSync={sync} syncing={syncing} />}
-        {tab === 'settings' && <SettingsTab overview={overview} settings={a} />}
+        {tab === 'settings' && <SettingsTab overview={overview} settings={a} webhookConfigured={!!auto.webhook?.configured} />}
       </div>
     </div>
   );
 }
 
-function SettingsTab({ overview, settings }: { overview: OverviewData | null; settings: AutomationSettings | null }) {
+function SettingsTab({ overview, settings, webhookConfigured }: { overview: OverviewData | null; settings: AutomationSettings | null; webhookConfigured: boolean }) {
   const cron = '* * * * * cd /path/to/app && npx tsx scripts/instagram-cron.ts >> logs/instagram.log 2>&1';
   const synced = settings?.last_sync_at ? Date.now() - new Date(settings.last_sync_at).getTime() < 10 * 60_000 : false;
+  const site = (settings?.site_url || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const hookUrl = `${site}/api/webhooks/instagram`;
+  const hookLive = !!settings?.webhook_last_at && Date.now() - new Date(settings.webhook_last_at).getTime() < 7 * 86_400_000;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      <Panel className="lg:col-span-2">
+        <PanelHeader icon={<Webhook />} gradient title="Message webhook" description="Required for auto replies to DMs — Instagram only lets an app answer messages it received through its webhook"
+          right={<span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600"><Dot tone={hookLive ? 'green' : webhookConfigured ? 'amber' : 'red'} />{hookLive ? `Receiving · last event ${timeAgo(settings!.webhook_last_at)}` : webhookConfigured ? 'Waiting for the first event' : 'Not set up'}</span>} />
+        <ol className="grid gap-4 px-5 py-4 text-[13px] text-slate-600 md:grid-cols-3">
+          <li>
+            <p className="font-semibold text-slate-900">1 · Add two secrets in Coolify</p>
+            <p className="mt-1 text-xs leading-relaxed">Environment Variables → add <code className="rounded bg-slate-100 px-1 font-mono">INSTAGRAM_APP_SECRET</code> (Meta App → App settings → Basic → App secret) and <code className="rounded bg-slate-100 px-1 font-mono">INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> (any long random text). Redeploy.</p>
+            <p className={cx('mt-2 inline-flex items-center gap-1.5 text-xs font-medium', webhookConfigured ? 'text-emerald-600' : 'text-amber-600')}><Dot tone={webhookConfigured ? 'green' : 'amber'} />{webhookConfigured ? 'Found on this server' : 'Not set on this server yet'}</p>
+          </li>
+          <li>
+            <p className="font-semibold text-slate-900">2 · Connect it in Meta</p>
+            <p className="mt-1 text-xs leading-relaxed">developers.facebook.com → your app → Webhooks → <b>Instagram</b> → Subscribe to this object. Callback URL:</p>
+            <code className="mt-1.5 block break-all rounded-lg bg-slate-50 px-2.5 py-1.5 font-mono text-[11px] text-slate-800 ring-1 ring-slate-200">{hookUrl}</code>
+            <p className="mt-1 text-xs">Verify token: the same text as step 1.</p>
+          </li>
+          <li>
+            <p className="font-semibold text-slate-900">3 · Turn on the fields</p>
+            <p className="mt-1 text-xs leading-relaxed">In the Instagram webhook fields, subscribe to <b>messages</b> and <b>comments</b>. Then make sure the app is connected to @{overview?.profile.username || 'your account'} (Instagram settings → Messages → Connected tools → <b>Allow access to messages</b> on).</p>
+            <p className="mt-2 text-xs text-slate-500">Then send your business account a DM — the status above turns green.</p>
+          </li>
+        </ol>
+      </Panel>
       <Panel>
         <PanelHeader icon={<ShieldCheck />} tone="green" title="Connection" description="Official Instagram Graph API" />
         <dl className="divide-y divide-slate-100 text-[13px]">

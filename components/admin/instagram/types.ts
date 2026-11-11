@@ -62,6 +62,7 @@ export interface AutomationSettings {
   comment_enabled: boolean; comment_enabled_at: string | null; comment_mode: 'fixed' | 'random';
   comment_dm_enabled: boolean; comment_posts_to_watch: number;
   last_sync_at: string | null; last_error: string | null; last_error_at: string | null; paused_until: string | null;
+  webhook_last_at?: string | null; site_url?: string | null;
 }
 
 export interface ReplyTemplate { id: string; kind: 'dm' | 'comment'; text: string; is_active: boolean; pinned: boolean; use_count: number; created_at: string }
