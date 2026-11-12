@@ -7,23 +7,27 @@
  *  - Booted on server start by `instrumentation.ts` (and lazily on first use).
  *  - One instance per process, kept on `globalThis` so dev hot-reload and
  *    separately bundled route handlers all share the same socket.
- *  - Session + queue + logs persist in WA_DATA_DIR (default `./data/whatsapp`).
- *  - A lock file guarantees only ONE process links this number. Run the app
- *    as a single instance (PM2 fork mode, not cluster).
+ *  - The WhatsApp login (Baileys auth keys) lives in Supabase (`whatsapp_auth`),
+ *    so it survives Coolify redeploys with no volume needed.
+ *  - A database lease (`whatsapp_lease`) guarantees only ONE server/container
+ *    connects at a time — even while old and new containers overlap.
+ *  - Queue + logs are kept in WA_DATA_DIR (default `./data/whatsapp`).
+ *  - Off in `next dev` (it would share production's login) unless WA_DEV_ENABLE=1.
  *
  * Server-only. Never import from a client component.
  */
 import path from 'node:path';
+import { hostname } from 'node:os';
 import {
-  appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync,
-  renameSync, statSync, unlinkSync, writeFileSync,
+  appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync,
 } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import {
+  acquireLease, clearSavedAuth, hasSavedAuth, releaseLease, loadSupabaseAuthState,
+  type SupabaseAuthStore,
+} from './supabase-auth';
 
 // ── Config ────────────────────────────────────────────────────────────────
 const DATA_DIR = path.resolve(process.env.WA_DATA_DIR || path.join(process.cwd(), 'data', 'whatsapp'));
-const AUTH_DIR = path.resolve(process.env.WA_AUTH_DIR || path.join(DATA_DIR, 'session'));
-const LOCK_FILE = path.join(DATA_DIR, 'whatsapp-client.lock');
 const QUEUE_FILE = path.join(DATA_DIR, 'send-queue.json');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'whatsapp.jsonl');
@@ -47,8 +51,12 @@ interface QueueItem { id: string; payload: SendPayload; attempts: number; nextAt
 interface WAState {
   booted: boolean;
   bootPromise: Promise<void> | null;
-  disabledReason: string | null; // set when another process holds the lock
-  lockFd: number | null;
+  disabledReason: string | null; // set when another server holds the lease / dev mode
+  leaseOwner: string;
+  leaseTimer: NodeJS.Timeout | null;
+  shutdownHooked: boolean;
+  authSaved: boolean;            // a login is saved in the database
+  authStore: SupabaseAuthStore | null;
   sock: any;
   ready: boolean;
   currentNumber: string | null;
@@ -78,7 +86,9 @@ interface WAState {
 
 const g = globalThis as unknown as { __ghumakkarsWhatsApp?: WAState };
 const S: WAState = (g.__ghumakkarsWhatsApp ??= {
-  booted: false, bootPromise: null, disabledReason: null, lockFd: null,
+  booted: false, bootPromise: null, disabledReason: null,
+  leaseOwner: `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`,
+  leaseTimer: null, shutdownHooked: false, authSaved: false, authStore: null,
   sock: null, ready: false, currentNumber: null, manualLogout: false, loggedOut: false,
   lastQR: null, starting: false, startPromise: null, reconnectTimer: null,
   reconnectAttempts: 0, stableTimer: null, queueTimer: null, lastDisconnect: null,
@@ -91,6 +101,10 @@ S.sent ??= new Map();
 S.loggedOutStreak ??= 0;
 S.replacedStreak ??= 0;
 S.problem ??= null;
+S.leaseOwner ??= `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
+S.leaseTimer ??= null;
+S.authSaved ??= false;
+S.authStore ??= null;
 
 const QUEUE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 const SENT_STORE_MAX = 500;
@@ -104,7 +118,6 @@ async function baileys() {
     makeWASocket: mod.default?.default ?? mod.default ?? mod.makeWASocket,
     DisconnectReason: mod.DisconnectReason ?? mod.default?.DisconnectReason,
     fetchLatestBaileysVersion: mod.fetchLatestBaileysVersion ?? mod.default?.fetchLatestBaileysVersion,
-    loadAuthState: mod.useMultiFileAuthState ?? mod.default?.useMultiFileAuthState,
     cacheableKeys: mod.makeCacheableSignalKeyStore ?? mod.default?.makeCacheableSignalKeyStore,
   };
 }
@@ -150,7 +163,7 @@ function maskedPhone(value: unknown) {
   return `${'*'.repeat(digits.length - 4)}${digits.slice(-4)}`;
 }
 
-const hasAuthFiles = () => existsSync(path.join(AUTH_DIR, 'creds.json'));
+const hasAuthFiles = () => S.authSaved;
 
 function setState(state: string, data: Record<string, unknown> = {}) {
   S.stateLabel = state;
@@ -158,45 +171,87 @@ function setState(state: string, data: Record<string, unknown> = {}) {
 }
 
 function prepareDirs() {
-  mkdirSync(AUTH_DIR, { recursive: true });
   mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// ── Single-process lock ───────────────────────────────────────────────────
-function acquireLock(): boolean {
-  prepareDirs();
+// ── Single-server lease (database) ────────────────────────────────────────
+// Only the server holding the lease may connect. During a Coolify redeploy the
+// old and new containers overlap; without this both would connect with the
+// same login and WhatsApp logs the device out. The holder renews it every 10s;
+// if it stops (container gone), another may take it after 30s — or at once
+// when the old container shuts down cleanly and releases it.
+const LEASE_HEARTBEAT_MS = 10_000;
+const LEASE_STALE_SECONDS = 30;
+
+async function tryAcquireLease(): Promise<boolean> {
   try {
-    S.lockFd = openSync(LOCK_FILE, 'wx');
-    writeFileSync(S.lockFd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-    process.once('exit', releaseLock);
-    log('process_lock_acquired', { lockFile: LOCK_FILE, pid: process.pid });
-    return true;
+    const ok = await acquireLease(S.leaseOwner, LEASE_STALE_SECONDS);
+    S.disabledReason = ok ? null : 'Another server is connected to WhatsApp (an old container still shutting down?). Waiting for it to stop…';
+    return ok;
   } catch (e) {
-    let existingPid: number | null = null;
-    try { existingPid = JSON.parse(readFileSync(LOCK_FILE, 'utf8') || '{}')?.pid ?? null; } catch { /* ignore */ }
-    if (existingPid === process.pid) return true;
-    if (existingPid) {
-      try {
-        process.kill(existingPid, 0);
-        S.disabledReason = `Another process (pid ${existingPid}) is already running WhatsApp. Run the app as a single instance.`;
-        errorLog('duplicate_process_rejected', { lockFile: LOCK_FILE, existingPid, pid: process.pid });
-        return false;
-      } catch {
-        warn('stale_process_lock_removed', { lockFile: LOCK_FILE, existingPid });
-        try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
-        return acquireLock();
-      }
-    }
-    S.disabledReason = `Could not create WhatsApp lock file: ${errMsg(e)}`;
-    errorLog('process_lock_failed', { lockFile: LOCK_FILE, error: errMsg(e) });
+    S.disabledReason = `Could not reach the database for WhatsApp: ${errMsg(e)}`;
+    errorLog('lease_error', { error: errMsg(e) });
     return false;
   }
 }
 
-function releaseLock() {
-  try { if (S.lockFd !== null) closeSync(S.lockFd); } catch { /* ignore */ }
-  try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
-  S.lockFd = null;
+function stopLeaseHeartbeat() {
+  if (S.leaseTimer) { clearInterval(S.leaseTimer); S.leaseTimer = null; }
+}
+
+function startLeaseHeartbeat() {
+  stopLeaseHeartbeat();
+  S.leaseTimer = setInterval(async () => {
+    try {
+      if (!(await acquireLease(S.leaseOwner, LEASE_STALE_SECONDS))) onLeaseLost();
+    } catch (e) {
+      warn('lease_heartbeat_failed', { error: errMsg(e) });
+    }
+  }, LEASE_HEARTBEAT_MS);
+  S.leaseTimer.unref?.();
+}
+
+// Someone else took over (we couldn't renew for too long): step back so two
+// servers never use the login at once, then wait to get it back.
+function onLeaseLost() {
+  errorLog('lease_lost', { owner: S.leaseOwner });
+  stopLeaseHeartbeat();
+  if (S.reconnectTimer) { clearTimeout(S.reconnectTimer); S.reconnectTimer = null; }
+  destroySocket();
+  void closeAuthStore();
+  S.ready = false;
+  S.booted = false;
+  S.bootPromise = null;
+  void bootWhatsApp();
+}
+
+function hookShutdown() {
+  if (S.shutdownHooked) return;
+  S.shutdownHooked = true;
+  // Coolify/Docker stop the old container with SIGTERM: close the socket
+  // (WITHOUT logging out) and free the lease so the new one connects at once.
+  process.once('SIGTERM', () => {
+    stopLeaseHeartbeat();
+    destroySocket();
+    void S.authStore?.close();
+    void releaseLease(S.leaseOwner).catch(() => {});
+  });
+}
+
+async function closeAuthStore() {
+  const store = S.authStore;
+  S.authStore = null;
+  try { await store?.close(); } catch { /* ignore */ }
+}
+
+async function deleteSavedAuth() {
+  await closeAuthStore();
+  try {
+    await clearSavedAuth();
+    S.authSaved = false;
+  } catch (e) {
+    errorLog('auth_clear_failed', { error: errMsg(e) });
+  }
 }
 
 // ── Queue (survives restarts) ─────────────────────────────────────────────
@@ -324,12 +379,15 @@ async function startSockInner() {
   if (S.stableTimer) { clearTimeout(S.stableTimer); S.stableTimer = null; }
 
   destroySocket();
+  await closeAuthStore();
   prepareDirs();
   setState(hasAuthFiles() ? 'connecting' : 'disconnected', { authExists: hasAuthFiles() });
 
-  const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, loadAuthState, cacheableKeys } = await baileys();
+  const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, cacheableKeys } = await baileys();
   const logger = await baileysLogger();
-  const { state, saveCreds } = await loadAuthState(AUTH_DIR);
+  const store = await loadSupabaseAuthState();
+  S.authStore = store;
+  const { state, saveCreds } = store;
   const { version } = await fetchLatestBaileysVersion();
   S.socketId = `sock_${Date.now()}_${++S.socketSeq}`;
   const sock = makeWASocket({
@@ -353,7 +411,7 @@ async function startSockInner() {
   log('socket_created', { socketId: S.socketId, registered: !!sock.authState.creds.registered });
 
   sock.ev.on('creds.update', async () => {
-    try { await saveCreds(); } catch (e) { errorLog('credentials_save_failed', { error: errMsg(e) }); }
+    try { await saveCreds(); S.authSaved = true; } catch (e) { errorLog('credentials_save_failed', { error: errMsg(e) }); }
   });
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }: any) => {
@@ -442,31 +500,24 @@ async function alertAdmins(html: string) {
 }
 
 /**
- * The saved session can no longer connect. Stop retrying, move the dead
- * session aside (kept as a backup, never deleted here) so the next "Link"
- * starts clean, and tell the admin. Queued messages are kept and go out once
- * the number is linked again.
+ * The saved login can no longer connect. Stop retrying, delete the dead login
+ * so the next "Link" starts clean, and tell the admin. Queued messages are
+ * kept and go out once the number is linked again.
  */
 async function markRelinkRequired(message: string, data: Record<string, unknown> = {}) {
   if (S.reconnectTimer) { clearTimeout(S.reconnectTimer); S.reconnectTimer = null; }
   destroySocket();
-  let backup: string | null = null;
-  if (hasAuthFiles()) {
-    backup = `${AUTH_DIR}-invalid-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    try { renameSync(AUTH_DIR, backup); } catch { backup = null; }
-  }
-  prepareDirs();
+  await deleteSavedAuth();
   Object.assign(S, { ready: false, currentNumber: null, lastQR: null, loggedOut: true, problem: message });
-  setState('relink_required', { ...data, backup });
-  errorLog('relink_required', { message, backup, queued: S.pending.length, ...data });
+  setState('relink_required', { ...data });
+  errorLog('relink_required', { message, queued: S.pending.length, ...data });
   await alertAdmins(`⚠️ <b>WhatsApp disconnected</b>\n${message}\nAdmin → Settings → WhatsApp.${S.pending.length ? `\n${S.pending.length} message(s) waiting to send.` : ''}`);
 }
 
 async function freshAuth(reason: string) {
   S.manualLogout = true;
   destroySocket();
-  try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
-  prepareDirs();
+  await deleteSavedAuth();
   Object.assign(S, { ready: false, currentNumber: null, lastQR: null, loggedOut: false, badSessionAttempts: 0, lastDisconnect: null, manualLogout: false, loggedOutStreak: 0, replacedStreak: 0, problem: null });
   log('fresh_auth_started', { reason });
   await startSock();
@@ -479,14 +530,30 @@ export function bootWhatsApp(): Promise<void> {
   if (S.booted) return S.bootPromise ?? Promise.resolve();
   S.booted = true;
   S.bootPromise = (async () => {
-    // Another live process holds the lock (e.g. the old one during a PM2
-    // reload). Keep retrying instead of leaving WhatsApp off until next restart.
-    while (!acquireLock()) {
-      S.stateLabel = 'waiting_for_lock';
-      await sleep(15_000);
+    // `next dev` shares production's database — connecting here would fight
+    // production over the same login. Opt in explicitly.
+    if (process.env.NODE_ENV !== 'production' && process.env.WA_DEV_ENABLE !== '1') {
+      S.stateLabel = 'disabled';
+      S.disabledReason = 'WhatsApp is off in local dev (it would share the live login). Set WA_DEV_ENABLE=1 to turn it on.';
+      log('disabled_in_dev');
+      return;
     }
-    S.disabledReason = null;
+    // Another server holds the lease (e.g. the old container during a
+    // redeploy). Keep retrying instead of leaving WhatsApp off.
+    while (!(await tryAcquireLease())) {
+      S.stateLabel = 'waiting_for_lock';
+      await sleep(10_000);
+    }
+    log('lease_acquired', { owner: S.leaseOwner });
+    startLeaseHeartbeat();
+    hookShutdown();
     loadQueue();
+    try {
+      S.authSaved = await hasSavedAuth();
+    } catch (e) {
+      errorLog('auth_check_failed', { error: errMsg(e) });
+      S.authSaved = true; // unsure → try to connect; a missing login just shows "link"
+    }
     log('service_startup', { dataDir: DATA_DIR, authExists: hasAuthFiles(), queued: S.pending.length, pid: process.pid });
     if (hasAuthFiles()) {
       await startSock();
@@ -502,7 +569,7 @@ export function bootWhatsApp(): Promise<void> {
 // seconds, then carry on with whatever state we have.
 async function ensureBooted() {
   await Promise.race([bootWhatsApp(), sleep(5000)]);
-  if (S.stateLabel === 'waiting_for_lock' && S.disabledReason) throw new Error(S.disabledReason);
+  if ((S.stateLabel === 'waiting_for_lock' || S.stateLabel === 'disabled') && S.disabledReason) throw new Error(S.disabledReason);
 }
 
 export async function getWhatsAppStatus() {
@@ -516,7 +583,7 @@ export async function getWhatsAppStatus() {
     state: S.stateLabel,
     number: S.currentNumber,
     qr,
-    error: (S.stateLabel === 'waiting_for_lock' ? S.disabledReason : null) || S.problem,
+    error: (S.stateLabel === 'waiting_for_lock' || S.stateLabel === 'disabled' ? S.disabledReason : null) || S.problem,
     relinkRequired: S.loggedOut,
     queued: S.pending.length,
     retryAttempt: S.reconnectAttempts,
@@ -580,13 +647,12 @@ export async function logoutWhatsApp() {
   S.manualLogout = true;
   try { await S.sock?.logout(); } catch { /* ignore */ }
   destroySocket();
+  await deleteSavedAuth();
   Object.assign(S, {
     ready: false, currentNumber: null, lastQR: null, loggedOut: true, badSessionAttempts: 0,
     loggedOutStreak: 0, replacedStreak: 0, problem: null,
     lastDisconnect: { code: 'manual', reason: 'manual_logout', message: 'Disconnected by admin', at: new Date().toISOString() },
   });
-  try { await rm(AUTH_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
-  prepareDirs();
   setState('relink_required', { reason: 'manual_logout' });
   S.manualLogout = false;
   return { ok: true };
