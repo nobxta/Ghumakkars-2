@@ -119,22 +119,25 @@ export function draftToPayload(d: AddonDraft, order: number) {
 
 const METHODS: PricingMethod[] = ['per_traveller', 'per_room', 'per_unit', 'per_traveller_night', 'per_booking'];
 
-const fieldCls =
-  'w-full h-10 px-3 text-sm rounded-lg border border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none text-gray-900 bg-white';
+const fieldCls = 'field';
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer select-none">
+    <span className="flex items-center gap-2 select-none">
       <button
         type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-purple-600' : 'bg-gray-300'}`}
-        aria-pressed={checked}
+        className="switch"
       >
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${checked ? 'translate-x-4' : ''}`} />
+        <span />
       </button>
-      <span className="text-sm text-gray-700">{label}</span>
-    </label>
+      <button type="button" onClick={() => onChange(!checked)} className="no-min-touch text-sm text-gray-700 text-left">
+        {label}
+      </button>
+    </span>
   );
 }
 
@@ -160,12 +163,15 @@ export default function TripAddonsEditor({
   drafts,
   onEnabledChange,
   onDraftsChange,
+  onRemove,
   tripDurationDays = 3,
 }: {
   enabled: boolean;
   drafts: AddonDraft[];
   onEnabledChange: (v: boolean) => void;
   onDraftsChange: (next: AddonDraft[]) => void;
+  /** Called after an add-on is removed (e.g. to offer Undo). */
+  onRemove?: (removed: AddonDraft, index: number) => void;
   tripDurationDays?: number;
 }) {
   const [pickerFor, setPickerFor] = useState<string | null>(null);
@@ -174,7 +180,13 @@ export default function TripAddonsEditor({
   const update = (id: string, patch: Partial<AddonDraft>) =>
     onDraftsChange(drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
-  const remove = (id: string) => onDraftsChange(drafts.filter((d) => d.id !== id));
+  const remove = (id: string) => {
+    const index = drafts.findIndex((d) => d.id === id);
+    if (index < 0) return;
+    const removed = drafts[index];
+    onDraftsChange(drafts.filter((d) => d.id !== id));
+    onRemove?.(removed, index);
+  };
 
   const add = () => {
     const d = newDraft();
@@ -212,7 +224,7 @@ export default function TripAddonsEditor({
         <div className="mt-4 space-y-3">
           {drafts.length === 0 && (
             <div className="text-center py-6 text-sm text-gray-500 border-2 border-dashed border-purple-200 rounded-xl bg-white/60">
-              No add-ons yet. Click “Add Add-on” to create the first upgrade.
+              No add-ons yet. Click “Add add-on” to create the first upgrade.
             </div>
           )}
 
@@ -244,11 +256,18 @@ export default function TripAddonsEditor({
                     </div>
                     <p className="text-xs text-gray-500 truncate">{pv.rule} · {PRICING_METHOD_LABELS[d.pricing_method]}</p>
                   </div>
-                  <button type="button" onClick={() => update(d.id, { _expanded: !d._expanded })} className="p-2 text-gray-400 hover:text-purple-600 rounded-lg">
-                    {d._expanded ? <ChevronUp className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                  <button
+                    type="button"
+                    onClick={() => update(d.id, { _expanded: !d._expanded })}
+                    className="btn btn-sm btn-icon btn-ghost"
+                    aria-label={d._expanded ? 'Collapse add-on' : 'Edit add-on'}
+                    aria-expanded={!!d._expanded}
+                    title={d._expanded ? 'Collapse' : 'Edit'}
+                  >
+                    {d._expanded ? <ChevronUp /> : <Pencil />}
                   </button>
-                  <button type="button" onClick={() => remove(d.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
+                  <button type="button" onClick={() => remove(d.id)} className="btn btn-sm btn-icon btn-danger" aria-label="Remove add-on" title="Remove">
+                    <Trash2 />
                   </button>
                 </div>
 
@@ -394,9 +413,9 @@ export default function TripAddonsEditor({
           <button
             type="button"
             onClick={add}
-            className="w-full h-11 rounded-xl border-2 border-dashed border-purple-300 text-purple-700 hover:bg-purple-50 text-sm font-semibold flex items-center justify-center gap-2"
+            className="btn btn-add bg-white/60"
           >
-            <Plus className="w-4 h-4" /> Add Add-on
+            <Plus /> Add add-on
           </button>
         </div>
       )}

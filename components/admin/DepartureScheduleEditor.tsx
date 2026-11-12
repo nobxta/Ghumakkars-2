@@ -24,7 +24,7 @@ interface Props {
   onDurationDaysChange: (v: string) => void;
 }
 
-const inputCls = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 focus:border-purple-500 outline-none';
+const inputCls = 'field';
 
 export default function DepartureScheduleEditor(p: Props) {
   const [pending, setPending] = useState('');
@@ -57,8 +57,10 @@ export default function DepartureScheduleEditor(p: Props) {
             <button
               key={String(o.v)}
               type="button"
+              role="radio"
+              aria-checked={p.isMulti === o.v}
               onClick={() => p.onIsMultiChange(o.v)}
-              className={`text-left p-3 rounded-lg border-2 transition-all ${p.isMulti === o.v ? 'border-purple-600 bg-white shadow-sm' : 'border-gray-200 bg-white/60 hover:border-purple-300'}`}
+              className={`no-min-touch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 p-3 rounded-lg border-2 transition-all ${p.isMulti === o.v ? 'border-purple-600 bg-white shadow-sm' : 'border-gray-200 bg-white/60 hover:border-purple-300'}`}
             >
               <span className="font-semibold text-gray-900 text-sm">{o.title}</span>
               <p className="text-xs text-gray-600 mt-0.5">{o.desc}</p>
@@ -71,15 +73,21 @@ export default function DepartureScheduleEditor(p: Props) {
         <>
           {/* Weekly rule */}
           <div className="rounded-lg bg-white border border-gray-200 p-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={p.weeklyEnabled}
-                onChange={(e) => p.onWeeklyEnabledChange(e.target.checked)}
-                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-              />
-              <span className="font-semibold text-sm text-gray-900">Repeat every week</span>
-            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={p.weeklyEnabled}
+                aria-label="Repeat every week"
+                onClick={() => p.onWeeklyEnabledChange(!p.weeklyEnabled)}
+                className="switch"
+              >
+                <span />
+              </button>
+              <button type="button" onClick={() => p.onWeeklyEnabledChange(!p.weeklyEnabled)} className="no-min-touch font-semibold text-sm text-gray-900">
+                Repeat every week
+              </button>
+            </div>
             {p.weeklyEnabled && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                 <div>
@@ -113,9 +121,9 @@ export default function DepartureScheduleEditor(p: Props) {
                 type="button"
                 onClick={addDate}
                 disabled={!pending}
-                className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-semibold disabled:opacity-40"
+                className="btn btn-primary"
               >
-                <Plus className="w-4 h-4" /> Add
+                <Plus /> Add date
               </button>
             </div>
             {p.customDates.length > 0 && (
@@ -123,10 +131,16 @@ export default function DepartureScheduleEditor(p: Props) {
                 {p.customDates.map((d) => {
                   const past = d < tomorrow;
                   return (
-                    <span key={d} className={`inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium ${past ? 'bg-gray-100 text-gray-400 line-through' : 'bg-purple-100 text-purple-800'}`}>
+                    <span key={d} className={`inline-flex h-7 items-center gap-1 pl-2.5 pr-1 rounded-full text-xs font-medium ${past ? 'bg-gray-100 text-gray-400 line-through' : 'bg-purple-100 text-purple-800'}`}>
                       {formatDeparture(d, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                      <button type="button" aria-label="Remove date" onClick={() => p.onCustomDatesChange(p.customDates.filter((x) => x !== d))} className="p-0.5 rounded-full hover:bg-purple-200">
-                        <X className="w-3 h-3" />
+                      <button
+                        type="button"
+                        aria-label={`Remove ${d}`}
+                        title="Remove"
+                        onClick={() => p.onCustomDatesChange(p.customDates.filter((x) => x !== d))}
+                        className="btn btn-sm btn-icon !h-5 !w-5 !rounded-full hover:bg-purple-200"
+                      >
+                        <X className="!h-3 !w-3" />
                       </button>
                     </span>
                   );
