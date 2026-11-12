@@ -15,12 +15,12 @@ export default function AdminErrorLogsPage() {
     setRefreshing(true);
     try {
       const response = await fetch('/api/admin/error-logs', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Failed to fetch error logs');
+      if (!response.ok) throw new Error('Failed to fetch logs');
       const { logs } = await response.json();
       setLogs(logs || []);
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error fetching error logs:', error);
+      console.error('Error fetching logs:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -32,21 +32,27 @@ export default function AdminErrorLogsPage() {
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') fetchLogs();
     }, AUTO_REFRESH_MS);
-    return () => clearInterval(timer);
+    const onVisible = () => document.visibilityState === 'visible' && fetchLogs();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchLogs]);
 
-  const setResolved = async (id: string, resolved: boolean) => {
-    setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, resolved } : l)));
+  const setResolved = async (ids: string[], resolved: boolean) => {
+    const idSet = new Set(ids);
+    setLogs((prev) => prev.map((l) => (idSet.has(l.id) ? { ...l, resolved } : l)));
     const response = await fetch('/api/admin/error-logs', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, resolved }),
+      body: JSON.stringify({ ids, resolved }),
     });
     if (!response.ok) fetchLogs();
   };
 
   const resolveAll = async () => {
-    if (!confirm('Mark every open log as resolved?')) return;
+    if (!confirm('Mark every open log as fixed?')) return;
     setLogs((prev) => prev.map((l) => ({ ...l, resolved: true })));
     await fetch('/api/admin/error-logs', {
       method: 'PATCH',
@@ -56,10 +62,10 @@ export default function AdminErrorLogsPage() {
     fetchLogs();
   };
 
-  const clearResolved = async () => {
-    if (!confirm('Delete all resolved logs? This cannot be undone.')) return;
-    setLogs((prev) => prev.filter((l) => !l.resolved));
-    await fetch('/api/admin/error-logs?scope=resolved', { method: 'DELETE' });
+  const clear = async (scope: 'resolved' | 'routine' | 'all', question: string, keep: (l: ErrorLog) => boolean) => {
+    if (!confirm(question)) return;
+    setLogs((prev) => prev.filter(keep));
+    await fetch(`/api/admin/error-logs?scope=${scope}`, { method: 'DELETE' });
     fetchLogs();
   };
 
@@ -72,7 +78,9 @@ export default function AdminErrorLogsPage() {
       onRefresh={fetchLogs}
       onSetResolved={setResolved}
       onResolveAll={resolveAll}
-      onClearResolved={clearResolved}
+      onClearResolved={() => clear('resolved', 'Delete all fixed logs? This cannot be undone.', (l) => !l.resolved)}
+      onClearRoutine={() => clear('routine', 'Delete all routine activity (typos, wrong OTPs, incomplete forms)? This cannot be undone.', (l) => l.level !== 'warning')}
+      onClearAll={() => clear('all', 'Delete EVERY log, including open problems? This cannot be undone.', () => false)}
     />
   );
 }

@@ -180,8 +180,8 @@ export default function ActionInbox({
           selected={sel === at()}
           icon={<Bug className="h-4 w-4" />}
           tone="bg-rose-50 text-rose-600"
-          title={<>{unresolvedErrors} unresolved error{unresolvedErrors > 1 ? 's' : ''}</>}
-          meta="Logged by the website or API"
+          title={<>{unresolvedErrors} website problem{unresolvedErrors > 1 ? 's' : ''} need{unresolvedErrors > 1 ? '' : 's'} attention</>}
+          meta="Things that broke on the site (customer typos are not counted)"
           actions={<Link href="/admin/error-logs" className={rowBtn}>View</Link>}
         />
       ),

@@ -40,7 +40,7 @@ export default function AdminSidebar({
   const pathname = usePathname();
   const [openErrors, setOpenErrors] = useState(0);
 
-  // Badge: unresolved errors in the last 24h. Re-checked on navigation.
+  // Badge: open website problems (customer typos and declined cards are not counted). Re-checked on navigation.
   useEffect(() => {
     fetch('/api/admin/error-logs?summary=1', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))

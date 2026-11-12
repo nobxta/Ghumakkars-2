@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { paidOf, owedOf as fullOf } from '@/lib/booking-money';
+import { countOpenProblems } from '@/lib/log-explain';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -85,7 +86,7 @@ export async function GET(req: Request) {
       .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, payment_mode, payment_status, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, referral_commission, is_offline_booking, user_id, created_at, primary_passenger_name, primary_passenger_phone, primary_passenger_email, trips(title, discounted_price, start_date), payment_transactions(id, amount, payment_status, amount_refunded, created_at, transaction_id, payment_mode, payment_method, payment_type)')
       .order('created_at', { ascending: false })
       .limit(10000),
-    admin.from('error_logs').select('*', { count: 'exact', head: true }).eq('resolved', false),
+    admin.from('error_logs').select('level, category, process, message, code, status, resolved').eq('resolved', false).limit(2000),
     admin.from('profiles').select('created_at').gte('created_at', rangeStart.toISOString()).lte('created_at', rangeEnd.toISOString()).limit(20000),
   ]);
 
@@ -251,7 +252,7 @@ export async function GET(req: Request) {
     collectedToday, collectedThisWeek, newBookingsToday,
     pendingApproval, seatLockWithBalance,
     nextTripDays: nextDep ? nextDep.daysAway : null,
-    unresolvedErrors: errorsRes.count || 0,
+    unresolvedErrors: countOpenProblems((errorsRes.data || []) as any),
     inbox: { approvals, cashPending, dueSoon, lowFill },
     departures,
   });
