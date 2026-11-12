@@ -472,7 +472,7 @@ function SettingsScreen() {
             <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600" aria-hidden />
           )}
           <p className="flex-1 text-sm font-medium text-slate-800">{toast.message}</p>
-          <button type="button" onClick={() => setToast(null)} className="no-min-touch -m-1 rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Dismiss">
+          <button type="button" onClick={() => setToast(null)} className="-m-1 rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Dismiss">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -726,7 +726,7 @@ function SummaryCard<T>({
           <Icon className="h-4 w-4 text-purple-600" aria-hidden />
           {title}
         </h3>
-        <button type="button" onClick={onOpen} className="no-min-touch inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-50">
+        <button type="button" onClick={onOpen} className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-50">
           Manage <ChevronRight className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
@@ -1684,7 +1684,7 @@ function TelegramPanel({
                   className={`${inputCls} pr-11 font-mono`}
                 />
                 {f.bot_token && (
-                  <button type="button" onClick={() => setShowToken((s) => !s)} className="no-min-touch absolute right-1.5 top-1.5 rounded-lg p-2 text-slate-400 hover:text-slate-700" aria-label={showToken ? 'Hide token' : 'Show token'}>
+                  <button type="button" onClick={() => setShowToken((s) => !s)} className="absolute right-1.5 top-1.5 rounded-lg p-2 text-slate-400 hover:text-slate-700" aria-label={showToken ? 'Hide token' : 'Show token'}>
                     {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 )}
@@ -1720,7 +1720,7 @@ function TelegramPanel({
                     <button
                       type="button"
                       onClick={() => setForm({ ...f, admin_chat_ids: f.admin_chat_ids.filter((x) => x !== id) })}
-                      className="no-min-touch rounded-full p-1 hover:bg-purple-100"
+                      className="rounded-full p-1 hover:bg-purple-100"
                       aria-label={`Remove ${id}`}
                     >
                       <X className="h-3 w-3" />

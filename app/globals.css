@@ -133,8 +133,13 @@ body {
 /* Touch-friendly tap targets for mobile */
 @media (hover: none) and (pointer: coarse) {
   /* .btn and .switch size themselves (with their own invisible tap area),
-     so they are excluded — forcing 44×44 on them distorts their shape. */
-  button:not(.no-min-touch):not(.btn):not(.switch), a[role="button"]:not(.no-min-touch):not(.btn), input[type="button"], input[type="submit"] {
+     so they are excluded — forcing 44×44 on them distorts their shape.
+     The admin panel (.gk-admin) is excluded too: it keeps buttons at their
+     designed size and adds an invisible 44px tap area instead (admin-styles.css). */
+  button:not(.no-min-touch):not(.btn):not(.switch):not(.gk-admin button),
+  a[role="button"]:not(.no-min-touch):not(.btn):not(.gk-admin a),
+  input[type="button"]:not(.gk-admin input),
+  input[type="submit"]:not(.gk-admin input) {
     min-height: 44px;
     min-width: 44px;
   }

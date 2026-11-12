@@ -53,7 +53,7 @@ export default function AdminPanelLayout({
 
   return (
     <AdminLiveProvider>
-    <div className="min-h-screen bg-[#F8F9FB] text-slate-900 font-sans antialiased">
+    <div className="gk-admin min-h-screen bg-[#F8F9FB] text-slate-900 font-sans antialiased">
       <AdminSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

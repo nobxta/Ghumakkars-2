@@ -256,3 +256,27 @@ html, body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Touch tap targets in the admin panel.
+   Instead of stretching small buttons to 44×44 (which turns switches into blobs
+   and makes chips/icon buttons push the layout around), keep their designed size
+   and give them an invisible tap area of at least 44×44 centred on the button.
+   Buttons that are already absolute/fixed/sticky keep their positioning (only
+   the tap area is added). Skipped: buttons that already style ::after
+   (e.g. stretched "whole card is clickable" links), .btn (has its own) and
+   anything marked .no-min-touch. */
+@media (hover: none) and (pointer: coarse) {
+  .gk-admin :is(button, a[role='button']):not(.btn, .no-min-touch, [class*='absolute'], [class*='fixed'], [class*='sticky'], [class*='after:']) {
+    position: relative;
+  }
+  /* Absolute/fixed/sticky buttons are already positioned, so they get the tap area too. */
+  .gk-admin :is(button, a[role='button']):not(.btn, .no-min-touch, [class*='after:'])::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}

@@ -157,7 +157,7 @@ export function Switch({
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`no-min-touch relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full transition-colors focus-visible:outline-none disabled:opacity-50 ${checked ? 'bg-purple-600' : 'bg-slate-300'}`}
+        className={`relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full transition-colors focus-visible:outline-none disabled:opacity-50 ${checked ? 'bg-purple-600' : 'bg-slate-300'}`}
       >
         <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-[left] ${checked ? 'left-6' : 'left-1'}`} />
         <span className="sr-only">{checked ? 'On' : 'Off'}</span>
@@ -237,10 +237,10 @@ export function SaveBar({
           <span className="hidden truncate sm:inline">{message}</span>
         </p>
         <div className="flex flex-shrink-0 gap-2">
-          <button type="button" onClick={onDiscard} disabled={saving} className="no-min-touch h-9 rounded-lg px-3 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-50">
+          <button type="button" onClick={onDiscard} disabled={saving} className="h-9 rounded-lg px-3 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-50">
             Discard
           </button>
-          <button type="button" onClick={onSave} disabled={saving} className="no-min-touch inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3.5 text-sm font-bold text-slate-900 hover:bg-purple-50 disabled:opacity-60">
+          <button type="button" onClick={onSave} disabled={saving} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3.5 text-sm font-bold text-slate-900 hover:bg-purple-50 disabled:opacity-60">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
             Save
           </button>
