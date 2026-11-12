@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth-helpers';
 import { isValidTripDeparture } from '@/lib/recurrence';
 import { validateAndPriceAddons, writeBookingAddons, passengerNameMap } from '@/lib/addons-server';
 import { withErrorLog } from '@/lib/error-log';
+import { checkCoupon } from '@/lib/coupons';
 
 export const runtime = "nodejs";
 
@@ -158,25 +159,27 @@ async function handlePOST(request: NextRequest) {
       );
     }
 
-    // Verify coupon: if a discount is claimed, the coupon must exist, be active,
-    // and the discount can't exceed what the coupon actually grants.
+    // Verify coupon with the SAME rules as the coupon box (user/trip restrictions,
+    // usage limits, min amount, dates). The discount can't exceed what it grants.
     let verifiedCouponDiscount = 0;
+    let verifiedCouponId: string | null = null;
+    let verifiedCouponCode: string | null = null;
     if (coupon_code && Number(coupon_discount) > 0) {
-      const { data: coupon } = await adminClient
-        .from('coupon_codes')
-        .select('id, discount_type, discount_value, max_discount, is_active, expiry_date')
-        .ilike('code', String(coupon_code))
-        .single();
-      if (!coupon || !coupon.is_active || (coupon.expiry_date && new Date(coupon.expiry_date) < new Date())) {
-        return NextResponse.json({ error: 'Invalid or expired coupon.' }, { status: 400 });
+      const check = await checkCoupon(adminClient, {
+        code: String(coupon_code),
+        amount: claimedBaseTotal,
+        tripId: trip_id,
+        userId: auth.user.id,
+      });
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: 400 });
       }
-      const maxAllowed = coupon.discount_type === 'percentage'
-        ? Math.min((claimedBaseTotal * Number(coupon.discount_value)) / 100, Number(coupon.max_discount) || Infinity)
-        : Number(coupon.discount_value);
-      verifiedCouponDiscount = Math.min(Number(coupon_discount), maxAllowed);
-      if (Number(coupon_discount) > maxAllowed + 1) {
+      if (Number(coupon_discount) > (check.discountAmount || 0) + 1) {
         return NextResponse.json({ error: 'Coupon discount mismatch.' }, { status: 400 });
       }
+      verifiedCouponDiscount = Math.min(Number(coupon_discount), check.discountAmount || 0);
+      verifiedCouponId = check.coupon.id;
+      verifiedCouponCode = check.coupon.code;
     }
 
     const baseAfterCoupon = Math.max(0, claimedBaseTotal - verifiedCouponDiscount);
@@ -184,7 +187,9 @@ async function handlePOST(request: NextRequest) {
       ? Math.min(Number(trip.seat_lock_price) * requested, baseAfterCoupon)
       : baseAfterCoupon;
 
-    // Verify wallet: claimed usage can't exceed the amount being collected now.
+    // Verify wallet: claimed usage can't exceed the real balance or the amount
+    // being collected now. The wallet is debited below, right after the booking
+    // row exists — the browser never debits it itself.
     let verifiedWalletUsed = 0;
     if (Number(wallet_amount_used) > 0) {
       const { data: profile } = await adminClient
@@ -192,10 +197,13 @@ async function handlePOST(request: NextRequest) {
         .select('wallet_balance')
         .eq('id', auth.user.id)
         .single();
-      // Note: by the time this runs, /api/wallet/use may already have deducted.
-      // Allow claimed usage up to balance + claimed (covers both orderings),
-      // but never more than the price being paid.
-      void profile;
+      const balance = Number(profile?.wallet_balance) || 0;
+      if (Number(wallet_amount_used) > balance + 0.01) {
+        return NextResponse.json(
+          { error: 'Insufficient wallet balance. Please refresh the page and try again.' },
+          { status: 400 }
+        );
+      }
       verifiedWalletUsed = Math.min(Number(wallet_amount_used), payableBaseBeforeWallet);
     }
 
@@ -271,6 +279,7 @@ async function handlePOST(request: NextRequest) {
         qr_image_url: manualMethod.qr_image_url,
         instructions: manualMethod.instructions,
         amount: expectedFinal + addonsTotalServer,
+        reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
         submitted_at: new Date().toISOString(),
       };
     }
@@ -281,8 +290,8 @@ async function handlePOST(request: NextRequest) {
       number_of_participants: requested,
       total_price: Number(total_price),
       final_amount: Number(final_amount),
-      coupon_code: coupon_code || null,
-      coupon_discount: Number(coupon_discount) || 0,
+      coupon_code: verifiedCouponCode,
+      coupon_discount: verifiedCouponDiscount,
       wallet_amount_used: verifiedWalletUsed,
       primary_passenger_name: String(primary_passenger_name).trim(),
       primary_passenger_email: String(primary_passenger_email).trim(),
@@ -303,6 +312,7 @@ async function handlePOST(request: NextRequest) {
       amount_paid: 0,
       addons_total: addonsTotalServer,
       reference_id: reference_id ? String(reference_id).slice(0, 100) : null,
+      payment_amount: expectedFinal + (payment_method === 'seat_lock' ? 0 : addonsTotalServer),
       manual_payment_method_id: verifiedManualMethodId,
       manual_payment_snapshot: manualPaymentSnapshot,
       departure_date: validatedDeparture,
@@ -323,6 +333,41 @@ async function handlePOST(request: NextRequest) {
       );
     }
 
+    // Take the wallet money now, tied to this booking. If the debit fails
+    // (balance changed since the check above), undo the booking.
+    if (verifiedWalletUsed > 0) {
+      const { data: debited, error: debitError } = await adminClient.rpc('debit_wallet', {
+        p_user_id: auth.user.id,
+        p_amount: verifiedWalletUsed,
+        p_description: 'Booking payment',
+        p_reference_type: 'booking_payment',
+        p_reference_id: booking.id,
+      });
+      if (debitError || debited !== true) {
+        await adminClient.from('bookings').delete().eq('id', booking.id);
+        return NextResponse.json(
+          { error: 'Insufficient wallet balance. Please refresh the page and try again.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Manual (UPI/QR) payments: record the user's submitted reference for admin review.
+    if (payment_mode === 'manual' && reference_id && booking?.id) {
+      const { error: txError } = await adminClient.from('payment_transactions').insert([{
+        booking_id: booking.id,
+        user_id: auth.user.id,
+        transaction_id: String(reference_id).slice(0, 100),
+        amount: bookingPayload.payment_amount,
+        payment_type: bookingPayload.payment_method === 'seat_lock' ? 'seat_lock' : 'full',
+        payment_status: 'pending',
+        payment_mode: 'manual',
+        manual_payment_method_id: verifiedManualMethodId,
+        manual_payment_snapshot: manualPaymentSnapshot,
+      }]);
+      if (txError) console.error('Manual payment transaction insert error:', txError);
+    }
+
     // Snapshot the add-ons onto the booking (immutable name/price at booking time).
     if (pricedAddons && booking?.id) {
       try {
@@ -338,25 +383,20 @@ async function handlePOST(request: NextRequest) {
       }
     }
 
-    if (coupon_code && booking?.id) {
+    if (verifiedCouponId && booking?.id) {
       try {
-        const { data: couponRow } = await adminClient
-          .from('coupon_codes')
-          .select('id')
-          .eq('code', coupon_code.toUpperCase().trim())
-          .single();
-
-        if (couponRow) {
-          await adminClient.from('coupon_usages').insert([
-            {
-              coupon_id: couponRow.id,
-              booking_id: booking.id,
-              user_id: auth.user.id,
-              discount_amount: Number(coupon_discount) || 0,
-            },
-          ]);
-          await adminClient.rpc('increment_coupon_usage', { coupon_id: couponRow.id });
-        }
+        await adminClient.from('coupon_usages').insert([
+          {
+            coupon_id: verifiedCouponId,
+            booking_id: booking.id,
+            user_id: auth.user.id,
+            discount_amount: verifiedCouponDiscount,
+          },
+        ]);
+        // The SQL function's parameter is `coupon_id_param` — the old
+        // `coupon_id` key silently failed, so usage limits never counted up.
+        const { error: incError } = await adminClient.rpc('increment_coupon_usage', { coupon_id_param: verifiedCouponId });
+        if (incError) console.error('increment_coupon_usage error:', incError);
       } catch (e) {
         console.error('Coupon usage record error:', e);
       }

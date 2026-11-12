@@ -4,7 +4,7 @@ import Razorpay from 'razorpay';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 import { getRazorpayConfig } from '@/lib/razorpay';
-import { revalidateTripById } from '@/lib/revalidate-trips';
+import { claimBookingSeats } from '@/lib/booking-admin-sync';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { derivePaymentStatus, owedOf, payableNowOf } from '@/lib/booking-money';
 import { withErrorLog } from '@/lib/error-log';
@@ -63,7 +63,7 @@ async function handlePOST(request: NextRequest) {
       // 1. Verify booking exists and belongs to the authenticated user
       const { data: existingBooking, error: fetchBookingError } = await adminClient
         .from('bookings')
-        .select('id, user_id, final_amount, total_price, coupon_discount, wallet_amount_used, addons_total, waived_amount, amount_paid, payment_method, booking_status, trip_id, number_of_participants, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
+        .select('id, user_id, razorpay_order_id, razorpay_payment_id, final_amount, total_price, coupon_discount, wallet_amount_used, addons_total, waived_amount, amount_paid, payment_method, booking_status, trip_id, number_of_participants, trips(discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
         .eq('id', bookingId)
         .single();
 
@@ -78,7 +78,27 @@ async function handlePOST(request: NextRequest) {
         );
       }
 
-      // 2. Verify payment amount against the amount due for this attempt, not
+      // 2. The payment must belong to the Razorpay order that was created for
+      // THIS booking. Without this, one real payment could be replayed to
+      // confirm any other booking of the same or lower price.
+      if (
+        (payment as any).order_id !== razorpay_order_id ||
+        !(existingBooking as any).razorpay_order_id ||
+        (existingBooking as any).razorpay_order_id !== razorpay_order_id
+      ) {
+        return NextResponse.json(
+          { error: 'This payment does not belong to this booking' },
+          { status: 400 }
+        );
+      }
+
+      // Already recorded (webhook got here first, or this is a replay): don't
+      // touch the booking again — it may have been cancelled by an admin since.
+      if ((existingBooking as any).razorpay_payment_id === razorpay_payment_id) {
+        return NextResponse.json({ success: true, alreadyProcessed: true, paymentId: razorpay_payment_id, amount: amountInRupees });
+      }
+
+      // 3. Verify payment amount against the amount due for this attempt, not
       // always against the grand total. Full payment includes add-ons; seat-lock
       // only collects the deposit and leaves add-ons in the remaining balance.
       const expectedAmount = payableNowOf(existingBooking as any, (existingBooking as any).trips);
@@ -93,19 +113,26 @@ async function handlePOST(request: NextRequest) {
       const paymentStatus = derivePaymentStatus(amountInRupees, owed, false);
       const bookingStatus = existingBooking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed';
 
-      await adminClient
-        .from('bookings')
-        .update({
-          payment_mode: 'razorpay',
-          payment_status: paymentStatus,
-          amount_paid: amountInRupees,
-          reference_id: razorpay_payment_id,
-          razorpay_order_id: razorpay_order_id,
-          razorpay_payment_id: razorpay_payment_id,
-          razorpay_response: payment as any,
-          booking_status: bookingStatus,
-        })
-        .eq('id', bookingId);
+      // Confirm the booking and add its seats — but only if nobody (the webhook,
+      // or an earlier/replayed call) has already done so.
+      const { claimed } = await claimBookingSeats(adminClient, bookingId, {
+        payment_mode: 'razorpay',
+        payment_status: paymentStatus,
+        amount_paid: amountInRupees,
+        reference_id: razorpay_payment_id,
+        razorpay_order_id: razorpay_order_id,
+        razorpay_payment_id: razorpay_payment_id,
+        razorpay_response: payment as any,
+        booking_status: bookingStatus,
+      });
+      if (!claimed) {
+        return NextResponse.json({
+          success: true,
+          alreadyProcessed: true,
+          paymentId: razorpay_payment_id,
+          amount: amountInRupees,
+        });
+      }
 
       // Create payment transaction with full Razorpay payment data
       const booking = existingBooking;
@@ -161,27 +188,7 @@ async function handlePOST(request: NextRequest) {
         await markBookingAddonsPaid(adminClient, bookingId).catch(() => {});
       }
 
-      // 3. Increment trip participants (same logic as webhook)
-      if (booking.trip_id) {
-        const { data: trip } = await adminClient
-          .from('trips')
-          .select('current_participants')
-          .eq('id', booking.trip_id)
-          .single();
-
-        if (trip) {
-          await adminClient
-            .from('trips')
-            .update({
-              current_participants: (trip.current_participants || 0) + (booking.number_of_participants || 1),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', booking.trip_id);
-        }
-        // Payment confirmed → seats changed. Refresh this trip's public pages
-        // now (best-effort; never blocks the payment response).
-        await revalidateTripById(booking.trip_id);
-      }
+      // (Seats were already added by claimBookingSeats above.)
 
       // Process referral reward if this is user's first confirmed booking
       try {

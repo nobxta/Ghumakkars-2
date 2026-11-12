@@ -3,10 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
 import crypto from 'crypto';
 import { getRazorpayWebhookSecret } from '@/lib/razorpay';
-import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { derivePaymentStatus, owedOf } from '@/lib/booking-money';
-import { syncRazorpayRefundTotals } from '@/lib/booking-admin-sync';
+import { syncRazorpayRefundTotals, claimBookingSeats } from '@/lib/booking-admin-sync';
 import { withErrorLog, logError } from '@/lib/error-log';
 
 export const runtime = "nodejs";
@@ -105,7 +104,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
     // Find booking by razorpay_payment_id or razorpay_order_id
     const { data: bookings, error: bookingError } = await adminClient
       .from('bookings')
-      .select('id, final_amount, total_price, coupon_discount, wallet_amount_used, waived_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status, addons_total, trips(discounted_price)')
+      .select('id, final_amount, total_price, coupon_discount, wallet_amount_used, waived_amount, payment_method, trip_id, number_of_participants, booking_status, payment_status, razorpay_payment_id, addons_total, trips(discounted_price)')
       .or(`razorpay_payment_id.eq.${razorpayPaymentId},razorpay_order_id.eq.${razorpayOrderId}`)
       .limit(1);
 
@@ -116,8 +115,9 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       return;
     }
 
-    // Check if payment is already processed
-    if (booking.booking_status === 'confirmed' || booking.payment_status === 'paid') {
+    // This exact payment was already recorded (e.g. by the verify route, or a
+    // redelivered webhook) — don't re-confirm a booking an admin may have cancelled since.
+    if (booking.razorpay_payment_id === razorpayPaymentId || booking.payment_status === 'paid') {
       console.log('Payment already processed for booking:', booking.id);
       return;
     }
@@ -137,13 +137,18 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
       reference_id: razorpayPaymentId,
     };
 
-    const { error: updateError } = await adminClient
-      .from('bookings')
-      .update(updateData)
-      .eq('id', booking.id);
-
-    if (updateError) {
+    // Confirm + add seats only if the verify route (or an earlier delivery of
+    // this webhook) hasn't already. Covers seat-lock bookings too, which the
+    // old "confirmed || paid" check missed and counted twice.
+    let claimed = false;
+    try {
+      ({ claimed } = await claimBookingSeats(adminClient, booking.id, updateData));
+    } catch (updateError) {
       console.error('Error updating booking:', updateError);
+      return;
+    }
+    if (!claimed) {
+      console.log('Payment already processed for booking:', booking.id);
       return;
     }
 
@@ -184,26 +189,7 @@ async function handlePaymentSuccess(payment: any, adminClient: any) {
         ]);
     }
 
-    // Increment trip participants
-    if (booking.trip_id) {
-      const { data: trip } = await adminClient
-        .from('trips')
-        .select('current_participants')
-        .eq('id', booking.trip_id)
-        .single();
-
-      if (trip) {
-        await adminClient
-          .from('trips')
-          .update({
-            current_participants: (trip.current_participants || 0) + (booking.number_of_participants || 1),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', booking.trip_id);
-      }
-      // Seats changed via webhook payment confirmation — refresh public pages.
-      await revalidateTripById(booking.trip_id);
-    }
+    // (Seats were already added by claimBookingSeats above.)
 
     // Send confirmation email
     const notifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/bookings/send-notification`;

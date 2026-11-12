@@ -595,42 +595,9 @@ export default function BookTripPage() {
       const walletToUse = (useWallet && walletAmount > 0)
         ? Math.min(walletAmount, walletBalance, amountToPayNowBeforeWallet)
         : 0;
-      let finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletToUse);
-
-      // Use wallet if selected
-      let walletAmountUsed = 0;
-      if (walletToUse > 0) {
-        try {
-          const walletResponse = await fetch('/api/wallet/use', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: walletToUse,
-              description: `Booking payment for ${trip.title}`,
-            }),
-          });
-
-          if (walletResponse.ok) {
-            const walletData = await walletResponse.json();
-            walletAmountUsed = walletData.amountUsed;
-            setWalletBalance(walletData.remainingBalance);
-            // Recompute final amount from actual server-confirmed wallet spend
-            finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
-          } else {
-            const errorData = await walletResponse.json();
-            setError(errorData.error || 'Failed to use wallet balance');
-            setProcessingRazorpay(false);
-            setPaymentOverlay('idle');
-            return;
-          }
-        } catch (walletError: any) {
-          console.error('Error using wallet:', walletError);
-          setError('Failed to process wallet payment. Please try again.');
-          setProcessingRazorpay(false);
-          setPaymentOverlay('idle');
-          return;
-        }
-      }
+      const finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletToUse);
+      // The server checks the balance and debits the wallet when it creates the booking.
+      const walletAmountUsed = walletToUse;
 
       const allPassengers = buildPassengerList();
 
@@ -676,6 +643,9 @@ export default function BookTripPage() {
       const bookingData = await bookingRes.json();
       if (!bookingRes.ok) {
         throw new Error(bookingData.error || 'Failed to create booking');
+      }
+      if (Number(bookingData.wallet_amount_used) > 0) {
+        setWalletBalance((b) => Math.max(0, b - Number(bookingData.wallet_amount_used)));
       }
 
       // Zero-amount case: wallet + coupon fully cover the trip (and no add-ons due now).
@@ -870,43 +840,13 @@ export default function BookTripPage() {
       const couponDiscount = couponApplied ? couponApplied.discount_amount : 0;
       const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
       
-      // Use wallet if selected
-      let walletAmountUsed = 0;
-      let walletToUse = (useWallet && walletAmount > 0)
+      // The server checks the balance and debits the wallet when it creates the booking.
+      const walletAmountUsed = (useWallet && walletAmount > 0)
         ? Math.min(walletAmount, walletBalance, amountToPayNowBeforeWallet)
         : 0;
 
-      if (walletToUse > 0) {
-        try {
-          const walletResponse = await fetch('/api/wallet/use', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: walletToUse,
-              description: `Booking payment for ${trip.title}`,
-            }),
-          });
-          
-          if (walletResponse.ok) {
-            const walletData = await walletResponse.json();
-            walletAmountUsed = walletData.amountUsed;
-            setWalletBalance(walletData.remainingBalance);
-          } else {
-            const errorData = await walletResponse.json();
-            setError(errorData.error || 'Failed to use wallet balance');
-            setSubmitting(false);
-            return;
-          }
-        } catch (walletError: any) {
-          console.error('Error using wallet:', walletError);
-          setError('Failed to process wallet payment. Please try again.');
-          setSubmitting(false);
-          return;
-        }
-      }
-
       // Calculate final amount after wallet
-      let finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
+      const finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
       const allPassengers = buildPassengerList();
 
@@ -947,6 +887,9 @@ export default function BookTripPage() {
       const bookingData = await cashBookingRes.json();
       if (!cashBookingRes.ok) {
         throw new Error(bookingData.error || 'Failed to create booking');
+      }
+      if (Number(bookingData.wallet_amount_used) > 0) {
+        setWalletBalance((b) => Math.max(0, b - Number(bookingData.wallet_amount_used)));
       }
 
       // Send notification
@@ -1214,160 +1157,61 @@ export default function BookTripPage() {
       // Calculate amount to pay before wallet
       const amountToPayNowBeforeWallet = getAmountToPayBeforeWallet();
       
-      // Use wallet if selected
-      let walletAmountUsed = 0;
-      if (useWallet && walletAmount > 0) {
-        try {
-          const walletResponse = await fetch('/api/wallet/use', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: walletAmount,
-              description: `Booking payment for ${trip.title}`,
-            }),
-          });
-          
-          if (walletResponse.ok) {
-            const walletData = await walletResponse.json();
-            walletAmountUsed = walletData.amountUsed;
-            setWalletBalance(walletData.remainingBalance);
-          } else {
-            const errorData = await walletResponse.json();
-            setError(errorData.error || 'Failed to use wallet balance');
-            setSubmitting(false);
-            return;
-          }
-        } catch (walletError: any) {
-          console.error('Error using wallet:', walletError);
-          setError('Failed to process wallet payment. Please try again.');
-          setSubmitting(false);
-          return;
-        }
-      }
+      // The server checks the balance and debits the wallet when it creates the booking.
+      const walletAmountUsed = (useWallet && walletAmount > 0)
+        ? Math.min(walletAmount, walletBalance, amountToPayNowBeforeWallet)
+        : 0;
 
       // Calculate final amount after wallet
       const finalAmount = Math.max(0, amountToPayNowBeforeWallet - walletAmountUsed);
 
       // Add-ons: full-pay collects them now; seat-lock rolls them into the balance.
       const addonsTotal = hasAddons ? addonsTotalClient : 0;
-      const addonsNow = paymentMethod === 'seat_lock' ? 0 : addonsTotal;
-      const chargeNow = finalAmount + addonsNow;
       const selectedManualMethod = (paymentSettings.manualMethods || []).find((m) => m.id === selectedManualMethodId) || paymentSettings.manualMethods?.[0];
       if (!selectedManualMethod) {
         setError('Manual payment is not available. Please choose another payment option.');
         setSubmitting(false);
         return;
       }
-      const manualPaymentSnapshot = {
-        id: selectedManualMethod.id,
-        upi_id: selectedManualMethod.upi_id,
-        qr_image_url: selectedManualMethod.qr_image_url || null,
-        amount: chargeNow,
-        reference_id: transactionId.trim(),
-        submitted_at: new Date().toISOString(),
-      };
-
-      // Create booking
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .insert([
-          {
-            trip_id: trip.id,
-            user_id: user.id,
-            number_of_participants: totalPassengers,
-            total_price: basePrice, // Base price before coupon
-            final_amount: finalAmount, // Base amount due now (excludes add-ons)
-            addons_total: addonsTotal,
-            coupon_code: couponApplied?.coupon?.code || null,
-            coupon_discount: couponDiscount,
-            wallet_amount_used: walletAmountUsed,
-            primary_passenger_name: primaryName,
-            primary_passenger_email: primaryEmail,
-            primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
-            primary_passenger_gender: primaryGender,
-            primary_passenger_age: parseInt(primaryAge),
-            emergency_contact_name: emergencyContactName,
-            emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
-            aadhaar_id: aadhaarId || null,
-            passengers: allPassengers,
-            payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
-            payment_mode: 'manual',
-            reference_id: transactionId.trim(),
-            manual_payment_method_id: selectedManualMethod.id === 'legacy' ? null : selectedManualMethod.id,
-            manual_payment_snapshot: manualPaymentSnapshot,
-            payment_amount: chargeNow,
-            payment_status: 'pending',
-            booking_status: 'pending',
-            amount_paid: 0,
-            departure_date: trip.is_recurring ? departureDate : null,
-        pickup_point: pickupPoint || null,
-          },
-        ])
-        .select()
-        .single();
-
-      if (bookingError) throw bookingError;
-
-      // Snapshot the selected add-ons server-side (client can't write booking_addons
-      // under RLS). Best-effort; the booking already carries addons_total.
-      if (hasAddons && bookingData?.id && addonSelections.length > 0) {
-        await fetch(`/api/bookings/${bookingData.id}/addons`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selections: addonSelections }),
-        }).catch(() => {});
+      // Create the booking through the server so prices, coupon, wallet and
+      // status are all validated there (the browser never writes bookings directly).
+      // The server also saves add-ons, the payment reference and coupon usage.
+      const manualBookingRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trip_id: trip.id,
+          number_of_participants: totalPassengers,
+          total_price: basePrice, // Base price before coupon
+          final_amount: finalAmount, // Base amount due now (excludes add-ons)
+          addons_total: addonsTotal,
+          addon_selections: hasAddons ? addonSelections : [],
+          coupon_code: couponApplied?.coupon?.code || null,
+          coupon_discount: couponDiscount,
+          wallet_amount_used: walletAmountUsed,
+          primary_passenger_name: primaryName,
+          primary_passenger_email: primaryEmail,
+          primary_passenger_phone: primaryPhone.replace(/\D/g, ''),
+          primary_passenger_gender: primaryGender,
+          primary_passenger_age: parseInt(primaryAge),
+          emergency_contact_name: emergencyContactName,
+          emergency_contact_phone: emergencyContactPhone.replace(/\D/g, ''),
+          aadhaar_id: aadhaarId || null,
+          passengers: allPassengers,
+          payment_method: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
+          payment_mode: 'manual',
+          reference_id: transactionId.trim(),
+          manual_payment_method_id: selectedManualMethod.id,
+          departure_date: trip.is_recurring ? departureDate : null,
+          pickup_point: pickupPoint || null,
+        }),
+      });
+      const bookingData = await manualBookingRes.json();
+      if (!manualBookingRes.ok) {
+        throw new Error(bookingData.error || 'Failed to create booking');
       }
-
-      // Create payment transaction for this booking
-      if (bookingData.id && transactionId.trim()) {
-        const { error: transactionError } = await supabase
-          .from('payment_transactions')
-          .insert([
-            {
-              booking_id: bookingData.id,
-              transaction_id: transactionId.trim(),
-              amount: chargeNow,
-              payment_type: paymentMethod === 'seat_lock' ? 'seat_lock' : 'full',
-              payment_status: 'pending',
-              payment_mode: 'manual', // Track payment mode
-              manual_payment_method_id: selectedManualMethod.id === 'legacy' ? null : selectedManualMethod.id,
-              manual_payment_snapshot: manualPaymentSnapshot,
-            },
-          ]);
-
-        if (transactionError) {
-          console.error('Error creating payment transaction:', transactionError);
-          // Don't fail the booking if transaction creation fails, but log it
-        }
-      }
-
-      // If coupon was applied, record the usage
-      if (couponApplied && bookingData.id) {
-        // Fetch coupon ID
-        const { data: couponData } = await supabase
-          .from('coupon_codes')
-          .select('id')
-          .eq('code', couponApplied.coupon.code)
-          .single();
-
-        if (couponData) {
-          // Record coupon usage
-          await supabase
-            .from('coupon_usages')
-            .insert([
-              {
-                coupon_id: couponData.id,
-                booking_id: bookingData.id,
-                user_id: user.id,
-                discount_amount: couponDiscount,
-              },
-            ]);
-
-          // Increment used count
-          await supabase.rpc('increment_coupon_usage', {
-            coupon_id_param: couponData.id,
-          });
-        }
+      if (Number(bookingData.wallet_amount_used) > 0) {
+        setWalletBalance((b) => Math.max(0, b - Number(bookingData.wallet_amount_used)));
       }
 
       // Send booking received email

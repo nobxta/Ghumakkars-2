@@ -23,6 +23,44 @@ export async function adjustTripSeats(admin: SupabaseClient, tripId: string | nu
   await revalidateTripById(tripId);
 }
 
+/**
+ * Atomically move a booking into a seat-holding status and add its seats.
+ * The update only matches while the booking does NOT already hold seats, so
+ * when the payment-verify route and the Razorpay webhook both fire (or a
+ * request is replayed), exactly one of them wins and seats are counted once.
+ * Returns `claimed: false` when someone else already confirmed the booking.
+ */
+export async function claimBookingSeats(
+  admin: SupabaseClient,
+  bookingId: string,
+  update: Record<string, unknown>,
+): Promise<{ claimed: boolean }> {
+  const { data, error } = await admin
+    .from('bookings')
+    .update(update)
+    .eq('id', bookingId)
+    .or(`booking_status.is.null,booking_status.not.in.(${SEAT_STATUSES.join(',')})`)
+    .select('id, trip_id, number_of_participants');
+  if (error) throw error;
+  const row = data?.[0];
+  if (!row) return { claimed: false };
+
+  if (row.trip_id) {
+    const pax = Number(row.number_of_participants) || 1;
+    // Atomic SQL increment (no read-then-write race between bookings).
+    const { error: incError } = await admin.rpc('increment_trip_participants', {
+      trip_id: row.trip_id,
+      increment_by: pax,
+    });
+    if (incError) {
+      await adjustTripSeats(admin, row.trip_id, pax);
+    } else {
+      await revalidateTripById(row.trip_id);
+    }
+  }
+  return { claimed: true };
+}
+
 /** Seat delta for a booking moving from one status to another. */
 export function seatDelta(fromStatus: string | null | undefined, toStatus: string | null | undefined, pax: number) {
   const was = occupiesSeat(fromStatus);

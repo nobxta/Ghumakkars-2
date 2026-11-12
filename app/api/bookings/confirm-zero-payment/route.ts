@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { revalidateTripById } from '@/lib/revalidate-trips';
+import { claimBookingSeats } from '@/lib/booking-admin-sync';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { withErrorLog } from '@/lib/error-log';
 
@@ -32,7 +32,7 @@ async function handlePOST(request: NextRequest) {
 
     const { data: booking, error: fetchErr } = await admin
       .from('bookings')
-      .select('id, user_id, final_amount, total_price, wallet_amount_used, coupon_discount, trip_id, number_of_participants, payment_method, booking_status')
+      .select('id, user_id, final_amount, total_price, wallet_amount_used, coupon_discount, trip_id, number_of_participants, payment_method, booking_status, addons_total')
       .eq('id', bookingId)
       .single();
 
@@ -50,20 +50,32 @@ async function handlePOST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (booking.booking_status === 'confirmed') {
+    // Full payment collects add-ons now, so they must be ₹0 too — otherwise this
+    // would mark unpaid add-ons as paid.
+    const addonsDueNow = booking.payment_method === 'seat_lock' ? 0 : Number(booking.addons_total || 0);
+    if (finalAmount + addonsDueNow >= 1) {
+      return NextResponse.json(
+        { error: `This endpoint is only for zero-amount bookings. Amount due is ₹${finalAmount + addonsDueNow}.` },
+        { status: 400 }
+      );
+    }
+    if (booking.booking_status === 'confirmed' || booking.booking_status === 'seat_locked') {
       return NextResponse.json({ success: true, alreadyConfirmed: true });
     }
+    if (booking.booking_status !== 'pending') {
+      return NextResponse.json({ error: 'This booking can no longer be confirmed.' }, { status: 400 });
+    }
 
-    // Mark booking as confirmed
-    await admin
-      .from('bookings')
-      .update({
-        payment_status: 'paid',
-        amount_paid: 0,
-        booking_status: booking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed',
-        payment_mode: 'wallet',
-      })
-      .eq('id', bookingId);
+    // Confirm + add seats exactly once (a repeated call does nothing).
+    const { claimed } = await claimBookingSeats(admin, bookingId, {
+      payment_status: 'paid',
+      amount_paid: 0,
+      booking_status: booking.payment_method === 'seat_lock' ? 'seat_locked' : 'confirmed',
+      payment_mode: 'wallet',
+    });
+    if (!claimed) {
+      return NextResponse.json({ success: true, alreadyConfirmed: true });
+    }
 
     // Create a transaction record so it shows up in payment timelines
     const txId = `WALLET-${Date.now().toString(36).toUpperCase()}`;
@@ -85,26 +97,6 @@ async function handlePOST(request: NextRequest) {
 
     if (booking.payment_method !== 'seat_lock') {
       await markBookingAddonsPaid(admin, bookingId).catch(() => {});
-    }
-
-    // Increment trip participants count
-    if (booking.trip_id) {
-      const { data: trip } = await admin
-        .from('trips')
-        .select('current_participants')
-        .eq('id', booking.trip_id)
-        .single();
-      if (trip) {
-        await admin
-          .from('trips')
-          .update({
-            current_participants: (trip.current_participants || 0) + (booking.number_of_participants || 1),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', booking.trip_id);
-      }
-      // Zero-payment confirmation took a seat — refresh public pages now.
-      await revalidateTripById(booking.trip_id);
     }
 
     // Process referral reward if this is user's first confirmed booking
