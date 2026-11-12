@@ -199,7 +199,7 @@ function commonBlock(b: any, trip: any, profile: any): string {
  */
 export async function notifyPaymentForApproval(bookingId: string) {
   const s = await getTelegramSettings();
-  if (!s?.enabled || !s.notify_payments) return;
+  if (!s?.enabled || (!s.notify_payments && !s.notify_new_booking)) return;
   const loaded = await loadBooking(bookingId);
   if (!loaded) return;
   const { booking, trip, profile } = loaded;
@@ -213,6 +213,9 @@ export async function notifyPaymentForApproval(bookingId: string) {
   // on seat_locked/confirmed (e.g. recording a cash payment) must NOT fire a
   // spurious "NEW BOOKING" alert.
   if (!pending && booking.booking_status !== 'pending') return;
+  // Respect the two Telegram toggles in Admin → Settings.
+  if (pending && !s.notify_payments) return;
+  if (!pending && !s.notify_new_booking) return;
 
   const isRemaining = booking.booking_status === 'remaining_submitted';
   const header = pending
@@ -241,6 +244,7 @@ export async function notifyPaymentForApproval(bookingId: string) {
 export async function notifyBookingInfo(bookingId: string, kind: 'razorpay_confirmed' | 'confirmed' | 'rejected' | 'cancelled') {
   const s = await getTelegramSettings();
   if (!s?.enabled) return;
+  if (kind === 'razorpay_confirmed' && !s.notify_new_booking) return;
   const loaded = await loadBooking(bookingId);
   if (!loaded) return;
   const { booking, trip, profile } = loaded;

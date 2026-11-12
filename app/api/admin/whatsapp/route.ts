@@ -6,7 +6,7 @@ import { sendWhatsApp, welcomeMessage } from '@/lib/whatsapp';
 // Sample messages for the Settings tester — mirror the real booking templates
 // (WhatsApp bold uses *single* asterisks). Uses placeholder data.
 function sampleMessage(template: string): string {
-  const name = 'Vivek';
+  const name = 'Traveller';
   const t = 'Manali Kasol Escape';
   const id = 'TEST1234';
   const otp = String(Math.floor(100000 + Math.random() * 900000));

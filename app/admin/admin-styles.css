@@ -250,3 +250,9 @@ html, body {
   .an-root .an-card, .an-root .an-kpi { break-inside: avoid; box-shadow: none !important; }
   .an-toolbar { position: static !important; backdrop-filter: none; }
 }
+
+/* Settings: save bar / sheet / toast entrance */
+@keyframes gk-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

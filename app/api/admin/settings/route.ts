@@ -21,24 +21,14 @@ export async function GET() {
   if (auth instanceof NextResponse) return auth;
 
   const admin = createAdminClient();
-  const [{ data: general }, { data: payment }] = await Promise.all([
-    admin.from('admin_general_settings').select('*').eq('id', 1).single(),
-    admin
-      .from('payment_settings')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single(),
-  ]);
+  const { data: payment } = await admin
+    .from('payment_settings')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
 
   return NextResponse.json({
-    general: general || {
-      email_notifications: true,
-      booking_alerts: true,
-      weekly_reports: false,
-      maintenance_mode: false,
-      updated_at: null,
-    },
     payment: {
       payment_mode: payment?.payment_mode || 'manual',
       referral_reward_amount: Number(payment?.referral_reward_amount ?? 100),
@@ -58,24 +48,6 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const section = String(body.section || '');
   const admin = createAdminClient();
-
-  if (section === 'general') {
-    const updates = {
-      email_notifications: !!body.email_notifications,
-      booking_alerts: !!body.booking_alerts,
-      weekly_reports: !!body.weekly_reports,
-      maintenance_mode: !!body.maintenance_mode,
-      updated_by: auth.user.id,
-    };
-    const { data, error } = await admin
-      .from('admin_general_settings')
-      .update(updates)
-      .eq('id', 1)
-      .select('*')
-      .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ success: true, general: data });
-  }
 
   if (section === 'payment') {
     const mode = String(body.payment_mode || 'manual');
