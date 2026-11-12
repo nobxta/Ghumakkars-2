@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { IMG } from '@/lib/image';
 import { resolveDueDate } from '@/lib/payment-due';
-import { derivePaymentStatus, moneyOf, payableNowOf, isPendingCashBooking } from '@/lib/booking-money';
+import { derivePaymentStatus, moneyOf, payableNowOf, isPendingCashBooking, seatLockBaseOf } from '@/lib/booking-money';
 import { customerBookingStatus, paymentStatusLabel, paymentStatusChip } from '@/lib/booking-status-labels';
 import UpiPayButton from '@/components/UpiPayButton';
 import AddonsSummary from '@/components/booking/AddonsSummary';
@@ -406,13 +406,12 @@ export default function BookingDetailsPage() {
   const pax = Number(booking.number_of_participants) || 1;
   const couponDiscount = parseFloat(String(booking.coupon_discount || 0)) || 0;
   const walletUsed = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
-  // Seat-lock bookings store only the DEPOSIT in total_price / final_amount, so
-  // the real trip price must come from list price × travellers.
+  // "Trip price" = total before coupon/wallet, at the price that applied when
+  // they booked (changing the trip's price later doesn't change it).
   const isSeatLockBooking = booking.payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(status);
   const grossFull = (trip?.discounted_price || 0) * pax;
-  // "Trip price" = list total before coupon/wallet.
   const totalAmount = isSeatLockBooking
-    ? grossFull
+    ? seatLockBaseOf(booking as any, trip as any)
     : (parseFloat(String(booking.total_price || 0)) || grossFull);
   // Net amount actually owed after coupon + wallet, minus any written-off (waived)
   // balance, PLUS any Trip Add-ons (which roll into the balance for seat-lock).
@@ -911,9 +910,8 @@ export default function BookingDetailsPage() {
             <div className="lg:sticky lg:top-20 space-y-4 sm:space-y-6">
               {/* Payment status + breakdown */}
               {(() => {
-                const perPerson = (trip?.discounted_price && trip.discounted_price > 0)
-                  ? trip.discounted_price
-                  : (pax > 0 ? Math.round(totalAmount / pax) : totalAmount);
+                // Per-person price they booked at (not today's trip price).
+                const perPerson = pax > 0 ? Math.round(totalAmount / pax) : totalAmount;
                 const shownPaid = paidAmount;
                 const payBefore = resolveDueDate(effectiveStart, trip?.payment_due_days_before, paymentSettings.dueDaysBefore);
                 const fmtPay = payBefore ? payBefore.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;

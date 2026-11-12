@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
 import { withErrorLog } from '@/lib/error-log';
+import { seatLockBaseOf } from '@/lib/booking-money';
 import {
   getTelegramSettings,
   answerCallbackQuery,
@@ -31,7 +32,7 @@ function fullOf(b: any, trip: any): number {
   const coupon = parseFloat(String(b.coupon_discount || 0)) || 0;
   const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
   if (b.payment_method === 'seat_lock' || b.booking_status === 'seat_locked') {
-    return Math.max(0, (Number(trip?.discounted_price) || 0) * pax - coupon - wallet);
+    return Math.max(0, seatLockBaseOf(b, trip) - coupon - wallet);
   }
   const fa = parseFloat(String(b.final_amount || 0));
   if (fa > 0) return fa;

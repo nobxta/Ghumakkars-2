@@ -12,7 +12,7 @@ import {
   Gift, StickyNote, RotateCcw, Bell
 } from 'lucide-react';
 import { resolveDueDate } from '@/lib/payment-due';
-import { moneyOf } from '@/lib/booking-money';
+import { moneyOf, seatLockBaseOf } from '@/lib/booking-money';
 import { bookingStatusLabel, paymentStatusLabel, bookingStatusChip, paymentStatusChip, MANUAL_STATUSES, effectiveBookingStatus } from '@/lib/booking-status-labels';
 import AdminBookingAddons from '@/components/admin/AdminBookingAddons';
 import AddonsSummary from '@/components/booking/AddonsSummary';
@@ -366,7 +366,10 @@ export default function AdminBookingDetailsPage() {
   const couponDiscountRaw = parseFloat(String(booking.coupon_discount || 0)) || 0;
   const walletUsed = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
   const isSeatLock = booking.payment_method === 'seat_lock' || status === 'seat_locked';
-  const listGross = (parseFloat(String(booking.trips?.discounted_price || 0)) || 0) * pax;
+  // Base price at the time of booking — not the trip's current price.
+  const listGross = isSeatLock
+    ? seatLockBaseOf(booking, booking.trips)
+    : (parseFloat(String(booking.total_price || 0)) || (parseFloat(String(booking.trips?.discounted_price || 0)) || 0) * pax);
   // Single source of truth for money (independent of booking status).
   const money = moneyOf(booking, booking.trips);
   const finalAmount = money.fullPrice; // net trip price (before any write-off)

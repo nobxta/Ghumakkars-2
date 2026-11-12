@@ -46,10 +46,26 @@ const tripOf = (b: BookingLike, trip?: TripLike | null): TripLike | undefined =>
 };
 
 /**
+ * Full trip price (before coupon/wallet) a seat-lock customer agreed to, at the
+ * price that applied WHEN THEY BOOKED. Changing the trip's price later must not
+ * change what existing customers owe.
+ *
+ * Seat-lock bookings save the full booked price in `total_price` and the deposit
+ * in `final_amount`. A few very old bookings saved only the deposit in
+ * `total_price` (so it equals `final_amount`); only for those do we fall back to
+ * the trip's current list price × travellers.
+ */
+export function seatLockBaseOf(b: BookingLike, trip?: TripLike | null): number {
+  const stored = num(b.total_price);
+  if (stored > num(b.final_amount) + 1) return stored;
+  const pax = Number(b.number_of_participants) || 1;
+  return num(tripOf(b, trip)?.discounted_price) * pax;
+}
+
+/**
  * The full amount the customer owes, after their coupon + wallet discounts,
- * INCLUDING any Trip Add-ons. Seat-lock bookings store only the deposit in
- * total_price/final_amount, so the real base cost comes from list price ×
- * travellers. Add-ons are tracked separately in `addons_total` (never folded
+ * INCLUDING any Trip Add-ons. Seat-lock bookings use the price saved at booking
+ * time (see seatLockBaseOf). Add-ons are tracked separately in `addons_total` (never folded
  * into final_amount), so editing add-ons after payment correctly moves the
  * outstanding balance.
  */
@@ -64,7 +80,7 @@ export function fullOwed(b: BookingLike, trip?: TripLike | null): number {
     b.booking_status === 'seat_locked' ||
     b.booking_status === 'remaining_submitted';
 
-  if (isSeatLock) return Math.max(0, disc * pax - coupon - wallet) + addons;
+  if (isSeatLock) return Math.max(0, seatLockBaseOf(b, trip) - coupon - wallet) + addons;
 
   const fa = num(b.final_amount);
   if (fa > 0) return fa + addons;

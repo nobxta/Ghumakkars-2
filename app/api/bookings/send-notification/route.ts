@@ -11,6 +11,7 @@ import {
 import { notifyPaymentForApproval } from '@/lib/telegram';
 import { sendWhatsApp } from '@/lib/whatsapp';
 import { withErrorLog } from '@/lib/error-log';
+import { seatLockBaseOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -167,7 +168,11 @@ async function handlePOST(request: NextRequest) {
           tripPrice = tripPriceData?.discounted_price;
         }
         
-        const fullTripPrice = (tripPrice || 0) * (booking.number_of_participants || 1);
+        // Price they booked at (not today's trip price), after coupon + wallet.
+        const fullTripPrice = Math.max(0,
+          seatLockBaseOf(booking, { discounted_price: tripPrice })
+          - (parseFloat(booking.coupon_discount) || 0)
+          - (parseFloat(booking.wallet_amount_used) || 0));
         const paidAmount = parseFloat(booking.payment_amount) || parseFloat(booking.final_amount) || 0;
         const remainingAmount = Math.max(0, fullTripPrice - paidAmount);
 

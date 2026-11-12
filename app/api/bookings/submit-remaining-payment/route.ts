@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { internalFetchHeaders } from '@/lib/auth-helpers';
 import { withErrorLog } from '@/lib/error-log';
+import { seatLockBaseOf } from '@/lib/booking-money';
 
 export const runtime = "nodejs";
 
@@ -62,7 +63,7 @@ async function handlePOST(request: NextRequest) {
     const wallet = parseFloat(String(booking.wallet_amount_used || 0)) || 0;
     const isSeatLock = booking.payment_method === 'seat_lock' || booking.booking_status === 'seat_locked';
     const bookingTotal = isSeatLock
-      ? Math.max(0, (Number(tripRel?.discounted_price) || 0) * pax - coupon - wallet)
+      ? Math.max(0, seatLockBaseOf(booking as any, tripRel) - coupon - wallet)
       : (parseFloat(String(booking.final_amount || 0)) > 0
           ? parseFloat(String(booking.final_amount))
           : Math.max(0, (parseFloat(String(booking.total_price || 0)) || (Number(tripRel?.discounted_price) || 0) * pax) - coupon - wallet));

@@ -20,7 +20,7 @@ export async function PATCH(
     const adminClient = createAdminClient();
     const { data: existing, error: fetchErr } = await adminClient
       .from('bookings')
-      .select('id, is_offline_booking')
+      .select('id, is_offline_booking, payment_method, number_of_participants, total_price, final_amount')
       .eq('id', id)
       .single();
 
@@ -42,7 +42,22 @@ export async function PATCH(
     if (body.contact_phone != null) updates.contact_phone = String(body.contact_phone).replace(/\D/g, '').slice(0, 20);
     if (body.number_of_participants != null) {
       const n = Math.max(1, parseInt(String(body.number_of_participants), 10));
-      if (!Number.isNaN(n)) updates.number_of_participants = n;
+      if (!Number.isNaN(n)) {
+        updates.number_of_participants = n;
+        // Seat-lock balances are based on the booked price saved in total_price,
+        // so keep it per-person when the traveller count changes (unless the
+        // admin is setting the amount explicitly in this same edit).
+        const oldPax = Number((existing as any).number_of_participants) || 1;
+        const oldTotal = Number((existing as any).total_price) || 0;
+        if (
+          body.amount_paid == null &&
+          (existing as any).payment_method === 'seat_lock' &&
+          n !== oldPax &&
+          oldTotal > (Number((existing as any).final_amount) || 0) + 1
+        ) {
+          updates.total_price = Math.round((oldTotal / oldPax) * n * 100) / 100;
+        }
+      }
     }
     if (body.passengers != null) updates.passengers = body.passengers;
     // Move a booking to a different departure batch (or clear it).

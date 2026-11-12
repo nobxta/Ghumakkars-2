@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { seatLockBaseOf } from '@/lib/booking-money';
 import {
   Calendar, ArrowLeft, MapPin, Clock, Users, Package, IndianRupee,
   Tag, CheckCircle, AlertCircle, ArrowRight, Eye, Lock, XCircle,
@@ -214,7 +215,7 @@ export default function BookingsPage() {
               const coupon = parseFloat(String(booking.coupon_discount || 0)) || 0;
               const wallet = parseFloat(String((booking as any).wallet_amount_used || 0)) || 0;
               const totalPrice = isSeatLock
-                ? Math.max(0, (Number((booking as any).trips?.discounted_price) || 0) * pax - coupon - wallet)
+                ? Math.max(0, seatLockBaseOf(booking as any, (booking as any).trips) - coupon - wallet)
                 : parseFloat(String(booking.final_amount || booking.total_price || 0));
 
               return (

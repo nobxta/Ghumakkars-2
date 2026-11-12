@@ -9,7 +9,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isPendingCashBooking, moneyOf, pendingCashOf } from '@/lib/booking-money';
+import { isPendingCashBooking, moneyOf, pendingCashOf, seatLockBaseOf } from '@/lib/booking-money';
 
 export interface TicketPassenger {
   name?: string;
@@ -131,7 +131,7 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
   const walletUsed = parseFloat(String((booking as any).wallet_amount_used || 0)) || 0;
   const isSeatLockBooking = (booking as any).payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(status);
   const grossFull = (trip.discounted_price || 0) * pax;
-  const tripPrice = isSeatLockBooking ? grossFull : (parseFloat(String((booking as any).total_price || 0)) || grossFull);
+  const tripPrice = isSeatLockBooking ? seatLockBaseOf(booking as any, trip as any) : (parseFloat(String((booking as any).total_price || 0)) || grossFull);
 
   // Add-ons (exclude cancelled). They add to the grand total; for seat-lock they
   // sit in the remaining balance.

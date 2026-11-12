@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { seatLockBaseOf } from '@/lib/booking-money';
 
 /**
  * Telegram bot integration.
@@ -107,7 +108,7 @@ function bookingMoney(b: any, trip: any) {
   const wallet = parseFloat(String(b.wallet_amount_used || 0)) || 0;
   const isSeatLock = b.payment_method === 'seat_lock' || ['seat_locked', 'remaining_submitted'].includes(b.booking_status);
   const full = isSeatLock
-    ? Math.max(0, (Number(trip?.discounted_price) || 0) * pax - coupon - wallet)
+    ? Math.max(0, seatLockBaseOf(b, trip) - coupon - wallet)
     : (parseFloat(String(b.final_amount || 0)) > 0
         ? parseFloat(String(b.final_amount))
         : Math.max(0, (parseFloat(String(b.total_price || 0)) || (Number(trip?.discounted_price) || 0) * pax) - coupon - wallet));
