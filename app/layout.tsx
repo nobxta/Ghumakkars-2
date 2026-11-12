@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ScrollToTop from "@/components/ScrollToTop";
 import ConditionalFooter from "@/components/ConditionalFooter";
 import { getSiteUrl } from "@/lib/site-url";
 
-const inter = Inter({ subsets: ["latin"] });
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  style: ["normal", "italic"],
+// Fonts live in app/fonts (Latin, variable weight) so builds never depend on Google Fonts being reachable.
+const inter = localFont({
+  src: "./fonts/inter-latin.woff2",
+  weight: "100 900",
+  display: "swap",
+});
+const playfair = localFont({
+  src: [
+    { path: "./fonts/playfair-latin.woff2", weight: "400 900", style: "normal" },
+    { path: "./fonts/playfair-italic-latin.woff2", weight: "400 900", style: "italic" },
+  ],
   variable: "--font-playfair",
   display: "swap",
 });

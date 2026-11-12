@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import { getStatusConfig } from './statusConfig';
 import StatusHero from './StatusHero';
 import BookingSummaryCard, { type PaymentData } from './BookingSummaryCard';
 import BookingActions from './BookingActions';
 
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-jakarta' });
+const jakarta = localFont({ src: '../../app/fonts/jakarta-latin.woff2', weight: '200 800', variable: '--font-jakarta' });
 
 export interface BookingStatusViewProps {
   bookingId: string;
