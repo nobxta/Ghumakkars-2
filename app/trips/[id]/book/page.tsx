@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { ArrowLeft, ArrowRight, Plus, X, User, Mail, Phone, Users, AlertCircle, CreditCard, QrCode, IndianRupee, Save, ChevronDown, ChevronUp, CheckCircle, Check, MapPin, Tag, Lock, Shield, Zap, Headphones, Info, Sparkles } from 'lucide-react';
 import { tripDepartures, formatDeparture } from '@/lib/recurrence';
 import UpiPayButton from '@/components/UpiPayButton';
@@ -18,6 +18,7 @@ import {
   type AddonSelection,
   type TripAddon,
 } from '@/lib/addons';
+import { BookTripSkeleton } from '@/components/ui/Skeleton';
 
 interface Passenger {
   name: string;
@@ -451,7 +452,7 @@ export default function BookTripPage() {
   };
 
   const checkUser = async () => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser } } = await getSessionUser(supabase);
     if (!currentUser) {
       router.push(`/auth/signin?redirect=/trips/${params.id}/book`);
       return;
@@ -1246,11 +1247,7 @@ export default function BookTripPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 md:pt-20 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-3 border-purple-200 border-t-purple-600"></div>
-      </div>
-    );
+    return <BookTripSkeleton />;
   }
 
   if (!trip) {

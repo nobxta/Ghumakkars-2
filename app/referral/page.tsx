@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { ArrowLeft, Gift, Copy, Check, Users, Award, Share2, CheckCircle, Mail, X, User, IndianRupee, TrendingUp, Clock, Sparkles, ArrowRight, ExternalLink, Calendar } from 'lucide-react';
+import { ReferralSkeleton } from '@/components/ui/Skeleton';
 
 export default function ReferralPage() {
   const [user, setUser] = useState<any>(null);
@@ -21,40 +22,40 @@ export default function ReferralPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch referral reward amount
-      try {
-        const rewardResponse = await fetch('/api/referral/reward-amount');
-        if (rewardResponse.ok) {
+      // Reward amounts don't depend on the user — start that request now and
+      // run it alongside the profile + referrals queries instead of before them.
+      const rewardPromise = fetch('/api/referral/reward-amount')
+        .then(async (rewardResponse) => {
+          if (!rewardResponse.ok) return;
           const rewardData = await rewardResponse.json();
           setRewardAmount(rewardData.rewardAmount || 100);
           setFriendRewardAmount(rewardData.friendRewardAmount || 50);
-        }
-      } catch (error) {
-        console.error('Error fetching reward amount:', error);
-      }
+        })
+        .catch((error) => console.error('Error fetching reward amount:', error));
 
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser } } = await getSessionUser(supabase);
       if (!currentUser) {
         router.push('/auth/signin');
         return;
       }
       setUser(currentUser);
 
-      // Fetch profile with referral code
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('referral_code, wallet_balance')
-        .eq('id', currentUser.id)
-        .single();
-      
-      setProfile(profileData);
+      const [{ data: profileData }, { data: referralsData, error: referralsError }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('referral_code, wallet_balance')
+          .eq('id', currentUser.id)
+          .single(),
+        // Referrals carry stored name/email data
+        supabase
+          .from('referrals')
+          .select('*')
+          .eq('referrer_id', currentUser.id)
+          .order('created_at', { ascending: false }),
+        rewardPromise,
+      ]);
 
-      // Fetch referrals (with stored name/email data)
-      const { data: referralsData, error: referralsError } = await supabase
-        .from('referrals')
-        .select('*')
-        .eq('referrer_id', currentUser.id)
-        .order('created_at', { ascending: false });
+      setProfile(profileData);
 
       if (referralsError) {
         console.error('Error fetching referrals:', referralsError);
@@ -97,11 +98,7 @@ export default function ReferralPage() {
   const pendingRewards = referrals.filter(r => r.reward_status === 'pending').length * rewardAmount;
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-600 border-t-transparent"></div>
-      </div>
-    );
+    return <ReferralSkeleton />;
   }
 
   return (

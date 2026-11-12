@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { ArrowLeft, Wallet, Plus, Minus, ArrowUpRight, ArrowDownRight, CreditCard } from 'lucide-react';
+import { WalletSkeleton } from '@/components/ui/Skeleton';
 
 export default function WalletPage() {
   const [user, setUser] = useState<any>(null);
@@ -16,7 +17,7 @@ export default function WalletPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser } } = await getSessionUser(supabase);
       if (!currentUser) {
         router.push('/auth/signin');
         return;
@@ -51,11 +52,7 @@ export default function WalletPage() {
   const walletBalance = profile?.wallet_balance || 0;
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-600 border-t-transparent"></div>
-      </div>
-    );
+    return <WalletSkeleton />;
   }
 
   return (

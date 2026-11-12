@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
@@ -16,6 +16,7 @@ import { moneyOf, seatLockBaseOf } from '@/lib/booking-money';
 import { bookingStatusLabel, paymentStatusLabel, bookingStatusChip, paymentStatusChip, MANUAL_STATUSES, effectiveBookingStatus } from '@/lib/booking-status-labels';
 import AdminBookingAddons from '@/components/admin/AdminBookingAddons';
 import AddonsSummary from '@/components/booking/AddonsSummary';
+import { AdminDetailSkeleton } from '@/components/ui/Skeleton';
 
 export default function AdminBookingDetailsPage() {
   const params = useParams();
@@ -197,7 +198,7 @@ export default function AdminBookingDetailsPage() {
   }, [booking?.id]);
 
   const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getSessionUser(supabase);
     if (!user) {
       router.push('/auth/signin?redirect=/admin/bookings');
       return;
@@ -328,14 +329,7 @@ export default function AdminBookingDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
-          <p className="text-purple-600 font-medium">Loading booking details...</p>
-        </div>
-      </div>
-    );
+    return <AdminDetailSkeleton label="Loading booking" />;
   }
 
   if (error && !booking) {

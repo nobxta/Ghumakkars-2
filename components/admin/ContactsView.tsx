@@ -6,6 +6,7 @@ import {
   MessageCircle, Pencil, Phone, Plus, Search, Siren, Star, StickyNote, Store, Trash2, UserCheck, X,
 } from 'lucide-react';
 import { CONTACT_CATEGORIES, phoneDigits, type AdminContact, type ContactCategory } from '@/lib/admin-contacts';
+import { AdminListSkeleton } from '@/components/ui/Skeleton';
 
 export interface TripOption { id: string; title: string; destination?: string | null }
 export type ContactDraft = Omit<AdminContact, 'id' | 'created_at' | 'updated_at'>;
@@ -151,14 +152,7 @@ export default function ContactsView({ contacts, trips, loading, onSave, onDelet
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh] bg-[#F7F8FC]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#E7E8EE] border-t-[#8758F6] mx-auto"></div>
-          <p className="mt-4 text-sm text-[#666873] font-medium">Loading contacts...</p>
-        </div>
-      </div>
-    );
+    return <AdminListSkeleton label="Loading contacts" stats={0} />;
   }
 
   const selectClass = 'h-10 rounded-xl border border-[#E7E8EE] bg-white px-3 text-sm text-[#17171C] outline-none transition focus:border-[#8758F6] focus:ring-4 focus:ring-[#8758F6]/10';

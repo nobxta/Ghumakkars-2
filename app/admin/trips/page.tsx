@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Plus, Edit, Trash2, MapPin, Calendar, Users, IndianRupee, Link as LinkIcon, CheckCircle, XCircle, Clock, Send, Ban, DollarSign, MoreVertical, X, Eye, EyeOff, Star } from 'lucide-react';
 import Link from 'next/link';
 import { moneyOf } from '@/lib/booking-money';
+import { AdminListSkeleton } from '@/components/ui/Skeleton';
 
 interface Trip {
   id: string;
@@ -470,14 +471,7 @@ export default function AdminTripsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-lg text-purple-600 tracking-wide font-medium">Loading trips...</p>
-        </div>
-      </div>
-    );
+    return <AdminListSkeleton label="Loading trips" stats={4} rows={6} />;
   }
 
   return (

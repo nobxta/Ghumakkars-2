@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, MapPin, User, Wallet, Calendar } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 
 export default function BottomNav() {
   const [user, setUser] = useState<any>(null);
@@ -13,7 +13,7 @@ export default function BottomNav() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSessionUser(supabase);
       setUser(user);
     };
 

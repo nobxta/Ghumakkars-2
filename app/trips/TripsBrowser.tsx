@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { IMG } from '@/lib/image';
 import { formatDeparture } from '@/lib/recurrence';
 import { upcomingDepartures, todayInIndia } from '@/lib/trip-dates';
@@ -86,7 +86,7 @@ export default function TripsBrowser({
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
+    getSessionUser(supabase).then(({ data }) => {
       if (active) setUser(data.user);
     });
     return () => {

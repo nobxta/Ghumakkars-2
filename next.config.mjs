@@ -29,17 +29,15 @@ const nextConfig = {
       // Production chunk names are content-hashed, so caching forever is safe.
       // In `next dev` the names never change, so this would pin stale JS in
       // the browser and cause hydration mismatches after every edit.
+      // (A dev-only `Clear-Site-Data: "cache"` rule used to live here. It wiped
+      // the browser cache on every page load, so every navigation in dev
+      // re-downloaded all JS/CSS/fonts/images — removed.)
       ...(process.env.NODE_ENV === 'production'
         ? [{
             source: '/_next/static/:path*',
             headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
           }]
-        : [{
-            // Dev only: purge JS that browsers pinned under the old year-long
-            // cache rule above, so they stop hydrating with stale code.
-            source: '/((?!_next/|api/).*)',
-            headers: [{ key: 'Clear-Site-Data', value: '"cache"' }],
-          }]),
+        : []),
     ];
   },
 };

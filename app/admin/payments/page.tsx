@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Bone } from '@/components/ui/Skeleton';
 import {
   Search, Filter, IndianRupee, CreditCard, RefreshCcw, Eye, X, Check,
   CheckCircle2, AlertCircle, Clock, ArrowLeft, Copy, Download, ExternalLink
@@ -334,7 +335,21 @@ export default function AdminPaymentsPage() {
         {/* Table (desktop) / cards (mobile) */}
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
           {loading ? (
-            <div className="p-10 text-center text-gray-500">Loading…</div>
+            <div className="divide-y divide-gray-100" role="status" aria-busy="true">
+              <span className="sr-only">Loading payments</span>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+                  <Bone className="h-9 w-9 rounded-full flex-shrink-0" tone="purple" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <Bone className="h-3.5 w-2/5" />
+                    <Bone className="h-3 w-1/4" tone="soft" />
+                  </div>
+                  <Bone className="hidden sm:block h-3.5 w-20" tone="soft" />
+                  <Bone className="h-4 w-16" />
+                  <Bone className="h-6 w-20 rounded-full" tone="soft" />
+                </div>
+              ))}
+            </div>
           ) : payments.length === 0 ? (
             <div className="p-10 text-center text-gray-500">No payments match these filters.</div>
           ) : (
@@ -441,9 +456,19 @@ export default function AdminPaymentsPage() {
             </div>
 
             {!detail ? (
-              <div className="p-10 text-center text-gray-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-purple-200 border-t-purple-600 mx-auto mb-3"></div>
-                Loading details…
+              <div className="p-4 sm:p-6 space-y-5" role="status" aria-busy="true">
+                <span className="sr-only">Loading details</span>
+                <div className="rounded-2xl border border-gray-100 p-5 space-y-3">
+                  <Bone className="h-3.5 w-24" tone="soft" />
+                  <Bone className="h-9 w-40" />
+                  <Bone className="h-6 w-24 rounded-full" tone="purple" />
+                </div>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex justify-between gap-4">
+                    <Bone className="h-3.5 w-1/3" tone="soft" />
+                    <Bone className="h-3.5 w-1/4" />
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="p-4 sm:p-6 space-y-5">

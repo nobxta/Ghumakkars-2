@@ -9,6 +9,7 @@ import { customerBookingStatus } from '@/lib/booking-status-labels';
 import { isPendingCashBooking, moneyOf, pendingCashOf } from '@/lib/booking-money';
 import BookingStatusView from '@/components/booking-status/BookingStatusView';
 import type { PaymentData } from '@/components/booking-status/BookingSummaryCard';
+import { BookingSuccessSkeleton } from '@/components/ui/Skeleton';
 
 interface Booking {
   id: string;
@@ -71,14 +72,7 @@ export default function BookingSuccessPage() {
   }, [bookingId, supabase]);
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f9f9ff]">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
-          <p className="font-medium text-blue-600">Loading your booking...</p>
-        </div>
-      </div>
-    );
+    return <BookingSuccessSkeleton />;
   }
 
   if (!booking) {

@@ -13,3 +13,21 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey)
 }
 
+
+/**
+ * Who is signed in, read from the locally stored session — no network call.
+ *
+ * `auth.getUser()` makes a round trip to Supabase Auth on every call, and the
+ * navbar, bottom nav and page each did it on every page load, which stalled
+ * every data fetch behind 2–3 extra requests. For UI decisions (show/hide,
+ * redirect to sign-in, filter by user id) the local session is enough: RLS and
+ * the API routes still verify the JWT on the server for every real read/write.
+ *
+ * Returns the same `{ data: { user } }` shape as `auth.getUser()`.
+ */
+export async function getSessionUser(client: ReturnType<typeof createClient> = createClient()) {
+  const {
+    data: { session },
+  } = await client.auth.getSession()
+  return { data: { user: session?.user ?? null } }
+}

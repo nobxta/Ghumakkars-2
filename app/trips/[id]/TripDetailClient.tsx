@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { IMG } from '@/lib/image';
 import { getSiteUrl } from '@/lib/site-url';
 import { scheduleLabel } from '@/lib/recurrence';
@@ -82,7 +82,7 @@ export default function TripDetailClient({ trip }: { trip: Trip }) {
   }, []);
 
   const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getSessionUser(supabase);
     setUser(user);
   };
 

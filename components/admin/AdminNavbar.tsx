@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import {
   MapPin,
   LogOut,
@@ -55,7 +55,7 @@ export default function AdminNavbar({ onMenuToggle, isCollapsed = false }: Admin
     (async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } = await getSessionUser(supabase);
       if (cancelled || !user) return;
       setEmail(user.email || '');
       const { data } = await supabase

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   CreditCard, IndianRupee, Lock, CheckCircle,
@@ -18,6 +18,7 @@ import UpiPayButton from '@/components/UpiPayButton';
 import AddonsSummary from '@/components/booking/AddonsSummary';
 import { calcLabelFromRow } from '@/lib/addons';
 import { upiNote } from '@/lib/upi';
+import { BookingDetailSkeleton } from '@/components/ui/Skeleton';
 
 interface Trip {
   id: string;
@@ -99,7 +100,7 @@ export default function BookingDetailsPage() {
   }, [toast]);
 
   const checkUser = async () => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser } } = await getSessionUser(supabase);
     if (!currentUser) {
       router.push(`/auth/signin?redirect=/bookings/${params.id}`);
       return;
@@ -150,7 +151,7 @@ export default function BookingDetailsPage() {
       if (error) throw error;
       
       // Verify user owns this booking
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser } } = await getSessionUser(supabase);
       if (data.user_id !== currentUser?.id) {
         setError('Unauthorized access');
         return;
@@ -274,14 +275,7 @@ export default function BookingDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center bg-gradient-to-b from-purple-50/50 via-white to-purple-50/30">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
-          <p className="text-purple-600 font-medium">Loading booking details...</p>
-        </div>
-      </div>
-    );
+    return <BookingDetailSkeleton />;
   }
 
   if (error && !booking) {

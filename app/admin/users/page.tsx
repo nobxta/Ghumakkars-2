@@ -28,6 +28,7 @@ import {
   IndianRupee,
 } from 'lucide-react';
 import styles from './users-page.module.css';
+import { AdminListSkeleton } from '@/components/ui/Skeleton';
 
 const PAGE_SIZE = 20;
 
@@ -414,23 +415,7 @@ export default function AdminUsersPage() {
 
   // Loading view
   if (loading) {
-    return (
-      <div
-        className={`admin-users-page ${styles.pageRoot} -m-4 sm:-m-6 min-h-[calc(100vh-3.5rem)] bg-[#F8F9FC] p-4 sm:p-6 lg:p-8 flex items-center justify-center`}
-      >
-        <div className="text-center p-8 bg-white rounded-2xl border border-[#E8EAF0] shadow-sm max-w-sm w-full">
-          <div
-            className="animate-spin rounded-full h-10 w-10 border-[3px] border-[#F3E8FF] border-t-[#7C3AED] mx-auto"
-            role="status"
-            aria-label="Loading registered users"
-          />
-          <p className="mt-4 text-[14px] font-semibold text-[#171923]">Loading registered users</p>
-          <p className="mt-1 text-[12px] text-[#64748B]">
-            Syncing customer accounts and bookings...
-          </p>
-        </div>
-      </div>
-    );
+    return <div className="-m-4 sm:-m-6 min-h-[calc(100vh-3.5rem)] bg-[#F8F9FC] p-4 sm:p-6 lg:p-8"><AdminListSkeleton label="Loading users" /></div>;
   }
 
   // Error state

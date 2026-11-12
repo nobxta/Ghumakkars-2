@@ -100,5 +100,5 @@ export function Sparkline({ values, color = '#7C3AED', height = 28 }: { values: 
 }
 
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-slate-100 ${className}`} />;
+  return <div className={`sk sk-soft rounded-md ${className}`} />;
 }

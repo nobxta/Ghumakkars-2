@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { Tag, Plus, X, Save, Calendar, MapPin, Users, Clock, Filter, Percent, DollarSign, CreditCard } from 'lucide-react';
+import { AdminListSkeleton } from '@/components/ui/Skeleton';
 
 export default function AdminCouponsPage() {
   const supabase = createClient();
@@ -103,7 +104,7 @@ export default function AdminCouponsPage() {
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSessionUser(supabase);
 
       const couponData: any = {
         code: couponForm.code.toUpperCase().trim(),
@@ -220,11 +221,7 @@ export default function AdminCouponsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600"></div>
-      </div>
-    );
+    return <AdminListSkeleton label="Loading coupons" />;
   }
 
   return (

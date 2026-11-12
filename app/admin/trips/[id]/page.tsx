@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import type { jsPDF as JsPdfType } from 'jspdf';
 
 // jsPDF + autotable are ~100kB. They are only needed when an admin clicks a
@@ -28,6 +28,7 @@ import {
 import { tripDepartures, scheduleLabel, formatDeparture, toDateString } from '@/lib/recurrence';
 import { moneyOf } from '@/lib/booking-money';
 import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
+import { AdminDetailSkeleton } from '@/components/ui/Skeleton';
 
 // Byte-order mark so Excel opens UTF-8 CSVs correctly (otherwise ₹ shows as â‚¹).
 const BOM = '\uFEFF';
@@ -69,7 +70,7 @@ export default function AdminTripDetailsPage() {
   }, [params.id]);
 
   const checkUser = async () => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser } } = await getSessionUser(supabase);
     if (!currentUser) {
       router.push('/auth/signin?redirect=/admin/trips');
       return;
@@ -900,14 +901,7 @@ export default function AdminTripDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
-          <p className="text-purple-600 font-medium">Loading trip details...</p>
-        </div>
-      </div>
-    );
+    return <AdminDetailSkeleton label="Loading trip" />;
   }
 
   if (error && !trip) {

@@ -21,6 +21,7 @@ import {
 } from './state';
 import { StepBasics, StepDates, StepExtras, StepItinerary, StepPhotos, StepPricing, type Patch, type StepProps } from './steps';
 import { Toast, type ToastData } from './ui';
+import { AdminFormSkeleton } from '@/components/ui/Skeleton';
 
 const AUTOSAVE_KEY = 'ghumakkars:trip-form:create';
 const LAST = STEPS.length;
@@ -360,14 +361,7 @@ export default function TripForm({ mode, tripId }: { mode: 'create' | 'edit'; tr
 
   /* ───────────── Render ───────────── */
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-purple-600" />
-          <p className="mt-3 text-sm font-medium text-gray-500">Loading trip…</p>
-        </div>
-      </div>
-    );
+    return <AdminFormSkeleton label="Loading trip" />;
   }
 
   if (loadError) {

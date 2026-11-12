@@ -34,10 +34,27 @@ export async function requireAuth(): Promise<
 export async function requireAdmin(): Promise<
   { user: User; profile: { role: string } } | NextResponse
 > {
+  const supabase = await createClient();
+
+  // Fast path: this exact access token was verified as an admin moments ago.
+  // Every admin page fires several API calls at once, and each one used to do
+  // two sequential round trips (Auth getUser + profiles role) before any real
+  // work. The key is the full token string that getUser() already accepted,
+  // so a forged or different token never matches.
+  const {
+    data: { session: cookieSession },
+  } = await supabase.auth.getSession();
+  const token = cookieSession?.access_token;
+  if (token) {
+    const hit = adminTokenCache.get(token);
+    if (hit && hit.expires > Date.now()) {
+      return { user: hit.user, profile: { role: 'admin' } };
+    }
+  }
+
   const session = await requireAuth();
   if (session instanceof NextResponse) return session;
 
-  const supabase = await createClient();
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
@@ -51,8 +68,21 @@ export async function requireAdmin(): Promise<
     );
   }
 
+  if (token) {
+    if (adminTokenCache.size > 200) {
+      const now = Date.now();
+      adminTokenCache.forEach((v, k) => { if (v.expires <= now) adminTokenCache.delete(k); });
+      if (adminTokenCache.size > 200) adminTokenCache.clear();
+    }
+    adminTokenCache.set(token, { user: session.user, expires: Date.now() + ADMIN_CACHE_MS });
+  }
+
   return { user: session.user, profile };
 }
+
+/** How long a verified admin token skips re-verification (sign-out / demotion lag at most this). */
+const ADMIN_CACHE_MS = 30_000;
+const adminTokenCache = new Map<string, { user: User; expires: number }>();
 
 /**
  * Check if request is from internal server (e.g. webhook calling send-notification).

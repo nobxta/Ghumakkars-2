@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { User, Calendar, Settings, Gift, Wallet, ArrowRight, Mail, Phone, MapPin } from 'lucide-react';
+import { ProfileSkeleton } from '@/components/ui/Skeleton';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -15,7 +16,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSessionUser(supabase);
       if (!user) {
         router.push('/auth/signin');
         return;
@@ -37,11 +38,7 @@ export default function ProfilePage() {
   }, [router, supabase]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 md:pt-20 pb-16 md:pb-0 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-600 border-t-transparent"></div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   const menuItems = [

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { MapPin, Menu, X, LogOut, User, Calendar, Settings, Gift, Wallet, ChevronDown, Sparkles } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,7 +18,7 @@ export default function Navbar() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSessionUser(supabase);
       setUser(user);
     };
 

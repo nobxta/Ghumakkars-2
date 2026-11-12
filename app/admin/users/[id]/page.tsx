@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import {
   Activity,
   AlertCircle,
@@ -357,7 +357,7 @@ export default function AdminUserDetailsPage() {
   }, [showMoreMenu]);
 
   const checkUser = async () => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser } } = await getSessionUser(supabase);
     if (!currentUser) {
       router.push('/auth/signin?redirect=/admin/users');
       return;

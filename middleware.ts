@@ -62,12 +62,18 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // getSession() reads the cookie locally and only hits Supabase Auth when the
+  // access token has expired and must be refreshed. getUser() would add a
+  // network round trip to EVERY request (pages, API calls, RSC fetches),
+  // which made every page slow. The real authorization still happens later:
+  // app/admin/layout.tsx verifies the user + admin role with getUser(), and
+  // API routes verify the JWT themselves.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   // Protect /admin: no session → redirect to home (no admin UI or copy ever sent)
-  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
+  if (request.nextUrl.pathname.startsWith('/admin') && !session) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
@@ -83,7 +89,7 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)',
   ],
 }
 

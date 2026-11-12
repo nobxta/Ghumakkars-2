@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getSessionUser } from '@/lib/supabase/client';
 import { seatLockBaseOf } from '@/lib/booking-money';
 import {
   Calendar, ArrowLeft, MapPin, Clock, Users, Package, IndianRupee,
   Tag, CheckCircle, AlertCircle, ArrowRight, Eye, Lock, XCircle,
   CreditCard, Filter, ChevronRight, Wallet
 } from 'lucide-react';
+import { BookingsListSkeleton } from '@/components/ui/Skeleton';
 
 interface Booking {
   id: string;
@@ -52,7 +53,7 @@ export default function BookingsPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data: { user: currentUser } } = await getSessionUser(supabase);
       if (!currentUser) {
         router.push('/auth/signin?redirect=/bookings');
         return;
@@ -124,11 +125,7 @@ export default function BookingsPage() {
   const formatShortDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-16 pb-20 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-600 border-t-transparent"></div>
-      </div>
-    );
+    return <BookingsListSkeleton />;
   }
 
   return (

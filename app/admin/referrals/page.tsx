@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Users, Award, Gift, TrendingUp, CheckCircle, Clock, XCircle, Mail, Phone, Calendar, X, User } from 'lucide-react';
+import { AdminListSkeleton } from '@/components/ui/Skeleton';
 
 export default function AdminReferralsPage() {
   const router = useRouter();
@@ -185,14 +186,7 @@ export default function AdminReferralsPage() {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto"></div>
-          <p className="mt-4 text-lg text-purple-600 tracking-wide font-medium">Loading referrals...</p>
-        </div>
-      </div>
-    );
+    return <AdminListSkeleton label="Loading referrals" />;
   }
 
   return (
