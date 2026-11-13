@@ -40,6 +40,7 @@ import {
   Wallet,
   X,
   XCircle,
+  UserRound,
 } from 'lucide-react';
 
 type EmailAttachment = { id: string; name: string; type: string; size: number; content: string };
@@ -82,12 +83,6 @@ function displayValue(value: unknown) {
 
 function getFullName(user: any) {
   return String(user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'Unnamed user');
-}
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return 'U';
-  return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0].slice(0, 2)).toUpperCase();
 }
 
 function maskAadhaar(value: string | null | undefined) {
@@ -769,7 +764,6 @@ export default function AdminUserDetailsPage() {
   if (!user) return null;
 
   const fullName = getFullName(user);
-  const initials = getInitials(fullName);
   const userIdShort = user.id ? String(user.id).slice(0, 8).toUpperCase() : 'UNKNOWN';
   const remainingPaymentBookings = getBookingsWithRemainingPayment();
 
@@ -784,7 +778,7 @@ export default function AdminUserDetailsPage() {
         <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#E8EAF0] text-base font-bold text-[#273144]">
-              {user.avatar_url ? <img src={user.avatar_url} alt={fullName} className="h-full w-full object-cover" /> : initials}
+              {user.avatar_url ? <img src={user.avatar_url} alt={fullName} referrerPolicy="no-referrer" className="h-full w-full object-cover" /> : <UserRound className="h-7 w-7 text-[#8A90A2]" aria-hidden="true" />}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -1057,7 +1051,7 @@ export default function AdminUserDetailsPage() {
         >
           <div className="space-y-5">
             <div className="flex items-center gap-3 rounded-xl border border-[#E7E8EE] bg-[#FAFAFD] px-4 py-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EDE7FF] text-sm font-bold text-[#7040DD]">{getInitials(fullName)}</div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EDE7FF] text-sm font-bold text-[#7040DD]">{user.avatar_url ? <img src={user.avatar_url} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover" /> : <UserRound className="h-5 w-5" aria-hidden="true" />}</div>
               <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#17171C]">{fullName}</p><p className="truncate text-xs text-[#666873]">{user.email}</p></div>
               <Badge className="ml-auto border-green-200 bg-green-50 text-green-700">Recipient</Badge>
             </div>

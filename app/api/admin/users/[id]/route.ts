@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
+import { authAvatarUrl } from '@/lib/auth-avatar';
 import { adjustTripSeats, occupiesSeat } from '@/lib/booking-admin-sync';
 
 export const runtime = "nodejs";
@@ -84,7 +85,9 @@ export async function GET(
     }
 
     return NextResponse.json({
-      user: userProfile,
+      user: userProfile.avatar_url
+        ? userProfile
+        : { ...userProfile, avatar_url: authAvatarUrl(authUser) },
       authUser,
       bookings: bookings || [],
       activities: activities || [],

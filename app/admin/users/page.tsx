@@ -26,6 +26,7 @@ import {
   Phone,
   Ticket,
   IndianRupee,
+  UserRound,
 } from 'lucide-react';
 import styles from './users-page.module.css';
 import { AdminListSkeleton } from '@/components/ui/Skeleton';
@@ -66,15 +67,6 @@ function getUserName(user: UserProfile): string {
     return parts.join(' ');
   }
   return 'Unnamed User';
-}
-
-function getInitials(name: string): string {
-  if (!name || name === 'Unnamed User') return 'U';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length > 1) {
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
 }
 
 function formatRegistrationDate(date: string | null | undefined): string {
@@ -891,7 +883,6 @@ export default function AdminUsersPage() {
                   bookingCounts[user.id] ?? user.booking_count ?? user.bookings_count ?? 0;
                 const spending =
                   userSpendings[user.id] ?? user.total_spent ?? user.spending ?? 0;
-                const initials = getInitials(name);
                 const isMenuOpen = activeMenuId === user.id;
 
                 return (
@@ -904,17 +895,17 @@ export default function AdminUsersPage() {
                     <td className="px-5 py-2">
                       <div className="flex items-center gap-3">
                         <div className="relative w-9 h-9 rounded-full shrink-0 bg-[#F3E8FF] text-[#7C3AED] flex items-center justify-center font-semibold text-[13px] border border-[#E9D5FF] overflow-hidden">
-                          {user.avatar_url ? (
+                          <UserRound className="w-[18px] h-[18px]" aria-hidden="true" />
+                          {user.avatar_url && (
                             <img
                               src={user.avatar_url}
                               alt=""
-                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              className="absolute inset-0 w-full h-full object-cover"
                               onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).style.display = 'none';
                               }}
                             />
-                          ) : (
-                            <span>{initials}</span>
                           )}
                         </div>
                         <div className="min-w-0">
@@ -1086,7 +1077,6 @@ export default function AdminUsersPage() {
               bookingCounts[user.id] ?? user.booking_count ?? user.bookings_count ?? 0;
             const spending =
               userSpendings[user.id] ?? user.total_spent ?? user.spending ?? 0;
-            const initials = getInitials(name);
             const isMenuOpen = activeMenuId === user.id;
 
             return (
@@ -1098,18 +1088,18 @@ export default function AdminUsersPage() {
                 {/* Top Row: Avatar + Name & Email */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full shrink-0 bg-[#F3E8FF] text-[#7C3AED] flex items-center justify-center font-semibold text-[14px] border border-[#E9D5FF] overflow-hidden">
-                      {user.avatar_url ? (
+                    <div className="relative w-10 h-10 rounded-full shrink-0 bg-[#F3E8FF] text-[#7C3AED] flex items-center justify-center font-semibold text-[14px] border border-[#E9D5FF] overflow-hidden">
+                      <UserRound className="w-5 h-5" aria-hidden="true" />
+                      {user.avatar_url && (
                         <img
                           src={user.avatar_url}
                           alt=""
-                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          className="absolute inset-0 w-full h-full object-cover"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).style.display = 'none';
                           }}
                         />
-                      ) : (
-                        <span>{initials}</span>
                       )}
                     </div>
                     <div className="min-w-0">
