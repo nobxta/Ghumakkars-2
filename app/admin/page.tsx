@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { Plus, RefreshCw, Wallet, Clock, Ticket, UserPlus, Activity, BarChart3, ArrowRight, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, Delta, Sparkline, Skeleton, inr, inrShort, timeAgo } from '@/components/admin/dashboard/utils';
+import { Plus, RefreshCw, AlertCircle } from 'lucide-react';
+import { Skeleton, timeAgo } from '@/components/admin/dashboard/utils';
 import ActionInbox, { type InboxData } from '@/components/admin/dashboard/ActionInbox';
 import DeparturesBoard, { type Departure } from '@/components/admin/dashboard/DeparturesBoard';
 import LiveActivity from '@/components/admin/dashboard/LiveActivity';
+import { RevenueCard, MoneyHealth, BookingFunnel, TopTrips, PaymentDonut, AudienceCard, BookingHeatmap } from '@/components/admin/dashboard/Insights';
 import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 
 type RangePreset = '1d' | '1w' | '1m' | '3m' | 'custom';
@@ -118,8 +118,12 @@ export default function AdminDashboard() {
             <button onClick={() => load()} className="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">Retry</button>
           </div>
         ) : <Skeleton className="h-28 w-full rounded-xl" />}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
-        <div className="grid gap-3 lg:grid-cols-12"><Skeleton className="h-80 rounded-xl lg:col-span-8" /><Skeleton className="h-80 rounded-xl lg:col-span-4" /></div>
+        <div className="grid gap-3 lg:grid-cols-12">
+          <div className="space-y-3 lg:col-span-8"><Skeleton className="h-[300px] rounded-xl" /><Skeleton className="h-40 rounded-xl" /></div>
+          <div className="space-y-3 lg:col-span-4"><Skeleton className="h-48 rounded-xl" /><Skeleton className="h-[244px] rounded-xl" /></div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-72 rounded-xl" />)}</div>
+        <div className="grid gap-3 lg:grid-cols-12"><Skeleton className="h-64 rounded-xl lg:col-span-5" /><Skeleton className="h-64 rounded-xl lg:col-span-7" /></div>
       </div>
     );
   }
@@ -133,9 +137,6 @@ export default function AdminDashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
   const needs = inbox.approvals.length + inbox.cashPending.length + inbox.dueSoon.length;
-  const expected = (d.collected || 0) + (d.outstanding || 0);
-  const collectedPct = expected > 0 ? Math.round((d.collected / expected) * 100) : 0;
-  const statusTotal = (period.confirmed || 0) + (period.seatLocked || 0) + (period.pending || 0) || 1;
   const rangeLong = RANGE_LONG[range];
 
   return (
@@ -190,143 +191,61 @@ export default function AdminDashboard() {
       {/* ── Action inbox ── */}
       <ActionInbox inbox={inbox} unresolvedErrors={d.unresolvedErrors || 0} onReview={openReview} onRemind={remind} />
 
-      {/* ── KPI strip (period-scoped, with trend vs previous period) ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi
-          icon={<Wallet className="h-3.5 w-3.5" />}
-          label="Collected"
-          value={inrShort(period.collected)}
-          title={inr(period.collected)}
-          delta={<Delta cur={period.collected || 0} prev={prev.collected || 0} />}
-          spark={<Sparkline values={series.map((s) => s.collected)} color="#059669" />}
-        />
-        <Kpi
-          icon={<Clock className="h-3.5 w-3.5" />}
-          label="Pending dues"
-          value={inrShort(d.outstanding)}
-          title={inr(d.outstanding)}
-          valueClass={d.outstanding > 0 ? 'text-amber-600' : undefined}
-          delta={<span className="text-[11px] text-slate-500">{d.outstandingBookings || 0} booking{d.outstandingBookings === 1 ? '' : 's'} · all time</span>}
-          spark={
-            <div className="pt-2.5">
-              <div className="mb-1 flex justify-between text-[10px] text-slate-400"><span>{collectedPct}% collected</span><span title={inr(expected)}>of {inrShort(expected)}</span></div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${collectedPct}%` }} /></div>
-            </div>
-          }
-        />
-        <Kpi
-          icon={<Ticket className="h-3.5 w-3.5" />}
-          label="Bookings"
-          value={String(period.bookings || 0)}
-          sub={`${period.travellers || 0} travellers`}
-          delta={<Delta cur={period.bookings || 0} prev={prev.bookings || 0} />}
-          spark={
-            <div className="pt-2.5">
-              <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="bg-emerald-500" style={{ width: `${((period.confirmed || 0) / statusTotal) * 100}%` }} />
-                <div className="bg-amber-400" style={{ width: `${((period.seatLocked || 0) / statusTotal) * 100}%` }} />
-                <div className="bg-slate-300" style={{ width: `${((period.pending || 0) / statusTotal) * 100}%` }} />
-              </div>
-              <div className="mt-1 flex gap-2.5 text-[10px] text-slate-500">
-                <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{period.confirmed || 0} conf.</span>
-                <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-amber-400" />{period.seatLocked || 0} locked</span>
-                <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-slate-300" />{period.pending || 0} pend.</span>
-              </div>
-            </div>
-          }
-        />
-        <Kpi
-          icon={<UserPlus className="h-3.5 w-3.5" />}
-          label="New users"
-          value={(period.newUsers || 0).toLocaleString('en-IN')}
-          sub={`${(d.totalUsers || 0).toLocaleString('en-IN')} total`}
-          delta={<Delta cur={period.newUsers || 0} prev={prev.newUsers || 0} />}
-          spark={<Sparkline values={series.map((s) => s.users)} color="#7C3AED" />}
-        />
-      </div>
-
-      {/* ── Main grid: departures │ today + at a glance ── */}
-      <div className="grid items-start gap-3 lg:grid-cols-12">
-        <div className="min-w-0 lg:col-span-8">
+      {/* ── Row 1: revenue curve │ money health + live feed (fills to the left column's height) ── */}
+      <div className="grid gap-3 lg:grid-cols-12">
+        <div className="min-w-0 space-y-3 lg:col-span-8">
+          <RevenueCard
+            collected={period.collected || 0}
+            prevCollected={prev.collected || 0}
+            series={series}
+            prevSeries={d.prevSeries || []}
+            avgBookingValue={d.avgBookingValue || 0}
+            rangeLabel={rangeLong}
+          />
           <DeparturesBoard departures={departures} onRemind={remind} />
         </div>
-
-        <aside className="space-y-3 lg:col-span-4">
-          <Card>
-            <CardHeader icon={<Activity className="h-4 w-4" />} title="Today" />
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-b-xl bg-slate-100 [&>*]:bg-white">
-              <MiniStat label="Collected" value={inrShort(d.collectedToday)} title={inr(d.collectedToday)} tone={d.collectedToday > 0 ? 'text-emerald-700' : undefined} />
-              <MiniStat label="New bookings" value={d.newBookingsToday || 0} />
-              <MiniStat label="New users" value={d.newUsersToday || 0} />
-              <MiniStat label="To review" value={inbox.approvals.length} tone={inbox.approvals.length > 0 ? 'text-amber-600' : undefined} />
-            </div>
-          </Card>
-
-          <LiveActivity />
-
-          <Card>
-            <CardHeader
-              icon={<BarChart3 className="h-4 w-4" />}
-              title="At a glance"
-              right={<Link href="/admin/analytics" className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700">Analytics <ArrowRight className="h-3 w-3" /></Link>}
-            />
-            <div className="divide-y divide-slate-100 text-[13px]">
-              <GlanceRow label="Collected (all time)" value={inr(d.collected)} />
-              <GlanceRow label="This week" value={inr(d.collectedThisWeek)} />
-              {(d.partnerCommission || 0) > 0 && <GlanceRow label="Partner commission" value={inr(d.partnerCommission)} tone="text-violet-700" />}
-              <GlanceRow label="Active trips" value={d.activeTrips} href="/admin/trips" />
-              <GlanceRow label="Active bookings" value={d.activeBookings} href="/admin/bookings" />
-              <GlanceRow label="Verified users" value={`${(d.verifiedUsers || 0).toLocaleString('en-IN')} / ${(d.totalUsers || 0).toLocaleString('en-IN')}`} href="/admin/users" />
-            </div>
-          </Card>
+        <aside className="flex flex-col gap-3 lg:col-span-4">
+          <MoneyHealth
+            collected={d.collected || 0}
+            outstanding={d.outstanding || 0}
+            outstandingBookings={d.outstandingBookings || 0}
+            partnerCommission={d.partnerCommission || 0}
+          />
+          <div className="relative min-h-[320px] flex-1">
+            <LiveActivity className="lg:absolute lg:inset-0" />
+          </div>
         </aside>
       </div>
 
-      <p className="pt-1 text-center text-[11px] text-slate-400">Activity figures cover {rangeLong} and compare with the period just before it. Pending dues are all-time.</p>
-    </div>
-  );
-}
-
-/* ───────────────────────────── Small pieces ───────────────────────────── */
-
-function Kpi({ icon, label, value, title, sub, delta, spark, valueClass }: {
-  icon: React.ReactNode; label: string; value: string; title?: string; sub?: string;
-  delta: React.ReactNode; spark: React.ReactNode; valueClass?: string;
-}) {
-  return (
-    <Card className="flex flex-col p-3.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-        <span className="text-slate-400">{icon}</span>{label}
+      {/* ── Row 2: three different lenses on sales ── */}
+      <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <BookingFunnel
+          pipeline={d.pipeline || { pending: 0, seatLocked: 0, confirmed: 0, completed: 0, referred: 0, cancelled: 0, total: 0 }}
+          travellers={period.travellers || 0}
+          bookings={period.bookings || 0}
+          prevBookings={prev.bookings || 0}
+        />
+        <TopTrips trips={d.topTrips || []} />
+        <PaymentDonut mix={d.paymentMix || []} />
       </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <p className={`text-[22px] font-bold leading-tight text-slate-900 ${valueClass || ''}`} title={title}>{value}</p>
-        {sub && <span className="truncate text-[11px] text-slate-400">{sub}</span>}
+
+      {/* ── Row 3: people ── */}
+      <div className="grid items-stretch gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <AudienceCard
+            newUsers={period.newUsers || 0}
+            prevNewUsers={prev.newUsers || 0}
+            totalUsers={d.totalUsers || 0}
+            verifiedUsers={d.verifiedUsers || 0}
+            series={series}
+          />
+        </div>
+        <div className="lg:col-span-7">
+          <BookingHeatmap heat={d.bookingHeat || []} />
+        </div>
       </div>
-      <div className="mt-0.5">{delta}</div>
-      <div className="mt-auto pt-1.5">{spark}</div>
-    </Card>
-  );
-}
 
-function MiniStat({ label, value, title, tone }: { label: string; value: React.ReactNode; title?: string; tone?: string }) {
-  return (
-    <div className="px-4 py-3">
-      <p className="text-[11px] text-slate-500">{label}</p>
-      <p className={`mt-0.5 text-lg font-bold leading-tight ${tone || 'text-slate-900'}`} title={title}>{value}</p>
+      <p className="pt-1 text-center text-[11px] text-slate-400">Figures cover {rangeLong} and compare with the period just before it. Money health and dues are all-time.</p>
     </div>
-  );
-}
-
-function GlanceRow({ label, value, href, tone }: { label: string; value: React.ReactNode; href?: string; tone?: string }) {
-  const inner = (
-    <>
-      <span className="text-slate-500">{label}</span>
-      <span className={`font-semibold ${tone || 'text-slate-900'}`}>{value}</span>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="flex items-center justify-between px-4 py-2 transition-colors hover:bg-slate-50">{inner}</Link>
-  ) : (
-    <div className="flex items-center justify-between px-4 py-2">{inner}</div>
   );
 }

@@ -236,6 +236,104 @@ export async function GET(req: Request) {
     .filter((d) => d.daysAway <= 7 && d.capacity > 0 && d.pax / d.capacity < 0.4)
     .map((d) => ({ kind: 'lowfill' as const, tripId: d.tripId, trip: d.title, departure: d.date, daysAway: d.daysAway, pax: d.pax, capacity: d.capacity }));
 
+  // ── Top trips in the period (by money collected in it) ──
+  const tripAgg = new Map<string, { tripId: string; title: string; cover: string | null; bookings: number; travellers: number; collected: number; due: number }>();
+  const tripRow = (id: string, b?: any) => {
+    let g = tripAgg.get(id);
+    if (!g) {
+      const t = tripById.get(id);
+      g = { tripId: id, title: t?.title || (b && tripOf(b)?.title) || 'Trip', cover: t?.cover_image_url || t?.image_url || null, bookings: 0, travellers: 0, collected: 0, due: 0 };
+      tripAgg.set(id, g);
+    }
+    return g;
+  };
+  own.forEach((b: any) => {
+    if (!b.trip_id) return;
+    (b.payment_transactions || []).forEach((t: any) => {
+      if (t.payment_status === 'verified' && inRange(t.created_at)) tripRow(b.trip_id, b).collected += num(t.amount);
+    });
+  });
+  active.forEach((b: any) => {
+    if (!b.trip_id || !inRange(b.created_at)) return;
+    const g = tripRow(b.trip_id, b);
+    g.bookings += 1;
+    if (SEATED.includes(b.booking_status)) g.travellers += Number(b.number_of_participants) || 1;
+    g.due += dueOf(b);
+  });
+  const topTrips = Array.from(tripAgg.values())
+    .filter((g) => g.collected > 0 || g.bookings > 0)
+    .sort((a, b) => b.collected - a.collected || b.bookings - a.bookings)
+    .slice(0, 5);
+
+  // ── Booking pipeline for the period (every booking made in it, cancelled too) ──
+  const madeInRange = bookings.filter((b: any) => inRange(b.created_at));
+  const countStatus = (...s: string[]) => madeInRange.filter((b: any) => s.includes(b.booking_status)).length;
+  const pipeline = {
+    pending: countStatus('pending'),
+    seatLocked: countStatus('seat_locked', 'remaining_submitted'),
+    confirmed: countStatus('confirmed', 'on_trip'),
+    completed: countStatus('completed'),
+    referred: countStatus('referred'),
+    cancelled: countStatus('cancelled', 'rejected'),
+    total: madeInRange.length,
+  };
+
+  // ── How money came in during the period ──
+  const methodLabel = (t: any) => {
+    const m = String(t.payment_method || t.payment_mode || 'other').toLowerCase();
+    if (m.includes('razorpay') || m.includes('online') || m.includes('card')) return 'Online';
+    if (m.includes('upi') || m.includes('qr')) return 'UPI';
+    if (m.includes('cash')) return 'Cash';
+    if (m.includes('bank') || m.includes('neft') || m.includes('imps')) return 'Bank';
+    if (m.includes('wallet')) return 'Wallet';
+    return 'Other';
+  };
+  const mix = new Map<string, { method: string; amount: number; count: number }>();
+  verifiedTxns.forEach((t: any) => {
+    if (!inRange(t.created_at)) return;
+    const k = methodLabel(t);
+    const g = mix.get(k) || { method: k, amount: 0, count: 0 };
+    g.amount += num(t.amount);
+    g.count += 1;
+    mix.set(k, g);
+  });
+  const paymentMix = Array.from(mix.values()).sort((a, b) => b.amount - a.amount);
+
+  // ── Latest bookings (any status) ──
+  const recentBookings = bookings.slice(0, 6).map((b: any) => ({
+    id: b.id,
+    name: b.primary_passenger_name || 'Customer',
+    trip: tripById.get(b.trip_id)?.title || tripOf(b)?.title || 'Trip',
+    pax: Number(b.number_of_participants) || 1,
+    status: b.booking_status,
+    total: isPartner(b) ? 0 : fullOf(b),
+    paid: revenueOf(b),
+    departure: departureOf(b),
+    createdAt: b.created_at,
+    offline: !!b.is_offline_booking,
+  }));
+
+  // ── Previous period, day-aligned to `series`, for the "vs before" overlay ──
+  const prevSeries: number[] = series.map(() => 0);
+  {
+    const base = dayStart(istDay(prevStart));
+    verifiedTxns.forEach((t: any) => {
+      if (!inPrev(t.created_at)) return;
+      const i = Math.round((dayStart(istDay(t.created_at)) - base) / DAY);
+      if (i >= 0 && i < prevSeries.length) prevSeries[i] += num(t.amount);
+    });
+  }
+
+  // ── When people book: weekday (Mon=0) × 3-hour block, IST ──
+  const bookingHeat: number[][] = Array.from({ length: 7 }, () => Array(8).fill(0));
+  madeInRange.forEach((b: any) => {
+    const ist = new Date(new Date(b.created_at).getTime() + IST_OFFSET_MS);
+    bookingHeat[(ist.getUTCDay() + 6) % 7][Math.floor(ist.getUTCHours() / 3)] += 1;
+  });
+
+  const periodOwn = own.filter((b: any) => inRange(b.created_at));
+  const avgBookingValue = periodOwn.length ? periodOwn.reduce((s: number, b: any) => s + fullOf(b), 0) / periodOwn.length : 0;
+
   const pendingApproval = new Set(approvals.map((a) => a.bookingId)).size;
   const nextDep = departures.find((d) => d.pax > 0) || departures[0];
 
@@ -255,5 +353,6 @@ export async function GET(req: Request) {
     unresolvedErrors: countOpenProblems((errorsRes.data || []) as any),
     inbox: { approvals, cashPending, dueSoon, lowFill },
     departures,
+    topTrips, pipeline, paymentMix, recentBookings, avgBookingValue, prevSeries, bookingHeat,
   });
 }

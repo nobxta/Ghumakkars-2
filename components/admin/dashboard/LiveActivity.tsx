@@ -6,16 +6,16 @@ import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 import { EventIcon } from '@/components/admin/live/events';
 import { Card, Skeleton, timeAgo } from './utils';
 
-const SHOW = 8;
+const SHOW = 20;
 
 /** Newest sign-ups, bookings, payments and cancellations — fed by the admin live provider. */
-export default function LiveActivity() {
+export default function LiveActivity({ className = '' }: { className?: string }) {
   const { events, loaded, lastSeen, openReview } = useAdminLive();
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(t); }, []);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={`flex flex-col overflow-hidden ${className}`}>
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
@@ -29,7 +29,7 @@ export default function LiveActivity() {
       ) : events.length === 0 ? (
         <p className="px-4 py-8 text-center text-xs text-slate-500">No activity in the last two weeks.</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
           {events.slice(0, SHOW).map((e) => {
             const isNew = new Date(e.at).getTime() > lastSeen;
             return (
