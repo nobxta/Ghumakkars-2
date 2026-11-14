@@ -31,5 +31,17 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('id', params.id)
     .single();
 
-  return NextResponse.json({ payment, refunds: refunds || [], razorpay_raw: raw?.razorpay_raw || null });
+  // Which bank payout(s) this payment (and its refunds) landed in, if Razorpay has settled it.
+  const rzpId = payment.razorpay_payment_id || payment.transaction_id;
+  let settlements: any[] = [];
+  if (rzpId?.startsWith('pay_')) {
+    const { data } = await admin
+      .from('v_settlement_items_admin')
+      .select('settlement_id, entity_id, type, amount, fee, tax, credit, debit, settled_at, settlement_utr, settlement_status')
+      .eq('razorpay_payment_id', rzpId)
+      .order('settled_at', { ascending: true });
+    settlements = data || [];
+  }
+
+  return NextResponse.json({ payment, refunds: refunds || [], razorpay_raw: raw?.razorpay_raw || null, settlements });
 }

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bone } from '@/components/ui/Skeleton';
+import SettlementsPanel from '@/components/admin/payments/SettlementsPanel';
+import { ui, Badge, SummaryBar, Field, CardTitle, type Tone } from '@/components/admin/payments/ui';
 import {
   Search, Filter, IndianRupee, CreditCard, RefreshCcw, Eye, X, Check,
   CheckCircle2, AlertCircle, Clock, ArrowLeft, Copy, Download, ExternalLink
@@ -42,6 +44,19 @@ interface Payment {
   trip_destination: string | null;
 }
 
+interface SettlementLine {
+  settlement_id: string;
+  entity_id: string;
+  type: string;
+  amount: number;
+  fee: number;
+  tax: number;
+  credit: number;
+  debit: number;
+  settled_at: string | null;
+  settlement_utr: string | null;
+}
+
 interface Refund {
   id: string;
   razorpay_refund_id: string | null;
@@ -52,17 +67,23 @@ interface Refund {
   created_at: string;
 }
 
-const statusBadge = (s: string) => {
+const statusBadge = (s: string): { label: string; cls: string; tone: Tone } => {
   switch (s) {
-    case 'verified': return { label: 'Paid', cls: 'bg-green-100 text-green-700 border-green-200' };
-    case 'refunded': return { label: 'Refunded', cls: 'bg-purple-100 text-purple-700 border-purple-200' };
-    case 'partially_refunded': return { label: 'Partial Refund', cls: 'bg-amber-100 text-amber-700 border-amber-200' };
-    case 'failed': return { label: 'Failed', cls: 'bg-red-100 text-red-700 border-red-200' };
-    case 'rejected': return { label: 'Rejected', cls: 'bg-red-100 text-red-700 border-red-200' };
-    case 'pending': return { label: 'Pending', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
-    default: return { label: s, cls: 'bg-gray-100 text-gray-700 border-gray-200' };
+    case 'verified': return { label: 'Paid', tone: 'green', cls: 'bg-green-100 text-green-700 border-green-200' };
+    case 'refunded': return { label: 'Refunded', tone: 'purple', cls: 'bg-purple-100 text-purple-700 border-purple-200' };
+    case 'partially_refunded': return { label: 'Partial refund', tone: 'amber', cls: 'bg-amber-100 text-amber-700 border-amber-200' };
+    case 'failed': return { label: 'Failed', tone: 'red', cls: 'bg-red-100 text-red-700 border-red-200' };
+    case 'rejected': return { label: 'Rejected', tone: 'red', cls: 'bg-red-100 text-red-700 border-red-200' };
+    case 'pending': return { label: 'Pending', tone: 'amber', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
+    default: return { label: s, tone: 'gray', cls: 'bg-gray-100 text-gray-700 border-gray-200' };
   }
 };
+
+const METHOD_NAMES: Record<string, string> = {
+  upi: 'UPI', card: 'Card', netbanking: 'Net banking', wallet: 'Wallet', emi: 'EMI',
+  razorpay: 'Razorpay', cash: 'Cash', manual: 'Manual', paylater: 'Pay later',
+};
+const methodName = (m: string | null | undefined) => (m ? METHOD_NAMES[m.toLowerCase()] || m.replace(/_/g, ' ') : '—');
 
 const fmtINR = (n: number | string | null | undefined) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -77,7 +98,8 @@ export default function AdminPaymentsPage() {
   const [status, setStatus] = useState('');
   const [method, setMethod] = useState('');
   const [selected, setSelected] = useState<Payment | null>(null);
-  const [detail, setDetail] = useState<{ payment: Payment; refunds: Refund[]; razorpay_raw: any } | null>(null);
+  const [detail, setDetail] = useState<{ payment: Payment; refunds: Refund[]; razorpay_raw: any; settlements?: SettlementLine[] } | null>(null);
+  const [tab, setTab] = useState<'payments' | 'settlements'>('payments');
   const [refundOpen, setRefundOpen] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   // Lightweight rows for EVERY matching payment, so the totals aren't limited to
@@ -132,6 +154,17 @@ export default function AdminPaymentsPage() {
   };
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [q, status, method]);
+
+  // ?tab=settlements opens the Settlements tab directly (and survives reloads).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'settlements') setTab('settlements');
+  }, []);
+  const switchTab = (t: 'payments' | 'settlements') => {
+    setTab(t);
+    const url = new URL(window.location.href);
+    if (t === 'settlements') url.searchParams.set('tab', 'settlements'); else url.searchParams.delete('tab');
+    window.history.replaceState(null, '', url.toString());
+  };
 
   const totals = useMemo(() => {
     const now = new Date();
@@ -221,218 +254,249 @@ export default function AdminPaymentsPage() {
   return (
     <div>
       <div className="max-w-7xl mx-auto">
-        <div className="mb-5 sm:mb-6 flex items-center justify-between gap-3">
-          <div>
-            <Link href="/admin" className="inline-flex items-center text-purple-700 hover:text-purple-900 text-sm font-semibold mb-2">
-              <ArrowLeft className="h-4 w-4 mr-1.5" /> Admin
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">Payments</h1>
-            <p className="text-sm text-gray-600 mt-1">{total} total · Net {fmtINR(net)} after refunds</p>
-          </div>
-          <button onClick={load} className="inline-flex items-center gap-1.5 bg-white border border-gray-200 hover:border-purple-300 px-3 py-2 rounded-lg text-sm font-semibold text-gray-700">
-            <RefreshCcw className="h-4 w-4" /> Refresh
-          </button>
+        <div className="mb-5">
+          <Link href="/admin" className="inline-flex items-center text-purple-700 hover:text-purple-900 text-sm font-medium mb-2">
+            <ArrowLeft className="h-4 w-4 mr-1.5" /> Admin
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Payments</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {tab === 'payments'
+              ? <>{total} payments · net <span className="tabular-nums text-gray-700 font-medium">{fmtINR(net)}</span> after refunds</>
+              : 'Razorpay payouts to your bank, by booking and customer'}
+          </p>
         </div>
 
-        {/* KPI strip — 6 metrics, single neutral palette */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-5">
-          <Kpi label="Collected" value={fmtINR(totals.collected)} tone="green" sub="all-time" />
-          <Kpi label="Pending" value={fmtINR(totals.pending)} tone="amber" sub="awaiting verify" />
-          <Kpi label="Refunded" value={fmtINR(totals.refunded)} tone="red" sub="all-time" />
-          <Kpi label="Failed" value={fmtINR(totals.failed)} tone="red" sub="needs review" />
-          <Kpi label="Today" value={fmtINR(totals.today)} tone="purple" sub={totals.yesterday > 0 ? `${todayTrend >= 0 ? '+' : ''}${todayTrend.toFixed(0)}% vs yest.` : 'no prior data'} trend={totals.yesterday > 0 ? todayTrend : undefined} />
-          <Kpi label="This month" value={fmtINR(totals.thisMonth)} tone="purple" sub={totals.lastMonth > 0 ? `${monthTrend >= 0 ? '+' : ''}${monthTrend.toFixed(0)}% vs last` : 'no prior data'} trend={totals.lastMonth > 0 ? monthTrend : undefined} />
+        {/* Tabs */}
+        <div className="flex gap-6 border-b border-gray-200 mb-5" role="tablist">
+          {([['payments', 'Payments'], ['settlements', 'Settlements']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => switchTab(k)}
+              className={`pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === k ? 'border-purple-700 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Quick filters — action-first chips */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs uppercase tracking-wider font-bold text-gray-500 mr-1">Quick filters:</span>
-          <QuickChip active={status === '' && method === ''} onClick={() => { setStatus(''); setMethod(''); }}>All</QuickChip>
-          <QuickChip active={status === 'pending'} onClick={() => setStatus(status === 'pending' ? '' : 'pending')} tone="amber">Pending collection</QuickChip>
-          <QuickChip active={status === 'failed'} onClick={() => setStatus(status === 'failed' ? '' : 'failed')} tone="red">Failed</QuickChip>
-          <QuickChip active={status === 'partially_refunded'} onClick={() => setStatus(status === 'partially_refunded' ? '' : 'partially_refunded')} tone="amber">Partial refund</QuickChip>
-          <QuickChip active={status === 'refunded'} onClick={() => setStatus(status === 'refunded' ? '' : 'refunded')} tone="red">Refunded</QuickChip>
-        </div>
+        {tab === 'settlements' ? (
+          <SettlementsPanel onToast={setToast} />
+        ) : (
+        <div className="space-y-4">
+          <SummaryBar items={[
+            { label: 'Collected', value: fmtINR(totals.collected), note: 'All time' },
+            { label: 'Refunded', value: fmtINR(totals.refunded), note: `Net ${fmtINR(net)}` },
+            { label: 'Pending', value: fmtINR(totals.pending), note: 'Awaiting verification', noteTone: totals.pending > 0 ? 'warn' : undefined },
+            { label: 'Failed', value: fmtINR(totals.failed), note: 'Needs review', noteTone: totals.failed > 0 ? 'bad' : undefined },
+            {
+              label: 'Today', value: fmtINR(totals.today),
+              note: totals.yesterday > 0 ? `${todayTrend >= 0 ? '+' : ''}${todayTrend.toFixed(0)}% vs yesterday` : 'No data yesterday',
+              noteTone: totals.yesterday > 0 ? (todayTrend >= 0 ? 'good' : 'bad') : undefined,
+            },
+            {
+              label: 'This month', value: fmtINR(totals.thisMonth),
+              note: totals.lastMonth > 0 ? `${monthTrend >= 0 ? '+' : ''}${monthTrend.toFixed(0)}% vs last month` : 'No data last month',
+              noteTone: totals.lastMonth > 0 ? (monthTrend >= 0 ? 'good' : 'bad') : undefined,
+            },
+          ]} />
 
-        {/* Filters — search grows, dropdowns sized to content */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:flex-wrap sm:items-center">
-          <div className="relative search-flex">
-            <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search payment ID, name, email, phone, trip…"
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
-            />
-          </div>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="filter-small px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">All statuses</option>
-            <option value="verified">Paid</option>
-            <option value="partially_refunded">Partially Refunded</option>
-            <option value="refunded">Refunded</option>
-            <option value="pending">Pending</option>
-            <option value="failed">Failed</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="filter-small px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">All methods</option>
-            <option value="upi">UPI</option>
-            <option value="card">Card</option>
-            <option value="netbanking">Net Banking</option>
-            <option value="wallet">Wallet</option>
-            <option value="emi">EMI</option>
-          </select>
-        </div>
+          <div className={`${ui.card} overflow-hidden`}>
+            <div className={ui.cardHeader}>
+              <CardTitle title="All payments" count={total} />
+              <button onClick={load} className={ui.btn}>
+                <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+              </button>
+            </div>
 
-        {/* Insights — Top trips + Payment method distribution */}
-        {(totals.topTrips.length > 0 || totals.methodPct.length > 0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
-            {totals.topTrips.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">Top trips by revenue</p>
-                <ul className="space-y-2">
-                  {totals.topTrips.map((t, i) => {
-                    const maxAmt = totals.topTrips[0].amount;
-                    const pct = maxAmt > 0 ? (t.amount / maxAmt) * 100 : 0;
+            <div className={ui.toolbar}>
+              <Field label="Search" grow>
+                <div className="relative">
+                  <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={q} onChange={(e) => setQ(e.target.value)}
+                    placeholder="Payment ID, name, email, phone, trip"
+                    className={`${ui.input} pl-9 w-full`}
+                  />
+                </div>
+              </Field>
+              <Field label="Status">
+                <select value={status} onChange={(e) => setStatus(e.target.value)} className={ui.input}>
+                  <option value="">All</option>
+                  <option value="verified">Paid</option>
+                  <option value="partially_refunded">Partially refunded</option>
+                  <option value="refunded">Refunded</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </Field>
+              <Field label="Method">
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className={ui.input}>
+                  <option value="">All</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="netbanking">Net banking</option>
+                  <option value="wallet">Wallet</option>
+                  <option value="emi">EMI</option>
+                </select>
+              </Field>
+              {(q || status || method) && (
+                <button onClick={() => { setQ(''); setStatus(''); setMethod(''); }} className={`${ui.link} text-sm h-9`}>
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div role="status" aria-busy="true">
+                <span className="sr-only">Loading payments</span>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 px-4 py-3.5 border-b border-gray-100 last:border-b-0">
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <Bone className="h-3.5 w-2/5" />
+                      <Bone className="h-3 w-1/4" tone="soft" />
+                    </div>
+                    <Bone className="hidden sm:block h-3.5 w-28" tone="soft" />
+                    <Bone className="h-4 w-20" />
+                    <Bone className="h-5 w-16 rounded-full" tone="soft" />
+                  </div>
+                ))}
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="px-4 py-12 text-center text-sm text-gray-500">No payments match these filters.</div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className={ui.table}>
+                    <thead className={ui.thead}>
+                      <tr>
+                        <th className={ui.th}>Customer</th>
+                        <th className={ui.th}>Payment ID</th>
+                        <th className={ui.th}>Method</th>
+                        <th className={`${ui.th} text-right`}>Amount</th>
+                        <th className={`${ui.th} text-right`}>Refunded</th>
+                        <th className={ui.th}>Status</th>
+                        <th className={ui.th}>Date</th>
+                        <th className={ui.th}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map(p => {
+                        const b = statusBadge(p.payment_status);
+                        const name = p.customer_name || p.primary_passenger_name || '—';
+                        return (
+                          <tr key={p.id} className={`${ui.tr} cursor-pointer`} onClick={() => openDetail(p)}>
+                            <td className={ui.td}>
+                              <p className="font-medium text-gray-900">{name}</p>
+                              <p className="text-xs text-gray-500 truncate max-w-xs">{p.trip_title || '—'}</p>
+                            </td>
+                            <td className={`${ui.td} ${ui.mono}`}>{p.razorpay_payment_id || p.transaction_id || '—'}</td>
+                            <td className={`${ui.td} text-gray-600`}>{methodName(p.payment_method || p.payment_mode)}</td>
+                            <td className={`${ui.num} font-semibold text-gray-900`}>{fmtINR(p.amount)}</td>
+                            <td className={ui.num}>{p.amount_refunded ? fmtINR(p.amount_refunded) : '—'}</td>
+                            <td className={ui.td}><Badge tone={b.tone}>{b.label}</Badge></td>
+                            <td className={`${ui.td} text-gray-600 whitespace-nowrap`}>{fmtDate(p.paid_at || p.created_at)}</td>
+                            <td className={`${ui.td} text-right`}>
+                              <button className="p-1.5 rounded-md text-gray-400 hover:text-purple-700 hover:bg-purple-50" onClick={(e) => { e.stopPropagation(); openDetail(p); }} aria-label="View payment">
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile list */}
+                <div className="md:hidden">
+                  {payments.map(p => {
+                    const b = statusBadge(p.payment_status);
                     return (
-                      <li key={t.name}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-sm font-semibold text-gray-900 truncate flex items-center gap-2">
-                            <span className="text-xs text-gray-400">{i + 1}</span>
-                            {t.name}
-                          </span>
-                          <span className="text-sm font-bold text-gray-900 whitespace-nowrap">{fmtINR(t.amount)}</span>
+                      <button key={p.id} onClick={() => openDetail(p)} className="w-full text-left px-4 py-3.5 border-b border-gray-100 last:border-b-0 hover:bg-purple-50/40">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 text-sm truncate">{p.customer_name || p.primary_passenger_name || '—'}</p>
+                            <p className="text-xs text-gray-500 truncate">{p.trip_title || '—'}</p>
+                          </div>
+                          <p className="font-semibold text-gray-900 tabular-nums text-sm flex-shrink-0">{fmtINR(p.amount)}</p>
                         </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-600 rounded-full" style={{ width: `${pct}%` }} />
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <span className="text-xs text-gray-500 truncate">{fmtDate(p.paid_at || p.created_at)} · {methodName(p.payment_method || p.payment_mode)}</span>
+                          <Badge tone={b.tone}>{b.label}</Badge>
                         </div>
-                      </li>
+                      </button>
                     );
                   })}
-                </ul>
-              </div>
-            )}
-            {totals.methodPct.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">Payment method distribution</p>
-                <ul className="space-y-2">
-                  {totals.methodPct.map((m) => (
-                    <li key={m.k}>
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-sm font-semibold text-gray-900 uppercase">{m.k}</span>
-                        <span className="text-xs text-gray-500">{m.n} · {m.pct}%</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-purple-600 rounded-full" style={{ width: `${m.pct}%` }} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                </div>
+                {payments.length < total && (
+                  <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
+                    <span className="text-xs text-gray-500 tabular-nums">{payments.length} of {total} shown</span>
+                    <button onClick={loadMore} disabled={loadingMore} className={ui.btn}>
+                      {loadingMore ? 'Loading…' : 'Load more'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
-        )}
 
-        {/* Table (desktop) / cards (mobile) */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="divide-y divide-gray-100" role="status" aria-busy="true">
-              <span className="sr-only">Loading payments</span>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3.5">
-                  <Bone className="h-9 w-9 rounded-full flex-shrink-0" tone="purple" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <Bone className="h-3.5 w-2/5" />
-                    <Bone className="h-3 w-1/4" tone="soft" />
-                  </div>
-                  <Bone className="hidden sm:block h-3.5 w-20" tone="soft" />
-                  <Bone className="h-4 w-16" />
-                  <Bone className="h-6 w-20 rounded-full" tone="soft" />
-                </div>
-              ))}
-            </div>
-          ) : payments.length === 0 ? (
-            <div className="p-10 text-center text-gray-500">No payments match these filters.</div>
-          ) : (
-            <>
-              {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50/70 text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Customer / Trip</th>
-                      <th className="px-4 py-3 text-left">Payment ID</th>
-                      <th className="px-4 py-3 text-left">Method</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                      <th className="px-4 py-3 text-right">Refunded</th>
-                      <th className="px-4 py-3 text-left">Status</th>
-                      <th className="px-4 py-3 text-left">Date</th>
-                      <th className="px-4 py-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {payments.map(p => {
-                      const b = statusBadge(p.payment_status);
-                      const name = p.customer_name || p.primary_passenger_name || '—';
-                      return (
-                        <tr key={p.id} className="hover:bg-purple-50/30 cursor-pointer" onClick={() => openDetail(p)}>
-                          <td className="px-4 py-3">
-                            <p className="font-semibold text-gray-900">{name}</p>
-                            <p className="text-xs text-gray-500 truncate max-w-xs">{p.trip_title || '—'}</p>
-                          </td>
-                          <td className="px-4 py-3"><span className="font-mono text-xs">{p.razorpay_payment_id || p.transaction_id || '—'}</span></td>
-                          <td className="px-4 py-3"><span className="uppercase text-xs font-bold text-gray-700">{p.payment_method || p.payment_mode || '—'}</span></td>
-                          <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtINR(p.amount)}</td>
-                          <td className="px-4 py-3 text-right text-purple-700 font-semibold">{p.amount_refunded ? fmtINR(p.amount_refunded) : '—'}</td>
-                          <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold border ${b.cls}`}>{b.label}</span></td>
-                          <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{fmtDate(p.paid_at || p.created_at)}</td>
-                          <td className="px-4 py-3 text-right">
-                            <button className="p-2 hover:bg-purple-100 rounded-lg" onClick={(e) => { e.stopPropagation(); openDetail(p); }}>
-                              <Eye className="h-4 w-4 text-purple-700" />
-                            </button>
-                          </td>
+          {/* Breakdowns */}
+          {(totals.topTrips.length > 0 || totals.methodPct.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {totals.topTrips.length > 0 && (
+                <div className={`${ui.card} overflow-hidden`}>
+                  <div className={ui.cardHeader}><CardTitle title="Top trips by revenue" /></div>
+                  <table className={ui.table}>
+                    <thead className={ui.thead}>
+                      <tr>
+                        <th className={ui.th}>Trip</th>
+                        <th className={`${ui.th} text-right`}>Revenue</th>
+                        <th className={`${ui.th} text-right`}>Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {totals.topTrips.map((t) => (
+                        <tr key={t.name} className={ui.tr}>
+                          <td className={`${ui.td} text-gray-900`}><div className="truncate max-w-[260px]">{t.name}</div></td>
+                          <td className={`${ui.num} font-medium text-gray-900`}>{fmtINR(t.amount)}</td>
+                          <td className={ui.num}>{totals.collected > 0 ? `${((t.amount / totals.collected) * 100).toFixed(1)}%` : '—'}</td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-gray-100">
-                {payments.map(p => {
-                  const b = statusBadge(p.payment_status);
-                  return (
-                    <button key={p.id} onClick={() => openDetail(p)} className="w-full text-left p-4 hover:bg-purple-50/30">
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="min-w-0">
-                          <p className="font-bold text-gray-900 text-sm truncate">{p.customer_name || p.primary_passenger_name || '—'}</p>
-                          <p className="text-xs text-gray-500 truncate">{p.trip_title || '—'}</p>
-                        </div>
-                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${b.cls} flex-shrink-0`}>{b.label}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-mono text-gray-600 truncate max-w-[55%]">{p.razorpay_payment_id || p.transaction_id}</span>
-                        <span className="font-extrabold text-gray-900">{fmtINR(p.amount)}</span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-1">{fmtDate(p.paid_at || p.created_at)} · <span className="uppercase font-bold">{p.payment_method || p.payment_mode || '—'}</span></p>
-                    </button>
-                  );
-                })}
-              </div>
-              {payments.length < total && (
-                <div className="border-t border-gray-100 p-3 text-center">
-                  <button
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:border-purple-300 disabled:opacity-50"
-                  >
-                    {loadingMore ? 'Loading…' : `Load more (${payments.length} of ${total} shown)`}
-                  </button>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
-            </>
+              {totals.methodPct.length > 0 && (
+                <div className={`${ui.card} overflow-hidden`}>
+                  <div className={ui.cardHeader}><CardTitle title="Payment methods" /></div>
+                  <table className={ui.table}>
+                    <thead className={ui.thead}>
+                      <tr>
+                        <th className={ui.th}>Method</th>
+                        <th className={`${ui.th} text-right`}>Payments</th>
+                        <th className={`${ui.th} text-right`}>Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {totals.methodPct.map((m) => (
+                        <tr key={m.k} className={ui.tr}>
+                          <td className={`${ui.td} text-gray-900`}>{methodName(m.k)}</td>
+                          <td className={ui.num}>{m.n}</td>
+                          <td className={ui.num}>{m.pct}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Detail modal */}
@@ -493,7 +557,7 @@ export default function AdminPaymentsPage() {
                 {/* Timeline (Razorpay-style) */}
                 <div>
                   <p className="text-xs uppercase tracking-wider font-bold text-gray-500 mb-2.5">Timeline</p>
-                  <Timeline payment={detail.payment} raw={detail.razorpay_raw} />
+                  <Timeline payment={detail.payment} raw={detail.razorpay_raw} settlements={detail.settlements || []} />
                 </div>
 
                 {/* Two-column details */}
@@ -628,7 +692,7 @@ export default function AdminPaymentsPage() {
   );
 }
 
-function Timeline({ payment, raw }: { payment: Payment; raw: any }) {
+function Timeline({ payment, raw, settlements }: { payment: Payment; raw: any; settlements: SettlementLine[] }) {
   // Razorpay-style timeline derived from payment + raw data
   const events: { label: string; at: string | null; status: 'done' | 'pending' }[] = [];
   const createdTs = raw?.created_at ? new Date(raw.created_at * 1000).toISOString() : payment.created_at;
@@ -640,8 +704,19 @@ function Timeline({ payment, raw }: { payment: Payment; raw: any }) {
   } else if (payment.payment_status === 'verified') {
     events.push({ label: 'Payment authorized', at: payment.paid_at || createdTs, status: 'done' });
   }
-  // Settlement estimate: T+2 business days (Razorpay default)
-  if (payment.captured || raw?.captured) {
+  // Actual payout(s) once Razorpay has settled; otherwise an estimate.
+  const settledLine = settlements.find((s) => s.type === 'payment');
+  if (settledLine) {
+    const net = Number(settledLine.credit) - Number(settledLine.debit);
+    events.push({
+      label: `Settled to bank · ${fmtINR(net)} (fee ${fmtINR(settledLine.fee)})${settledLine.settlement_utr ? ` · UTR ${settledLine.settlement_utr}` : ''}`,
+      at: settledLine.settled_at,
+      status: 'done',
+    });
+    settlements.filter((s) => s.type === 'refund').forEach((s) => {
+      events.push({ label: `Refund ${fmtINR(s.debit || s.amount)} deducted from payout`, at: s.settled_at, status: 'done' });
+    });
+  } else if (payment.captured || raw?.captured) {
     const settleBy = new Date(new Date(payment.paid_at || createdTs).getTime() + 2 * 86400000).toISOString();
     events.push({ label: 'Settlement (to be processed)', at: settleBy, status: 'pending' });
   }
@@ -662,31 +737,6 @@ function Timeline({ payment, raw }: { payment: Payment; raw: any }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-function Kpi({ label, value, sub, tone, trend }: { label: string; value: string; sub?: string; tone?: 'green' | 'amber' | 'red' | 'purple'; trend?: number }) {
-  const toneCls = tone === 'green' ? 'text-green-700' : tone === 'amber' ? 'text-amber-700' : tone === 'red' ? 'text-red-700' : tone === 'purple' ? 'text-purple-700' : 'text-gray-900';
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4">
-      <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-gray-500">{label}</p>
-      <p className={`text-base sm:text-xl font-extrabold mt-1 truncate ${toneCls}`}>{value}</p>
-      {sub && (
-        <p className={`text-[10px] sm:text-xs mt-1 truncate ${trend !== undefined ? (trend >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold') : 'text-gray-500'}`}>
-          {sub}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function QuickChip({ children, active, onClick, tone }: { children: React.ReactNode; active?: boolean; onClick: () => void; tone?: 'amber' | 'red' }) {
-  const activeCls = tone === 'amber' ? 'bg-amber-600 text-white border-amber-600' : tone === 'red' ? 'bg-red-600 text-white border-red-600' : 'bg-purple-600 text-white border-purple-600';
-  const inactiveCls = tone === 'amber' ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100' : tone === 'red' ? 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100' : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300';
-  return (
-    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? activeCls : inactiveCls}`}>
-      {children}
-    </button>
   );
 }
 

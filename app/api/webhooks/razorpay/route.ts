@@ -81,6 +81,18 @@ async function handlePOST(request: NextRequest) {
         }
         break;
 
+      case 'settlement.processed':
+        if (payload.settlement?.entity) {
+          try {
+            const { recordSettlementFromWebhook } = await import('@/lib/razorpay-settlements');
+            await recordSettlementFromWebhook(adminClient, payload.settlement.entity);
+          } catch (e: any) {
+            // Don't make Razorpay retry: the admin Settlements tab can re-sync.
+            await logError({ category: 'webhook', process: 'Razorpay: record settlement', error: e, details: { settlement_id: payload.settlement.entity.id } });
+          }
+        }
+        break;
+
       default:
         console.log(`Unhandled webhook event: ${event}`);
     }
