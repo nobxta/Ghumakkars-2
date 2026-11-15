@@ -13,13 +13,16 @@ export const GET = withErrorLog('admin', 'Instagram automation get', async () =>
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
   const db = createAdminClient();
-  const [cfg, tpl] = await Promise.all([
+  const [cfg, tpl, mutes] = await Promise.all([
     db.from('instagram_automation').select('*').eq('id', 1).maybeSingle(),
     db.from('instagram_reply_templates').select('*').order('created_at', { ascending: true }),
+    // People handed over to the team (auto replies paused for them). Table may not exist yet.
+    db.from('instagram_reply_mutes').select('recipient_id, username, until').gt('until', new Date().toISOString()).order('until', { ascending: false }).limit(50),
   ]);
   return NextResponse.json({
     settings: cfg.data,
     templates: tpl.data || [],
+    mutes: mutes.error ? [] : mutes.data || [],
     webhook: { configured: Boolean(process.env.INSTAGRAM_APP_SECRET && process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN) },
   });
 });
@@ -53,6 +56,12 @@ export const PUT = withErrorLog('admin', 'Instagram automation save', async (req
     const u = b.site_url.trim().replace(/\/$/, '');
     if (u && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(u)) return NextResponse.json({ error: 'Website must be a full https:// address.' }, { status: 400 });
     p.site_url = u || null;
+  }
+  if (b.human_pause_hours != null) p.human_pause_hours = Math.min(168, Math.max(0, Math.round(Number(b.human_pause_hours) || 0)));
+  if (typeof b.unmute === 'string' && /^\d+$/.test(b.unmute)) {
+    const { error } = await db.from('instagram_reply_mutes').delete().eq('recipient_id', b.unmute);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
   if (b.comment_posts_to_watch != null) p.comment_posts_to_watch = Math.min(25, Math.max(1, Math.round(Number(b.comment_posts_to_watch) || 10)));
 

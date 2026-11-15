@@ -6,9 +6,9 @@ import {
   XCircle, Clock, ShieldAlert, TrendingUp, TrendingDown, Minus, PencilLine, Terminal,
 } from 'lucide-react';
 import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
-import { Card, Skeleton, Sparkline, timeAgo } from '@/components/admin/dashboard/utils';
+import { Skeleton, Sparkline, timeAgo } from '@/components/admin/dashboard/utils';
 import { FollowerLine, NetBars, fmt, signed } from './charts';
-import { Kpi, Segmented, Banner, PanelHeader } from './shared';
+import { Banner, Button, Panel, PanelHeader, Segmented, cx } from './shared';
 
 /* ── types ── */
 interface Growth { value: number | null; partial: boolean }
@@ -55,7 +55,7 @@ function GrowthChip({ g, label }: { g: Growth; label: string }) {
   return (
     <div className="min-w-0">
       {label && <p className="text-xs text-slate-500">{label}</p>}
-      <p className={`flex items-center gap-1 text-[13px] font-semibold tabular-nums ${tone}`} title={g.partial ? 'Since tracking started (less history than the full period)' : undefined}>
+      <p className={`flex items-center gap-1 text-base font-semibold tabular-nums ${tone}`} title={g.partial ? 'Since tracking started (less history than the full period)' : undefined}>
         <Icon className="h-3 w-3 shrink-0" />{v == null ? '—' : signed(v)}{g.partial && <span className="text-[10px] font-normal text-slate-400">*</span>}
       </p>
     </div>
@@ -78,6 +78,15 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${s.cls}`}><s.Icon className="h-3 w-3" />{s.label}</span>;
 }
 
+function GrowthCell({ label, g }: { label: string; g: Growth }) {
+  return (
+    <div className="px-4 py-3.5 sm:px-5">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <div className="mt-1.5"><GrowthChip g={g} label="" /></div>
+    </div>
+  );
+}
+
 /* ── page ── */
 export default function FollowersTab() {
   const { toast } = useAdminLive();
@@ -94,6 +103,8 @@ export default function FollowersTab() {
   const [manualVal, setManualVal] = useState('');
   const [manualAt, setManualAt] = useState('');
   const [histVersion, setHistVersion] = useState(0);
+  const [chart, setChart] = useState<'total' | 'net'>('total');
+  const [logAll, setLogAll] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -217,7 +228,7 @@ export default function FollowersTab() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-slate-900">Follower tracker</h2>
+          <h2 className="text-[15px] font-semibold text-slate-900">Follower tracker</h2>
           <p className="text-xs text-slate-500">
             Track your account or any public Business/Creator account
             {lastRun && <> · last run {timeAgo(lastRun)}</>}
@@ -226,14 +237,11 @@ export default function FollowersTab() {
         <form onSubmit={addAccount} className="flex w-full items-center gap-2 sm:w-auto">
           <div className="relative flex-1 sm:w-56 sm:flex-none">
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">@</span>
-            <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder="username or profile link" className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-7 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none" />
+            <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder="username or profile link" className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-7 pr-3 text-[13px] text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500/20" />
           </div>
-          <button disabled={busy === 'add' || !newUser.trim()} className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-[#0095f6] px-3.5 text-[13px] font-semibold text-white hover:bg-[#1877f2] disabled:opacity-50">
-            {busy === 'add' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Track
-          </button>
-          <button type="button" onClick={() => runCheck()} disabled={!!busy || !data?.accounts.length} title="Check every active account now" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${busy === 'check:all' ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Check all</span>
-          </button>
+          <Button type="submit" variant="primary" disabled={!newUser.trim()} loading={busy === 'add'} icon={<Plus className="h-4 w-4" />}>Track</Button>
+          <Button type="button" onClick={() => runCheck()} disabled={!!busy || !data?.accounts.length} title="Check every active account now"
+            icon={<RefreshCw className={cx('h-3.5 w-3.5', busy === 'check:all' && 'animate-spin')} />}><span className="hidden sm:inline">Check all</span></Button>
         </form>
       </div>
 
@@ -264,19 +272,19 @@ export default function FollowersTab() {
       {!data ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}</div>
       ) : data.accounts.length === 0 ? (
-        <Card className="!border-slate-200 px-6 py-14 text-center">
+        <Panel className="px-6 py-14 text-center">
           <Instagram className="mx-auto mb-3 h-10 w-10 text-pink-400" />
           <p className="text-sm font-semibold text-slate-800">Track your first account</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">Enter a public Business or Creator username above — your own (@ghumakkars_in) or a competitor&apos;s. Personal accounts can&apos;t be read by the API.</p>
-        </Card>
+        </Panel>
       ) : (
         <>
-          {/* Account cards */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Account cards — only when there is more than one account to pick from */}
+          {data.accounts.length > 1 && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {data.accounts.map((a) => {
               const on = a.id === selectedId;
               return (
-                <button key={a.id} onClick={() => setSelectedId(a.id)} className={`group rounded-2xl border bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition ${on ? 'border-pink-300 ring-4 ring-pink-50' : 'border-slate-200 hover:border-slate-300'} ${a.is_active ? '' : 'opacity-60'}`}>
+                <button key={a.id} onClick={() => setSelectedId(a.id)} className={`group rounded-xl border bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors ${on ? 'border-[#d62976] ring-2 ring-pink-100' : 'border-slate-200 hover:border-slate-300'} ${a.is_active ? '' : 'opacity-60'}`}>
                   <div className="flex items-center gap-2.5">
                     <Avatar a={a} size="h-9 w-9" />
                     <div className="min-w-0 flex-1">
@@ -287,7 +295,7 @@ export default function FollowersTab() {
                   </div>
                   <div className="mt-3 flex items-end justify-between gap-2">
                     <div>
-                      <p className="text-xl font-bold tabular-nums text-slate-900">{a.followers_count == null ? '—' : fmt(a.followers_count)}</p>
+                      <p className="text-xl font-semibold tabular-nums tracking-tight text-slate-900">{a.followers_count == null ? '—' : fmt(a.followers_count)}</p>
                       <p className={`text-[11px] font-medium tabular-nums ${(a.growth.week.value ?? 0) > 0 ? 'text-emerald-600' : (a.growth.week.value ?? 0) < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
                         {a.growth.week.value == null ? 'no history yet' : `${signed(a.growth.week.value)} this week`}
                       </p>
@@ -297,99 +305,88 @@ export default function FollowersTab() {
                 </button>
               );
             })}
-          </div>
+          </div>}
 
           {selected && (
-            <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
-              <div className="min-w-0 space-y-4">
-                {/* KPI strip */}
-                <Card className="!border-slate-200 grid grid-cols-2 gap-px overflow-hidden bg-slate-100 sm:grid-cols-3 lg:grid-cols-6 [&>*]:bg-white">
-                  <Kpi label="Total followers" value={selected.followers_count == null ? '—' : fmt(selected.followers_count)} sub={selected.follows_count != null ? `${fmt(selected.follows_count)} following · ${fmt(selected.media_count || 0)} posts` : undefined} />
-                  <Kpi label="Today"><GrowthChip g={selected.growth.today} label="" /></Kpi>
-                  <Kpi label="Last 24h"><GrowthChip g={selected.growth.day} label="" /></Kpi>
-                  <Kpi label="Last 7 days"><GrowthChip g={selected.growth.week} label="" /></Kpi>
-                  <Kpi label="Last 30 days"><GrowthChip g={selected.growth.month} label="" /></Kpi>
-                  <Kpi label="Last successful check" value={selected.last_success_at ? timeAgo(selected.last_success_at) : 'never'}
-                    sub={selected.is_active ? `next ${until(selected.next_check_at)}` : 'paused'} />
-                </Card>
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+              {/* One panel: numbers on top, one chart below that switches between total and net change */}
+              <Panel className="min-w-0 overflow-hidden">
+                <div className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 sm:grid-cols-5 [&>*]:bg-white">
+                  <div className="col-span-2 px-4 py-3.5 sm:col-span-1 sm:px-5">
+                    <p className="text-xs font-medium text-slate-500">Followers</p>
+                    <p className="mt-1 text-[22px] font-semibold leading-7 tabular-nums tracking-tight text-slate-900">{selected.followers_count == null ? '—' : fmt(selected.followers_count)}</p>
+                    <p className="truncate text-[11px] text-slate-400">{selected.media_count != null ? `${fmt(selected.media_count)} posts` : ' '}</p>
+                  </div>
+                  <GrowthCell label="Today" g={selected.growth.today} />
+                  <GrowthCell label="Last 24h" g={selected.growth.day} />
+                  <GrowthCell label="Last 7 days" g={selected.growth.week} />
+                  <GrowthCell label="Last 30 days" g={selected.growth.month} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 px-4 pt-3.5 sm:px-5">
+                  <Segmented value={chart} onChange={(v) => setChart(v as any)} options={[{ k: 'total', l: 'Total followers' }, { k: 'net', l: 'Net change' }]} />
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {chart === 'net' && <Segmented size="xs" options={[{ k: 'day', l: 'Daily' }, { k: 'week', l: 'Weekly' }, { k: 'month', l: 'Monthly' }]} value={unit} onChange={(v) => setUnit(v as any)} />}
+                    <Segmented size="xs" options={RANGES} value={range} onChange={setRange} />
+                  </div>
+                </div>
+                <div className={cx('px-3 pb-3 pt-3 transition-opacity sm:px-4', histLoading && 'opacity-50')}>
+                  {chart === 'total' ? <FollowerLine points={linePoints} height={260} /> : <NetBars bars={bars} height={260} signedColors />}
+                </div>
                 {(selected.growth.week.partial || selected.growth.month.partial) && (
-                  <p className="-mt-2 text-[11px] text-slate-400">* since tracking started {selected.tracking_since ? timeAgo(selected.tracking_since) : ''} — full-period numbers appear once enough history exists.</p>
+                  <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400 sm:px-5">* since tracking started {selected.tracking_since ? timeAgo(selected.tracking_since) : ''} — full-period numbers appear once enough history exists.</p>
                 )}
+              </Panel>
 
-                {/* Followers chart */}
-                <Card className="!border-slate-200 overflow-hidden">
-                  <PanelHeader title="Followers over time"
-                    right={<Segmented options={RANGES} value={range} onChange={setRange} />} />
-                  <div className={`px-2 pb-2 pt-3 transition-opacity ${histLoading ? 'opacity-50' : ''}`}>
-                    <FollowerLine points={linePoints} />
-                  </div>
-                </Card>
-
-                {/* Net change */}
-                <Card className="!border-slate-200 overflow-hidden">
-                  <PanelHeader title="Net new followers"
-                    right={<Segmented options={[{ k: 'day', l: 'Daily' }, { k: 'week', l: 'Weekly' }, { k: 'month', l: 'Monthly' }]} value={unit} onChange={(v) => setUnit(v as any)} />} />
-                  <div className={`px-2 pb-2 pt-3 transition-opacity ${histLoading ? 'opacity-50' : ''}`}>
-                    <NetBars bars={bars} />
-                  </div>
-                </Card>
-              </div>
-
-              {/* Side: controls + health */}
+              {/* Side: the account's controls and health */}
               <div className="space-y-4">
-                <Card className="!border-slate-200 overflow-hidden">
+                <Panel className="overflow-hidden">
                   <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-                    <Avatar a={selected} />
+                    <Avatar a={selected} size="h-9 w-9" />
                     <div className="min-w-0 flex-1">
-                      <a href={`https://www.instagram.com/${selected.username}/`} target="_blank" rel="noreferrer" className="block truncate text-sm font-semibold text-slate-900 hover:text-violet-700">@{selected.username}</a>
-                      <p className="truncate text-[11px] text-slate-500">{selected.display_name || 'Instagram account'}</p>
+                      <a href={`https://www.instagram.com/${selected.username}/`} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold text-slate-900 hover:underline">@{selected.username}</a>
+                      <p className="truncate text-[11px] text-slate-500">
+                        {selected.last_success_at ? `Checked ${timeAgo(selected.last_success_at)}` : 'Never checked'} · {selected.is_active ? `next ${until(selected.next_check_at)}` : 'paused'}
+                      </p>
                     </div>
                   </div>
-                  <div className="space-y-3 px-4 py-3 text-sm">
-                    <button onClick={() => runCheck(selected.id)} disabled={!!busy} className="flex w-full items-center justify-center gap-1.5 h-9 rounded-lg bg-[#0095f6] px-3.5 text-[13px] font-semibold text-white hover:bg-[#1877f2] disabled:opacity-50">
-                      <RefreshCw className={`h-4 w-4 ${busy === `check:${selected.id}` ? 'animate-spin' : ''}`} /> Check now
-                    </button>
+                  <div className="space-y-3 px-4 py-3.5">
+                    <Button variant="primary" className="w-full" onClick={() => runCheck(selected.id)} disabled={!!busy && busy !== `check:${selected.id}`} loading={busy === `check:${selected.id}`} icon={<RefreshCw className="h-3.5 w-3.5" />}>Check now</Button>
                     <label className="flex items-center justify-between gap-2">
                       <span className="text-xs text-slate-600">Check every</span>
                       <select value={selected.check_interval_hours} disabled={!!busy}
                         onChange={(e) => patch(selected.id, { check_interval_hours: Number(e.target.value) }, `@${selected.username} will be checked every ${e.target.value}h`)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800">
+                        className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800">
                         {Array.from(new Set([...INTERVALS, selected.check_interval_hours])).sort((x, y) => x - y).map((h) => <option key={h} value={h}>{h} hour{h > 1 ? 's' : ''}</option>)}
                       </select>
                     </label>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => patch(selected.id, { is_active: !selected.is_active }, selected.is_active ? `Paused @${selected.username}` : `Resumed @${selected.username}`)} disabled={!!busy}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                        {selected.is_active ? <><PauseCircle className="h-3.5 w-3.5" /> Pause</> : <><PlayCircle className="h-3.5 w-3.5" /> Resume</>}
-                      </button>
-                      <button onClick={() => setManualOpen((o) => !o)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                        <PencilLine className="h-3.5 w-3.5" /> Add count
-                      </button>
+                      <Button size="sm" onClick={() => patch(selected.id, { is_active: !selected.is_active }, selected.is_active ? `Paused @${selected.username}` : `Resumed @${selected.username}`)} disabled={!!busy}
+                        icon={selected.is_active ? <PauseCircle className="h-3.5 w-3.5" /> : <PlayCircle className="h-3.5 w-3.5" />}>{selected.is_active ? 'Pause' : 'Resume'}</Button>
+                      <Button size="sm" onClick={() => setManualOpen((o) => !o)} icon={<PencilLine className="h-3.5 w-3.5" />}>Add count</Button>
                     </div>
                     {manualOpen && (
                       <form onSubmit={saveManual} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 animate-slide-down">
                         <p className="text-[11px] text-slate-500">Record a known count, e.g. to back-fill history from before tracking.</p>
-                        <input value={manualVal} onChange={(e) => setManualVal(e.target.value)} inputMode="numeric" placeholder="Followers" className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" />
-                        <input type="datetime-local" value={manualAt} onChange={(e) => setManualAt(e.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700" title="Leave empty for now" />
-                        <button disabled={busy === 'manual' || !manualVal.trim()} className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50">Save snapshot</button>
+                        <input value={manualVal} onChange={(e) => setManualVal(e.target.value)} inputMode="numeric" placeholder="Followers" className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px]" />
+                        <input type="datetime-local" value={manualAt} onChange={(e) => setManualAt(e.target.value)} className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700" title="Leave empty for now" />
+                        <Button type="submit" size="sm" variant="primary" className="w-full" disabled={!manualVal.trim()} loading={busy === 'manual'}>Save snapshot</Button>
                       </form>
                     )}
                     <button onClick={() => remove(selected)} disabled={!!busy} className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rose-600">
                       <Trash2 className="h-3 w-3" /> Stop tracking &amp; delete history
                     </button>
                   </div>
-                </Card>
+                </Panel>
 
-                <Card className="!border-slate-200 overflow-hidden">
-                  <PanelHeader title="Failed attempts"
-                    right={<span className="text-[11px] text-slate-400">{failedForSelected.length} recent</span>} />
+                <Panel className="overflow-hidden">
+                  <PanelHeader title="Failed attempts" right={<span className="text-[11px] text-slate-400">{failedForSelected.length} recent</span>} />
                   {selected.last_error && selected.consecutive_failures > 0 && (
                     <p className="border-b border-amber-100 bg-amber-50/60 px-4 py-2 text-[11px] text-amber-800">
                       {selected.consecutive_failures} in a row · retrying {until(selected.next_check_at)}<br />{selected.last_error}
                     </p>
                   )}
                   {failedForSelected.length === 0 ? (
-                    <p className="px-4 py-5 text-center text-xs text-slate-400">No failed checks recently.</p>
+                    <p className="flex items-center justify-center gap-1.5 px-4 py-5 text-xs text-slate-500"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />No failed checks recently</p>
                   ) : (
                     <ul className="max-h-60 divide-y divide-slate-100 overflow-y-auto">
                       {failedForSelected.slice(0, 10).map((l) => (
@@ -400,13 +397,13 @@ export default function FollowersTab() {
                       ))}
                     </ul>
                   )}
-                </Card>
+                </Panel>
               </div>
             </div>
           )}
 
           {/* Recent activity (all accounts) */}
-          <Card className="!border-slate-200 overflow-hidden">
+          <Panel className="overflow-hidden">
             <PanelHeader title="Recent tracking activity"
               right={<span className={`text-[11px] ${data.failures24h ? 'font-medium text-rose-600' : 'text-slate-400'}`}>{data.failures24h} failed in 24h</span>} />
             {data.log.length === 0 ? (
@@ -418,10 +415,10 @@ export default function FollowersTab() {
                     <tr><th className="px-4 py-2 font-medium">When</th><th className="px-3 py-2 font-medium">Account</th><th className="px-3 py-2 font-medium">Result</th><th className="px-3 py-2 text-right font-medium">Followers</th><th className="hidden px-3 py-2 font-medium md:table-cell">Details</th><th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Source</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {data.log.slice(0, 25).map((l) => (
+                    {data.log.slice(0, logAll ? 25 : 6).map((l) => (
                       <tr key={l.id} className="hover:bg-slate-50/60">
                         <td className="whitespace-nowrap px-4 py-2 text-slate-500" title={new Date(l.created_at).toLocaleString('en-IN')}>{timeAgo(l.created_at)}</td>
-                        <td className="whitespace-nowrap px-3 py-2"><button onClick={() => l.account_id && setSelectedId(l.account_id)} className="font-medium text-slate-800 hover:text-violet-700">@{l.username}</button></td>
+                        <td className="whitespace-nowrap px-3 py-2"><button onClick={() => l.account_id && setSelectedId(l.account_id)} className="font-medium text-slate-800 hover:underline">@{l.username}</button></td>
                         <td className="px-3 py-2"><StatusPill status={l.status} /></td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-800">{l.followers_count == null ? '—' : fmt(l.followers_count)}</td>
                         <td className="hidden max-w-xs truncate px-3 py-2 text-slate-500 md:table-cell" title={l.message || ''}>{l.message || (l.duration_ms != null ? `${l.duration_ms} ms` : '')}</td>
@@ -430,9 +427,14 @@ export default function FollowersTab() {
                     ))}
                   </tbody>
                 </table>
+                {data.log.length > 6 && (
+                  <button onClick={() => setLogAll((v) => !v)} className="w-full border-t border-slate-100 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    {logAll ? 'Show less' : `Show ${Math.min(25, data.log.length) - 6} more`}
+                  </button>
+                )}
               </div>
             )}
-          </Card>
+          </Panel>
         </>
       )}
     </div>

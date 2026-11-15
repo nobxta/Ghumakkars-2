@@ -280,3 +280,17 @@ html, body {
     transform: translate(-50%, -50%);
   }
 }
+
+/* Thin, quiet scrollbar for in-panel lists (Instagram inbox). Standard props win over the
+   site-wide purple ::-webkit-scrollbar in Chrome 121+, Edge and Firefox. */
+.gk-scroll-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: #d6dbe3 transparent;
+}
+.gk-scroll-subtle::-webkit-scrollbar { width: 6px; height: 6px; }
+.gk-scroll-subtle::-webkit-scrollbar-track { background: transparent; }
+.gk-scroll-subtle::-webkit-scrollbar-thumb { background: #d6dbe3; border-radius: 9999px; }
+
+/* Horizontally scrollable strips (tab bars): scroll by swipe/trackpad, no visible bar. */
+.gk-no-scrollbar { scrollbar-width: none; }
+.gk-no-scrollbar::-webkit-scrollbar { display: none; }

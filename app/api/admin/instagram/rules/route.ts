@@ -3,6 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { withErrorLog } from '@/lib/error-log';
 import { cleanReply, siteUrlFrom } from '@/lib/instagram-tracker/messages';
+import { cleanConditions } from '@/lib/instagram-tracker/rules-core';
+import { tripTerms } from '@/lib/instagram-tracker/trip-pick';
+
+/** Too broad to be useful as a keyword suggestion. */
+const REGIONS = new Set(['india', 'uttarakhand', 'himachal', 'himanchal', 'himachal pradesh', 'himanchal pradesh', 'rajasthan', 'pradesh', 'kerala', 'goa state', 'jammu', 'kashmir', 'ladakh region']);
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,13 +19,15 @@ export const GET = withErrorLog('admin', 'Instagram rules list', async () => {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
   const db = createAdminClient();
-  const [rules, replies, sent, cfg, chats] = await Promise.all([
+  const [rules, replies, sent, cfg, chats, trips] = await Promise.all([
     db.from('instagram_reply_rules').select('*').order('channel').order('position'),
     db.from('instagram_reply_templates').select('*').not('rule_id', 'is', null).order('created_at'),
     db.from('instagram_auto_replies').select('rule_id, status').gte('created_at', new Date(Date.now() - 7 * DAY).toISOString()).not('rule_id', 'is', null).limit(5000),
     db.from('instagram_automation').select('site_url').eq('id', 1).maybeSingle(),
     // People who wrote in the last 24h — Instagram only allows sending to them.
     db.from('instagram_dm_messages').select('user_id, username, created_at').eq('direction', 'in').gte('created_at', new Date(Date.now() - DAY + 10 * 60_000).toISOString()).order('created_at', { ascending: false }).limit(200),
+    // Destinations of live trips — templates use them as keywords.
+    db.from('trips').select('title, destination, status, is_active').or('is_active.eq.true,status.eq.active,status.eq.scheduled').limit(100),
   ]);
   if (rules.error) return NextResponse.json({ error: rules.error.message }, { status: 500 });
 
@@ -38,6 +45,10 @@ export const GET = withErrorLog('admin', 'Instagram rules list', async () => {
     siteUrl: siteUrlFrom(cfg.data?.site_url),
     siteUrlConfigured: cfg.data?.site_url || null,
     testTargets,
+    // Place names people actually type: the town from each destination + the trip's own title words (no states or countries).
+    destinations: Array.from(new Set((trips.data || []).filter((t: any) => !['completed', 'cancelled', 'postponed'].includes(t.status || ''))
+      .flatMap((t: any) => [String(t.destination || '').split(',')[0].trim().toLowerCase(), ...tripTerms({ title: String(t.title || ''), destination: '' })])
+      .filter((d: string) => d.length >= 3 && d.length <= 20 && !REGIONS.has(d)))).slice(0, 20),
   });
 });
 
@@ -46,7 +57,7 @@ function cleanRule(b: any): { error: string } | { value: Record<string, unknown>
   if (!channel) return { error: 'Choose messages or comments.' };
   const name = String(b?.name || '').trim().slice(0, 80);
   if (!name) return { error: 'Give the rule a name.' };
-  const trigger = b?.trigger === 'keywords' ? 'keywords' : 'any';
+  const trigger = ['keywords', 'media', 'story'].includes(b?.trigger) && (channel === 'dm' || b.trigger === 'keywords') ? b.trigger : 'any';
   const keywords = Array.from(new Set((Array.isArray(b?.keywords) ? b.keywords : []).map((k: any) => String(k).trim().toLowerCase()).filter(Boolean).map((k: string) => k.slice(0, 40)))).slice(0, 30);
   if (trigger === 'keywords' && !keywords.length) return { error: 'Add at least one keyword.' };
   const hour = (v: any) => (v === null || v === '' || v === undefined ? null : Math.min(23, Math.max(0, Math.round(Number(v)))));
@@ -54,14 +65,16 @@ function cleanRule(b: any): { error: string } | { value: Record<string, unknown>
   return {
     value: {
       channel, name, trigger, keywords,
-      match_type: b?.match_type === 'exact' ? 'exact' : 'contains',
+      match_type: b?.match_type === 'exact' || b?.match_type === 'starts' ? b.match_type : 'contains',
       media_ids: channel === 'comment' ? (Array.isArray(b?.media_ids) ? b.media_ids : []).map(String).filter((x: string) => /^\d+$/.test(x)).slice(0, 50) : [],
       reply_mode: b?.reply_mode === 'fixed' ? 'fixed' : 'random',
-      cooldown_hours: channel === 'dm' ? Math.min(720, Math.max(0, Math.round(Number(b?.cooldown_hours) || 0))) : 0,
+      cooldown_hours: Math.min(720, Math.max(0, Math.round(Number(b?.cooldown_hours) || 0))),
       send_dm: channel === 'comment' ? !!b?.send_dm : false,
       active_from: from != null && to != null && from !== to ? from : null,
       active_to: from != null && to != null && from !== to ? to : null,
       is_active: b?.is_active !== false,
+      action: b?.action === 'ignore' ? 'ignore' : 'reply',
+      conditions: cleanConditions(b?.conditions, channel),
     },
   };
 }
@@ -81,6 +94,7 @@ function cleanAll(body: any) {
     if ('error' in c) return { error: c.error };
     out.push({ ...c.value, id: typeof raw?.id === 'string' && /^[0-9a-f-]{36}$/i.test(raw.id) ? raw.id : undefined });
   }
+  if (rule.action === 'ignore') return { rule: { ...rule, send_dm: false }, replies: out };
   const dms = out.filter((x) => x.kind === 'dm' && x.is_active);
   const pubs = out.filter((x) => x.kind === 'comment' && x.is_active);
   if (rule.channel === 'dm' && !dms.length) return { error: 'Add at least one reply message.' };
@@ -121,7 +135,7 @@ export const POST = withErrorLog('admin', 'Instagram rule create', async (reques
   const db = createAdminClient();
   // New keyword rules go above the catch-alls.
   const { data: top } = await db.from('instagram_reply_rules').select('position').eq('channel', c.rule.channel).order('position', { ascending: true }).limit(1);
-  const position = c.rule.trigger === 'keywords' ? (top?.[0]?.position ?? 100) - 1 : 200;
+  const position = c.rule.trigger !== 'any' ? (top?.[0]?.position ?? 100) - 1 : 200;
   const { data, error } = await db.from('instagram_reply_rules').insert({ ...c.rule, position }).select('id').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   try { await saveReplies(db, data.id, c.replies); } catch (e: any) {

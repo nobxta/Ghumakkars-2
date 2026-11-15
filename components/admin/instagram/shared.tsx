@@ -5,10 +5,11 @@ import { ArrowDownRight, ArrowUpRight, Loader2 } from 'lucide-react';
 
 /*
  * Design language for the Instagram section
- * - Neutral surfaces, ink for text, violet only for selection/focus/links.
- * - Status colours (emerald/amber/rose) only when something IS good/bad.
- * - Sentence-case labels, numbers carry the weight (semibold, tabular).
- * - One primary (dark) button per area, always on the right.
+ * - Neutral surfaces (white panels on the grey admin canvas), slate ink for text.
+ * - One data accent: Instagram magenta (#d62976) for charts, selection and "needs you".
+ * - One action colour: Instagram blue for the single primary button in an area.
+ * - Green / amber / red only for status. The story-ring gradient only on avatars.
+ * - Sizes: buttons 36px (md) / 32px (sm), panels rounded-xl, 16px gaps between panels.
  */
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -18,23 +19,17 @@ export const IG_GRADIENT = 'bg-[linear-gradient(45deg,#feda75_0%,#fa7e1e_25%,#d6
 export const IG_GRADIENT_TEXT = 'bg-[linear-gradient(90deg,#fa7e1e,#d62976,#962fbf)] bg-clip-text text-transparent';
 export const IG_BLUE = '#0095f6';
 
-/** Coloured icon chip (soft tint) for stat tiles and section headers. */
+/** Kept for callers; chips are neutral so colour stays meaningful. */
 export const TONES = {
-  pink: 'bg-pink-50 text-pink-600',
-  orange: 'bg-orange-50 text-orange-600',
-  purple: 'bg-purple-50 text-purple-600',
-  blue: 'bg-sky-50 text-sky-600',
-  green: 'bg-emerald-50 text-emerald-600',
-  amber: 'bg-amber-50 text-amber-600',
-  rose: 'bg-rose-50 text-rose-600',
-  indigo: 'bg-indigo-50 text-indigo-600',
+  pink: '', orange: '', purple: '', blue: '', green: '', amber: '', rose: '', indigo: '',
 } as const;
 export type Tone = keyof typeof TONES;
 
-export function IconChip({ icon, tone, size = 32, gradient }: { icon: ReactNode; tone?: Tone; size?: number; gradient?: boolean }) {
+/** Small square icon holder for section headers. Neutral; `gradient` marks the one accented item. */
+export function IconChip({ icon, size = 32, gradient }: { icon: ReactNode; tone?: Tone; size?: number; gradient?: boolean }) {
   return (
     <span style={{ width: size, height: size }}
-      className={cx('flex shrink-0 items-center justify-center rounded-xl [&>svg]:h-4 [&>svg]:w-4', gradient ? cx(IG_GRADIENT, 'text-white shadow-sm shadow-pink-500/20') : TONES[tone || 'purple'])}>
+      className={cx('flex shrink-0 items-center justify-center rounded-lg [&>svg]:h-4 [&>svg]:w-4', gradient ? 'bg-pink-50 text-[#d62976]' : 'bg-slate-100 text-slate-600')}>
       {icon}
     </span>
   );
@@ -50,18 +45,18 @@ export function StoryRing({ children, active = true, size }: { children: ReactNo
 }
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cx('rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]', className)}>{children}</section>;
+  return <section className={cx('rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]', className)}>{children}</section>;
 }
 
 export function PanelHeader({ title, description, right, className, icon, tone, gradient }: { title: ReactNode; description?: ReactNode; right?: ReactNode; className?: string; icon?: ReactNode; tone?: Tone; gradient?: boolean }) {
   return (
-    <div className={cx('flex min-h-[56px] flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-3', className)}>
-      {icon && <IconChip icon={icon} tone={tone} gradient={gradient} />}
+    <div className={cx('flex min-h-[52px] flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-2.5 sm:px-5', className)}>
+      {icon && <IconChip icon={icon} tone={tone} gradient={gradient} size={28} />}
       <div className="min-w-0 flex-1">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
       </div>
-      {right && <div className="flex shrink-0 items-center gap-2">{right}</div>}
+      {right && <div className="flex shrink-0 flex-wrap items-center gap-2">{right}</div>}
     </div>
   );
 }
@@ -84,24 +79,21 @@ export function Delta({ cur, prev, invert = false, suffix }: { cur?: number | nu
 }
 
 /** Stat tile: label → number → context. */
-export function Stat({ label, value, sub, delta, size = 'md', className, title, icon, tone }: {
+export function Stat({ label, value, sub, delta, size = 'md', className, title, icon }: {
   label: ReactNode; value: ReactNode; sub?: ReactNode; delta?: ReactNode; size?: 'sm' | 'md' | 'lg'; className?: string; title?: string; icon?: ReactNode; tone?: Tone;
 }) {
   return (
     <div className={cx('min-w-0', className)} title={title}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[13px] text-slate-500">{label}</p>
-        {icon && <IconChip icon={icon} tone={tone} size={size === 'sm' ? 26 : 30} />}
-      </div>
-      <p className={cx('mt-1 truncate font-semibold tabular-nums tracking-tight text-slate-900', size === 'lg' ? 'text-[28px] leading-8' : size === 'md' ? 'text-2xl' : 'text-lg')}>{value}</p>
-      {(delta || sub) && <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-slate-500">{delta}{sub && <span className="truncate">{sub}</span>}</div>}
+      <p className="flex items-center gap-1.5 truncate text-xs font-medium text-slate-500">{icon && <span className="text-slate-400 [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>}{label}</p>
+      <p className={cx('mt-1 truncate font-semibold tabular-nums tracking-tight text-slate-900', size === 'lg' ? 'text-[26px] leading-8' : size === 'md' ? 'text-xl' : 'text-base')}>{value}</p>
+      {(delta || sub) && <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-slate-500">{delta}{sub && <span className="truncate">{sub}</span>}</div>}
     </div>
   );
 }
 
 /** Row of stats separated by hairlines; wraps to 2 columns on phones. */
 export function StatRow({ children, cols = 'lg:grid-cols-6' }: { children: ReactNode; cols?: string }) {
-  return <div className={cx('grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-3 [&>*]:bg-white [&>*]:px-5 [&>*]:py-4', cols)}>{children}</div>;
+  return <div className={cx('grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200/90 bg-slate-100 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-3 [&>*]:bg-white [&>*]:px-4 [&>*]:py-3.5', cols)}>{children}</div>;
 }
 
 export function Segmented({ options, value, onChange, size = 'sm' }: { options: { k: string; l: ReactNode }[]; value: string; onChange: (k: string) => void; size?: 'sm' | 'xs' }) {
@@ -121,17 +113,17 @@ export function Segmented({ options, value, onChange, size = 'sm' }: { options: 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'gradient' | 'soft'; loading?: boolean; icon?: ReactNode; size?: 'sm' | 'md' };
 export function Button({ variant = 'secondary', loading, icon, size = 'md', className, children, disabled, ...rest }: BtnProps) {
   const v = {
-    primary: 'bg-[#0095f6] text-white shadow-sm hover:bg-[#1877f2] disabled:bg-sky-200',
-    gradient: cx(IG_GRADIENT, 'text-white shadow-sm shadow-pink-500/25 hover:brightness-105'),
-    soft: 'bg-slate-100 text-slate-900 hover:bg-slate-200/80',
-    secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900',
+    primary: 'bg-[#0095f6] text-white shadow-sm hover:bg-[#1877f2] disabled:bg-sky-300',
+    gradient: 'bg-[#0095f6] text-white shadow-sm hover:bg-[#1877f2] disabled:bg-sky-300',
+    soft: 'bg-slate-100 text-slate-800 hover:bg-slate-200/80',
+    secondary: 'border border-slate-200 bg-white text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900',
     ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
     danger: 'text-rose-600 hover:bg-rose-50',
   }[variant];
   return (
     <button {...rest} disabled={disabled || loading}
-      className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 disabled:cursor-not-allowed disabled:opacity-60',
-        size === 'md' ? 'h-8 px-3.5 text-[13px] font-semibold' : 'h-7 px-2.5 text-xs font-semibold', v, className)}>
+      className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:shrink-0',
+        size === 'md' ? 'h-9 px-3.5 text-[13px]' : 'h-8 px-2.5 text-xs', v, className)}>
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
       {children}
     </button>

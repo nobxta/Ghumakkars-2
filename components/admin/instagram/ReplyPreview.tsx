@@ -3,20 +3,24 @@
 import { ChevronLeft, Info, ImageIcon, Phone, Video } from 'lucide-react';
 import { Avatar, StoryRing, cx } from './shared';
 import type { RuleReply, TripCardPreview } from './types';
+import { renderText } from '@/lib/instagram-tracker/rules-core';
 
 const SAMPLE_USER = 'traveller.riya';
-const fillVars = (s: string) => s.replace(/\{username\}/gi, `@${SAMPLE_USER}`);
+// Same filling as the real send; {a|b} options always show the first one so the preview doesn't flicker.
+const fillVars = (s: string, trip?: string | null) => renderText(s, { username: SAMPLE_USER, name: 'Riya Sharma', trip }, () => 0);
 const BUBBLE_OUT = 'bg-[linear-gradient(135deg,#8a3ffc_0%,#5b5bf7_55%,#0095f6_100%)] text-white';
 
 /** Phone-shaped preview of how a reply lands in Instagram. */
 export default function ReplyPreview({
-  channel, incoming, reply, publicReply, trips, profile,
+  channel, incoming, reply, publicReply, trips, tripName, profile,
 }: {
   channel: 'dm' | 'comment';
   incoming: string;
   reply: RuleReply | null;          // the DM that gets sent
   publicReply?: RuleReply | null;   // comment rules: the public reply
   trips: TripCardPreview[] | null;
+  /** {trip} for this preview message (from the server's trip choice) */
+  tripName?: string | null;
   profile?: { username?: string; picture?: string | null };
 }) {
   const me = profile?.username || 'your_account';
@@ -56,7 +60,7 @@ export default function ReplyPreview({
             {reply && (
               <div className="border-t border-dashed border-slate-200 bg-slate-50/60 px-3 pb-4 pt-3">
                 <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400">…and in their DMs</p>
-                <DmMessage reply={reply} trips={trips} />
+                <DmMessage reply={reply} trips={trips} tripName={tripName} />
               </div>
             )}
           </div>
@@ -77,7 +81,7 @@ export default function ReplyPreview({
                 <Avatar name={SAMPLE_USER} size={22} />
                 <div className="max-w-[75%] rounded-3xl rounded-bl-md bg-[#efefef] px-3.5 py-2 text-[13px]">{incoming || 'Hi!'}</div>
               </div>
-              {reply ? <DmMessage reply={reply} trips={trips} /> : <p className="py-8 text-center text-xs text-slate-400">Add a reply to preview it</p>}
+              {reply ? <DmMessage reply={reply} trips={trips} tripName={tripName} /> : <p className="py-8 text-center text-xs text-slate-400">Add a reply to preview it</p>}
             </div>
             {reply?.format === 'text' && reply.quick_replies.length > 0 && !reply.buttons.length && (
               <div className="flex gap-1.5 overflow-x-auto px-3 pb-2">
@@ -96,16 +100,35 @@ export default function ReplyPreview({
   );
 }
 
-function DmMessage({ reply, trips }: { reply: RuleReply; trips: TripCardPreview[] | null }) {
-  const text = fillVars(reply.text || '');
+/** Our text bubble, with optional quick-reply chips under it. */
+function Bubble({ text, quick }: { text: string; quick?: string[] }) {
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <div className={cx('max-w-[78%] whitespace-pre-wrap break-words rounded-3xl rounded-br-md px-3.5 py-2 text-[13px]', BUBBLE_OUT)}>{text}</div>
+      {!!quick?.length && (
+        <div className="flex max-w-full flex-wrap justify-end gap-1">
+          {quick.map((q) => <span key={q} className="rounded-full border border-[#0095f6] px-2.5 py-1 text-[11px] font-medium text-[#0095f6]">{q}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DmMessage({ reply, trips, tripName }: { reply: RuleReply; trips: TripCardPreview[] | null; tripName?: string | null }) {
+  const fill = (s: string) => fillVars(s, tripName);
+  const text = fill(reply.text || '');
+  const before = reply.options?.before_text ? fill(reply.options.before_text) : '';
+  const after = reply.options?.after_text ? fill(reply.options.after_text) : '';
+  const extra = reply.options?.trip_extra_button?.title ? reply.options.trip_extra_button.title : null;
   const buttons = (reply.buttons || []).filter((b) => b.title);
 
   if (reply.format === 'trips') {
     return (
       <div className="space-y-2">
-        {text && <div className="flex justify-end"><div className={cx('max-w-[78%] whitespace-pre-wrap break-words rounded-3xl rounded-br-md px-3.5 py-2 text-[13px]', BUBBLE_OUT)}>{text}</div></div>}
-        <div className="-mx-3 flex snap-x gap-2 overflow-x-auto px-3 pb-1">
-          {(trips && trips.length ? trips : [null, null]).map((t, i) => (
+        {text && <Bubble text={text} />}
+        {trips && trips.length === 0 && <p className="text-center text-[11px] text-slate-400">No trip cards for this message</p>}
+        <div className="gk-scroll-subtle -mx-3 flex snap-x gap-2 overflow-x-auto px-3 pb-1">
+          {(trips ? trips : [null, null]).map((t, i) => (
             <div key={i} className="w-[210px] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex h-28 items-center justify-center bg-slate-100">
                 {t?.image
@@ -118,15 +141,19 @@ function DmMessage({ reply, trips }: { reply: RuleReply; trips: TripCardPreview[
                 <p className="line-clamp-1 text-[11px] text-slate-500">{t?.subtitle || 'From ₹…'}</p>
               </div>
               <div className="border-t border-slate-100 py-2 text-center text-[13px] font-semibold text-[#0095f6]">{reply.options?.trip_button || 'View trip'}</div>
+              {extra && <div className="border-t border-slate-100 py-2 text-center text-[13px] font-semibold text-[#0095f6]">{extra}</div>}
             </div>
           ))}
         </div>
+        {after && <Bubble text={after} quick={reply.options?.after_quick} />}
       </div>
     );
   }
 
   if (reply.format === 'card') {
     return (
+      <div className="space-y-2">
+      {before && <Bubble text={before} />}
       <div className="flex justify-end">
         <div className="w-[230px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex h-32 items-center justify-center bg-slate-100">
@@ -136,11 +163,13 @@ function DmMessage({ reply, trips }: { reply: RuleReply; trips: TripCardPreview[
               : <ImageIcon className="h-6 w-6 text-slate-300" />}
           </div>
           <div className="px-3 py-2">
-            <p className="line-clamp-2 text-[13px] font-semibold">{fillVars(reply.title || '') || 'Card title'}</p>
+            <p className="line-clamp-2 text-[13px] font-semibold">{fill(reply.title || '') || 'Card title'}</p>
             {text && <p className="line-clamp-2 text-[11px] text-slate-500">{text}</p>}
           </div>
           {buttons.map((b, i) => <div key={i} className="border-t border-slate-100 py-2 text-center text-[13px] font-semibold text-[#0095f6]">{b.title}</div>)}
         </div>
+      </div>
+      {after && <Bubble text={after} quick={reply.options?.after_quick} />}
       </div>
     );
   }

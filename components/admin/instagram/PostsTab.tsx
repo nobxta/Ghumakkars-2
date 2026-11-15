@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { LayoutGrid, Rows3, Play, Heart, MessageCircle, ArrowUpRight, ChevronDown, ChevronUp, Clapperboard, Copy, Send, Bookmark, Eye } from 'lucide-react';
 import { Skeleton } from '@/components/admin/dashboard/utils';
-import { compact, fmt } from './charts';
-import { Panel, Segmented, Stat, StatRow, IG_GRADIENT, cx } from './shared';
+import { NetBars, compact, fmt } from './charts';
+import { Panel, PanelHeader, Segmented, cx } from './shared';
 import { isReel, mediaThumb, type IgMediaItem, type MediaData } from './types';
 
 type SortKey = 'date' | 'views' | 'reach' | 'likes' | 'comments' | 'shares' | 'saved' | 'er';
@@ -43,28 +43,42 @@ export default function PostsTab({ media, error }: { media: MediaData | null; er
     return { views: mean((m) => m.insights.views || 0), reach: mean((m) => m.insights.reach || 0), likes: mean((m) => m.like_count || 0), er: mean((m) => val(m, 'er')) * 100 };
   }, [list]);
 
+  const timeline = useMemo(() => [...list].sort((a, b) => val(a, 'date') - val(b, 'date')).map((m) => ({
+    key: m.id, label: day(m.timestamp), net: m.insights.views ?? m.insights.reach ?? 0, close: m.like_count || 0,
+  })), [list]);
+
   if (error) return <p className="rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3 text-[13px] text-rose-700">{error}</p>;
   if (!media) return <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-[4/5] rounded-xl" />)}</div>;
 
   return (
-    <div className="space-y-6">
-      {avg && (
-        <StatRow cols="lg:grid-cols-4">
-          <Stat icon={<Play />} tone="pink" label={`Average views · ${list.length} ${filter === 'reels' ? 'reels' : 'posts'}`} value={compact(avg.views)} />
-          <Stat icon={<Eye />} tone="purple" label="Average reach" value={compact(avg.reach)} />
-          <Stat icon={<Heart />} tone="rose" label="Average likes" value={compact(avg.likes)} />
-          <Stat icon={<MessageCircle />} tone="orange" label="Average engagement" value={`${avg.er.toFixed(1)}%`} sub="interactions ÷ reach" />
-        </StatRow>
-      )}
+    <div className="space-y-4">
+      {/* Summary: averages on the left, every post's views on the right — one panel, one glance. */}
+      <Panel className="overflow-hidden">
+        <PanelHeader title="How your posts perform" description={`Averages across ${list.length} ${filter === 'reels' ? 'reels' : filter === 'posts' ? 'photos & carousels' : 'posts'} · bars are views per post, oldest → newest`}
+          right={<Segmented options={[{ k: 'all', l: 'All' }, { k: 'reels', l: 'Reels' }, { k: 'posts', l: 'Photos' }]} value={filter} onChange={setFilter} />} />
+        <div className="grid lg:grid-cols-[280px_minmax(0,1fr)]">
+          {avg && (
+            <dl className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 lg:border-b-0 lg:border-r [&>div]:bg-white [&>div]:px-4 [&>div]:py-3.5 sm:[&>div]:px-5">
+              <Avg label="Views" icon={<Play />} value={compact(avg.views)} />
+              <Avg label="Reach" icon={<Eye />} value={compact(avg.reach)} />
+              <Avg label="Likes" icon={<Heart />} value={compact(avg.likes)} />
+              <Avg label="Engagement" icon={<MessageCircle />} value={`${avg.er.toFixed(1)}%`} />
+            </dl>
+          )}
+          <div className="min-w-0 px-3 pb-2 pt-4 sm:px-4">
+            <NetBars bars={timeline} height={172} valueLabel="views" closeLabel="likes" emptyText="No posts yet." />
+          </div>
+        </div>
+      </Panel>
 
-      {/* Filters left · ordering and view right */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented options={[{ k: 'all', l: 'All' }, { k: 'reels', l: 'Reels' }, { k: 'posts', l: 'Photos & carousels' }]} value={filter} onChange={setFilter} />
+      {/* Toolbar: count left · ordering and view right */}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[13px] text-slate-500"><b className="font-semibold text-slate-900">{list.length}</b> {list.length === 1 ? 'post' : 'posts'}</p>
         <div className="ml-auto flex items-center gap-2">
           <label className="relative">
             <span className="sr-only">Sort posts</span>
             <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}
-              className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-[13px] font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+              className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-xs font-semibold text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500/30">
               {SORTS.map((s) => <option key={s.k} value={s.k}>{s.l}</option>)}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -74,8 +88,8 @@ export default function PostsTab({ media, error }: { media: MediaData | null; er
       </div>
 
       {view === 'grid' ? (
-        <Panel className="p-1.5">
-          <div className="grid grid-cols-3 gap-1.5 md:grid-cols-4 xl:grid-cols-6">
+        <Panel className="p-2">
+          <div className="grid grid-cols-3 gap-2 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
             {list.map((m) => {
               const er = val(m, 'er') * 100;
               const TypeIcon = isReel(m) ? Clapperboard : m.media_type === 'CAROUSEL_ALBUM' ? Copy : null;
@@ -100,7 +114,7 @@ export default function PostsTab({ media, error }: { media: MediaData | null; er
                       <span className="flex items-center gap-1"><Send className="h-3 w-3" />{compact(m.insights.shares || 0)}</span>
                       <span className="flex items-center gap-1"><Bookmark className="h-3 w-3" fill="currentColor" />{compact(m.insights.saved || 0)}</span>
                     </div>
-                    <span className={cx('mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white', er >= 5 ? IG_GRADIENT : 'bg-white/20')}>{er.toFixed(1)}% engagement</span>
+                    <span className={cx('mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', er >= 5 ? 'bg-white text-[#d62976]' : 'bg-white/20 text-white')}>{er.toFixed(1)}% engagement</span>
                     <span className="absolute bottom-2 text-[10px] text-white/70">{day(m.timestamp)}</span>
                   </div>
                 </a>
@@ -172,4 +186,13 @@ function Th({ k, sort, setSort, children, last }: { k: SortKey; sort: SortKey; s
 
 function Td({ on, children }: { on: boolean; children: React.ReactNode }) {
   return <td className={cx('px-3 py-2.5 text-right', on ? 'font-semibold text-slate-900' : 'text-slate-600')}>{children}</td>;
+}
+
+function Avg({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="text-slate-400 [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>{label}</dt>
+      <dd className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</dd>
+    </div>
+  );
 }

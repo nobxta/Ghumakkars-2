@@ -171,19 +171,56 @@ export async function getDemographics() {
 }
 
 /* ── inbox ── */
+const MSG_FIELDS = 'id,created_time,from,to,message,attachments{id}';
+
+/**
+ * Latest conversations. Also asks for shares (a post/reel they sent) and story
+ * (a reply to / mention of our story) so rules can react to them; if Instagram
+ * refuses those fields, falls back to the basic list so the inbox keeps syncing.
+ */
 export async function getConversations(limit = 25, perConversation = 10) {
-  const r = await igGet(`${ownId()}/conversations`, {
+  const get = (fields: string) => igGet(`${ownId()}/conversations`, {
     platform: 'instagram',
     limit: String(limit),
-    fields: `id,updated_time,participants,messages.limit(${perConversation}){id,created_time,from,to,message,attachments{id}}`,
+    fields: `id,updated_time,participants,messages.limit(${perConversation}){${fields}}`,
   });
+  let r: any;
+  try { r = await get(`${MSG_FIELDS},shares{link},story`); } catch (e) {
+    if (!(e instanceof IgApiError) || e.kind !== 'failed') throw e;
+    r = await get(MSG_FIELDS);
+  }
   return (r?.data || []) as any[];
+}
+
+/** What kind of message this is, for rule triggers. */
+export function messageKind(m: any): 'text' | 'media' | 'story' {
+  if (m?.story) return 'story';
+  if (m?.shares?.data?.length || m?.attachments?.data?.length) return 'media';
+  return 'text';
+}
+
+/**
+ * Someone's public profile as Instagram shares it with the business (works for
+ * people who messaged or commented). null when Instagram doesn't say.
+ */
+export async function getUserProfile(igsid: string): Promise<{ name: string | null; follows: boolean | null; followers: number | null } | null> {
+  try {
+    const r = await igGet(igsid, { fields: 'name,username,is_user_follow_business,follower_count' });
+    return {
+      name: r?.name || null,
+      follows: typeof r?.is_user_follow_business === 'boolean' ? r.is_user_follow_business : null,
+      followers: Number.isFinite(Number(r?.follower_count)) ? Number(r.follower_count) : null,
+    };
+  } catch (e) {
+    if (e instanceof IgApiError && e.kind !== 'failed') throw e;
+    return null;
+  }
 }
 
 export async function getRecentComments(posts = 10) {
   const r = await igGet(`${ownId()}/media`, {
     limit: String(posts),
-    fields: 'id,permalink,timestamp,comments.limit(50){id,text,username,timestamp,from,replies.limit(20){id,from,username}}',
+    fields: 'id,permalink,timestamp,caption,comments.limit(50){id,text,username,timestamp,from,replies.limit(20){id,from,username}}',
   });
   return (r?.data || []) as any[];
 }

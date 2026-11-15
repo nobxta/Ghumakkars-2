@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { withErrorLog } from '@/lib/error-log';
-import { cleanReply, loadTripCards, siteUrlFrom, type ReplyRow } from '@/lib/instagram-tracker/messages';
+import { cleanReply, loadLiveTrips, siteUrlFrom, tripsFor, type ReplyRow } from '@/lib/instagram-tracker/messages';
 import { sendReply } from '@/lib/instagram-tracker/automation';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST { reply, userId, username }   → send a draft reply to someone who messaged you in the last 24h
- * POST { previewTrips: n }           → the trip cards a "trips" reply would show right now
+ * POST { previewTrips: options, message } → the trip cards a "trips" reply would send for that message right now
+ *                                          (+ the {trip} name and whether the message named a trip)
+ * POST { listTrips: true }           → live trips for the "pick trips" list
  */
 export const POST = withErrorLog('admin', 'Instagram reply test', async (request: NextRequest) => {
   const auth = await requireAdmin();
@@ -20,9 +22,14 @@ export const POST = withErrorLog('admin', 'Instagram reply test', async (request
   const { data: cfg } = await db.from('instagram_automation').select('site_url').eq('id', 1).maybeSingle();
   const siteUrl = siteUrlFrom(cfg?.site_url);
 
+  if (b.listTrips) {
+    const trips = await loadLiveTrips();
+    return NextResponse.json({ trips: trips.map((t) => ({ id: t.id, title: t.title, place: (t.destination || '').split(',')[0], price: t.price, image: t.image, bookable: t.bookable, featured: t.featured })) });
+  }
   if (b.previewTrips != null) {
-    const cards = await loadTripCards(Number(b.previewTrips) || 5, siteUrl || 'https://example.com');
-    return NextResponse.json({ cards });
+    const options = typeof b.previewTrips === 'object' ? b.previewTrips : { trips_limit: Number(b.previewTrips) || 5 };
+    const r = await tripsFor({ format: 'trips', options }, String(b.message || ''), siteUrl || 'https://example.com');
+    return NextResponse.json({ cards: r.cards, tripName: r.tripName, matched: r.matched });
   }
 
   if (!/^\d+$/.test(String(b.userId))) return NextResponse.json({ error: 'Pick who to send the test to.' }, { status: 400 });
@@ -39,7 +46,7 @@ export const POST = withErrorLog('admin', 'Instagram reply test', async (request
   }
 
   try {
-    const r = await sendReply({ id: String(b.userId) }, { id: 'test', rule_id: null, ...(c.value as any) } as ReplyRow, { username: b.username || null }, siteUrl);
+    const r = await sendReply({ id: String(b.userId) }, { id: 'test', rule_id: null, ...(c.value as any) } as ReplyRow, { username: b.username || null, message: String(b.message || '') }, siteUrl);
     return NextResponse.json({ ok: true, fellBack: r.fellBack });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Instagram refused the message' }, { status: 502 });

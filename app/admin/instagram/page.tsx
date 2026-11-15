@@ -10,7 +10,7 @@ import FollowersTab from '@/components/admin/instagram/FollowersTab';
 import InboxTab from '@/components/admin/instagram/InboxTab';
 import AutomationTab from '@/components/admin/instagram/AutomationTab';
 import { fmt } from '@/components/admin/instagram/charts';
-import { Avatar, Button, Dot, Panel, PanelHeader, StoryRing, IG_GRADIENT, cx } from '@/components/admin/instagram/shared';
+import { Avatar, Button, Dot, Panel, PanelHeader, StoryRing, cx } from '@/components/admin/instagram/shared';
 import type { InboxData, MediaData, OverviewData, ReplyTemplate, AutomationSettings } from '@/components/admin/instagram/types';
 
 const TABS = [
@@ -36,7 +36,7 @@ export default function InstagramPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [media, setMedia] = useState<MediaData | null>(null);
   const [inbox, setInbox] = useState<InboxData | null>(null);
-  const [auto, setAuto] = useState<{ settings: AutomationSettings | null; templates: ReplyTemplate[]; webhook?: { configured: boolean } }>({ settings: null, templates: [] });
+  const [auto, setAuto] = useState<{ settings: AutomationSettings | null; templates: ReplyTemplate[]; webhook?: { configured: boolean }; mutes?: { recipient_id: string; username: string | null; until: string }[] }>({ settings: null, templates: [] });
   const [errors, setErrors] = useState({ overview: '', media: '' });
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -63,7 +63,7 @@ export default function InstagramPage() {
     ]);
   }, []);
   const loadInbox = useCallback(() => getJson<InboxData>('/api/admin/instagram/inbox').then(setInbox).catch(() => {}), []);
-  const loadAuto = useCallback(() => getJson<{ settings: AutomationSettings; templates: ReplyTemplate[]; webhook: { configured: boolean } }>('/api/admin/instagram/automation').then(setAuto).catch(() => {}), []);
+  const loadAuto = useCallback(() => getJson<{ settings: AutomationSettings; templates: ReplyTemplate[]; webhook: { configured: boolean }; mutes: { recipient_id: string; username: string | null; until: string }[] }>('/api/admin/instagram/automation').then(setAuto).catch(() => {}), []);
 
   useEffect(() => { loadInsights(); loadInbox(); loadAuto(); }, [loadInsights, loadInbox, loadAuto]);
   useEffect(() => {
@@ -93,71 +93,69 @@ export default function InstagramPage() {
   const autoOn = !!a && (a.dm_enabled || a.comment_enabled);
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 pb-10 pt-5 sm:px-6">
-      {/* Profile — Instagram layout: story ring, counts, bio */}
-      <header className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-5 py-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:px-8 sm:py-7">
-        <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-pink-300/30 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -top-20 right-40 h-48 w-48 rounded-full bg-orange-200/40 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-24 right-10 h-56 w-56 rounded-full bg-purple-300/25 blur-3xl" />
-
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
-          <StoryRing><Avatar src={p?.profile_picture_url} name={p?.username} size={92} /></StoryRing>
+    <div className="mx-auto w-full max-w-[1440px]">
+      {/* Compact profile bar + section tabs in one card: ~130px instead of a 300px hero on every tab. */}
+      <header className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
+          <StoryRing><Avatar src={p?.profile_picture_url} name={p?.username} size={52} /></StoryRing>
           <div className="min-w-0 flex-1">
             {p ? (
               <>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <h1 className="text-xl font-semibold tracking-tight text-slate-900">{p.username}</h1>
-                  <a href={`https://www.instagram.com/${p.username}/`} target="_blank" rel="noreferrer"
-                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-slate-100 px-3.5 text-[13px] font-semibold text-slate-900 hover:bg-slate-200/80">
-                    View profile <ArrowUpRight className="h-3.5 w-3.5" />
-                  </a>
-                  <Button variant="soft" onClick={refresh} loading={refreshing} icon={<RefreshCw className="h-3.5 w-3.5" />} aria-label="Refresh data">
-                    <span className="hidden sm:inline">Refresh</span>
-                  </Button>
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h1 className="truncate text-[17px] font-semibold tracking-tight text-slate-900">{p.username}</h1>
+                  {p.name && <span className="hidden truncate text-[13px] text-slate-500 md:inline">{p.name}</span>}
                 </div>
-                <ul className="mt-3 flex gap-6 text-[15px] text-slate-700">
-                  <li><b className="font-semibold tabular-nums text-slate-900">{fmt(p.media_count)}</b> posts</li>
+                <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-slate-500">
                   <li><b className="font-semibold tabular-nums text-slate-900">{fmt(p.followers_count)}</b> followers</li>
+                  <li><b className="font-semibold tabular-nums text-slate-900">{fmt(p.media_count)}</b> posts</li>
                   <li><b className="font-semibold tabular-nums text-slate-900">{fmt(p.follows_count)}</b> following</li>
+                  {p.website && <li className="hidden lg:block"><a href={p.website} target="_blank" rel="noreferrer" className="font-medium text-[#00376b] hover:underline">{p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a></li>}
                 </ul>
-                <p className="mt-3 text-[13px] font-semibold text-slate-900">{p.name}</p>
-                {p.biography && <p className="mt-0.5 max-w-xl whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{p.biography}</p>}
-                {p.website && <a href={p.website} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold text-[#00376b] hover:underline">{p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>}
               </>
             ) : errors.overview ? (
               <p className="text-sm text-rose-600">{errors.overview}</p>
             ) : (
-              <div className="space-y-3"><Skeleton className="h-6 w-48" /><Skeleton className="h-4 w-72" /><Skeleton className="h-12 w-96 max-w-full" /></div>
+              <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-4 w-64 max-w-full" /></div>
             )}
           </div>
-          {overview && <span className="absolute right-0 top-0 hidden text-[11px] text-slate-400 lg:block">Updated {timeAgo(overview.fetchedAt)}</span>}
+          <div className="flex items-center gap-2">
+            {overview && <span className="hidden text-xs text-slate-400 xl:inline">Updated {timeAgo(overview.fetchedAt)}</span>}
+            {p && (
+              <a href={`https://www.instagram.com/${p.username}/`} target="_blank" rel="noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900">
+                <span className="hidden sm:inline">Open in Instagram</span><span className="sm:hidden">Open</span> <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            )}
+            <Button onClick={refresh} loading={refreshing} icon={<RefreshCw className="h-3.5 w-3.5" />} aria-label="Refresh data">
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </div>
         </div>
+
+        <nav className="gk-no-scrollbar flex gap-1 overflow-x-auto border-t border-slate-100 px-2 sm:px-3" aria-label="Instagram sections">
+          {TABS.map((t) => {
+            const on = tab === t.k;
+            return (
+              <button key={t.k} onClick={() => go(t.k)} aria-current={on ? 'page' : undefined}
+                className={cx('relative flex h-11 shrink-0 items-center gap-2 px-3 text-[13px] font-medium transition-colors',
+                  on ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900')}>
+                <t.Icon className={cx('h-4 w-4', on ? 'text-[#d62976]' : 'text-slate-400')} />
+                {t.l}
+                {t.k === 'inbox' && waiting > 0 && <span className="min-w-[18px] rounded-full bg-[#d62976] px-1.5 text-center text-[11px] font-semibold tabular-nums leading-[18px] text-white">{waiting}</span>}
+                {t.k === 'automation' && a && <Dot tone={autoOn ? 'green' : 'gray'} />}
+                {on && <span className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-slate-900" />}
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
-      {/* Sections — Instagram-style icon tabs with a gradient marker */}
-      <nav className="-mx-4 mt-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Instagram sections">
-        {TABS.map((t) => {
-          const on = tab === t.k;
-          return (
-            <button key={t.k} onClick={() => go(t.k)} aria-current={on ? 'page' : undefined}
-              className={cx('relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-colors',
-                on ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80' : 'text-slate-500 hover:bg-white/60 hover:text-slate-900')}>
-              <t.Icon className={cx('h-4 w-4', on && 'text-pink-600')} />
-              {t.l}
-              {t.k === 'inbox' && waiting > 0 && <span className={cx('rounded-full px-1.5 text-[11px] font-bold tabular-nums leading-[18px] text-white', IG_GRADIENT)}>{waiting}</span>}
-              {t.k === 'automation' && a && <Dot tone={autoOn ? 'green' : 'gray'} />}
-              {on && <span className={cx('absolute inset-x-3.5 -bottom-px h-[2px] rounded-full', IG_GRADIENT)} />}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="mt-5">
+      <div className="mt-4">
         {tab === 'overview' && <OverviewTab overview={overview} media={media} inbox={inbox} error={errors.overview} onTab={go} />}
         {tab === 'posts' && <PostsTab media={media} error={errors.media} />}
         {tab === 'followers' && <FollowersTab />}
         {tab === 'inbox' && <InboxTab inbox={inbox} media={media} templates={auto.templates} onChanged={loadInbox} onSync={() => sync()} syncing={syncing} />}
-        {tab === 'automation' && <AutomationTab settings={auto.settings} inbox={inbox} media={media?.media || []} profile={p ? { username: p.username, picture: p.profile_picture_url } : undefined} onChanged={() => { loadAuto(); loadInbox(); }} onSync={sync} syncing={syncing} />}
+        {tab === 'automation' && <AutomationTab settings={auto.settings} mutes={auto.mutes} inbox={inbox} media={media?.media || []} profile={p ? { username: p.username, picture: p.profile_picture_url } : undefined} onChanged={() => { loadAuto(); loadInbox(); }} onSync={sync} syncing={syncing} />}
         {tab === 'settings' && <SettingsTab overview={overview} settings={a} webhookConfigured={!!auto.webhook?.configured} />}
       </div>
     </div>
@@ -171,7 +169,7 @@ function SettingsTab({ overview, settings, webhookConfigured }: { overview: Over
   const hookUrl = `${site}/api/webhooks/instagram`;
   const hookLive = !!settings?.webhook_last_at && Date.now() - new Date(settings.webhook_last_at).getTime() < 7 * 86_400_000;
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <Panel className="lg:col-span-2">
         <PanelHeader icon={<Webhook />} gradient title="Message webhook" description="Required for auto replies to DMs — Instagram only lets an app answer messages it received through its webhook"
           right={<span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600"><Dot tone={hookLive ? 'green' : webhookConfigured ? 'amber' : 'red'} />{hookLive ? `Receiving · last event ${timeAgo(settings!.webhook_last_at)}` : webhookConfigured ? 'Waiting for the first event' : 'Not set up'}</span>} />

@@ -62,7 +62,7 @@ export interface AutomationSettings {
   comment_enabled: boolean; comment_enabled_at: string | null; comment_mode: 'fixed' | 'random';
   comment_dm_enabled: boolean; comment_posts_to_watch: number;
   last_sync_at: string | null; last_error: string | null; last_error_at: string | null; paused_until: string | null;
-  webhook_last_at?: string | null; site_url?: string | null;
+  webhook_last_at?: string | null; site_url?: string | null; human_pause_hours?: number;
 }
 
 export interface ReplyTemplate { id: string; kind: 'dm' | 'comment'; text: string; is_active: boolean; pinned: boolean; use_count: number; created_at: string }
@@ -73,11 +73,15 @@ export const isReel = (m: IgMediaItem) => m.media_product_type === 'REELS' || m.
 export type ReplyFormat = 'text' | 'card' | 'trips';
 export interface RuleReply {
   id?: string; kind: 'dm' | 'comment'; format: ReplyFormat; text: string; title: string | null; image_url: string | null;
-  buttons: { title: string; url: string }[]; quick_replies: string[]; options: { trips_limit?: number; trip_button?: string };
+  buttons: { title: string; url: string }[]; quick_replies: string[]; options: ReplyOptions;
   is_active: boolean; pinned: boolean; use_count?: number;
 }
+export type { RuleConditions } from '@/lib/instagram-tracker/rules-core';
+import type { RuleConditions } from '@/lib/instagram-tracker/rules-core';
+import type { ReplyOptions } from '@/lib/instagram-tracker/messages';
 export interface ReplyRule {
-  id?: string; channel: 'dm' | 'comment'; name: string; trigger: 'any' | 'keywords'; keywords: string[]; match_type: 'contains' | 'exact';
+  id?: string; channel: 'dm' | 'comment'; name: string; trigger: 'any' | 'keywords' | 'media' | 'story'; keywords: string[]; match_type: 'contains' | 'exact' | 'starts';
+  action: 'reply' | 'ignore'; conditions: RuleConditions;
   media_ids: string[]; reply_mode: 'random' | 'fixed'; cooldown_hours: number; send_dm: boolean;
   active_from: number | null; active_to: number | null; is_active: boolean; position?: number;
   replies: RuleReply[]; stats?: { sent: number; failed: number };
@@ -85,5 +89,6 @@ export interface ReplyRule {
 export interface RulesData {
   rules: ReplyRule[]; siteUrl: string; siteUrlConfigured: string | null;
   testTargets: { user_id: string; username: string | null; created_at: string }[];
+  destinations?: string[];
 }
-export interface TripCardPreview { title: string; subtitle: string; image: string | null; url: string }
+export interface TripCardPreview { title: string; subtitle: string; image: string | null; url: string; id?: string }

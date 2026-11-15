@@ -1,72 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Plus, PauseCircle, AlertTriangle, Check, X, ChevronUp, ChevronDown, Hash, MessagesSquare, MessageCircle, Moon, Map, Link2,
-  ShieldCheck, Bot, Sparkles, Image as ImageIcon, Globe, Pencil,
+  ShieldCheck, Bot, Image as ImageIcon, Globe, Pencil, Star, VolumeX, FlaskConical, Users, CalendarDays, Timer, Hand, CircleSlash, UserRound,
 } from 'lucide-react';
+import { matchRule, type MessageKind } from '@/lib/instagram-tracker/rules-core';
 import { useAdminLive } from '@/components/admin/live/AdminLiveProvider';
 import { Skeleton, timeAgo } from '@/components/admin/dashboard/utils';
-import RuleEditor, { blankReply, blankRule } from './RuleEditor';
+import RuleEditor from './RuleEditor';
+import { CATEGORIES, blankRule, ruleTemplates, type TemplateCategory } from './ruleTemplates';
 import { Banner, Button, Dot, IconChip, Panel, PanelHeader, Segmented, Switch, cx } from './shared';
 import type { AutomationSettings, IgMediaItem, InboxData, ReplyRule, RulesData } from './types';
 
 const KIND: Record<string, string> = { dm: 'Message', comment: 'Comment', comment_dm: 'Comment → DM' };
 const hourLabel = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? 'am' : 'pm'}`;
 
-/** Ready-made rules — one click fills the editor, then tweak and save. */
-function starters(channel: 'dm' | 'comment', site: string): { name: string; desc: string; icon: React.ReactNode; rule: ReplyRule }[] {
-  const trips = site ? `${site}/trips` : 'https://';
-  if (channel === 'dm') {
-    return [
-      {
-        name: 'Price enquiry', desc: 'price, cost, kitna… → prices + button', icon: <Hash />,
-        rule: { ...blankRule('dm'), name: 'Price enquiry', keywords: ['price', 'cost', 'kitna', 'charges', 'fees', 'rate'], replies: [
-          { ...blankReply('dm', true), text: 'Hi {username}! 🙌 Our trips start from ₹2,999 per person. See every trip with dates and prices below 👇', buttons: [{ title: 'View all trips', url: trips }] },
-        ] },
-      },
-      {
-        name: 'Upcoming trips', desc: 'trips, dates, schedule… → live trip cards', icon: <Map />,
-        rule: { ...blankRule('dm'), name: 'Upcoming trips', keywords: ['trips', 'upcoming', 'next trip', 'dates', 'schedule', 'plan'], replies: [
-          { ...blankReply('dm', true), format: 'trips', text: 'Here are our upcoming trips {username} ✨ Swipe to see them all 👉', options: { trips_limit: 5, trip_button: 'View trip' } },
-        ] },
-      },
-      {
-        name: 'Night-time away message', desc: '9 pm – 9 am, once a day', icon: <Moon />,
-        rule: { ...blankRule('dm'), name: 'Night-time away message', trigger: 'any', active_from: 21, active_to: 9, cooldown_hours: 24, replies: [
-          { ...blankReply('dm', true), text: 'Thanks for your message {username}! 🌙 Our team is offline right now and will reply first thing in the morning.', quick_replies: ['Upcoming trips', 'Prices'] },
-        ] },
-      },
-      {
-        name: 'Welcome message', desc: 'Anything else, once a day, with quick replies', icon: <Sparkles />,
-        rule: { ...blankRule('dm'), name: 'Welcome message', trigger: 'any', cooldown_hours: 24, replies: [
-          { ...blankReply('dm', true), text: 'Hey {username}! 👋 Welcome to Ghumakkars. What would you like to know?', quick_replies: ['Upcoming trips', 'Prices', 'Talk to team'] },
-        ] },
-      },
-    ];
-  }
-  return [
-    {
-      name: 'Comment “details” → DM', desc: 'details, info, price → reply + DM with trips', icon: <Hash />,
-      rule: { ...blankRule('comment'), name: 'Comment “details” → DM', keywords: ['details', 'detail', 'info', 'price', 'dm', 'interested'], send_dm: true, replies: [
-        { ...blankReply('comment', true), text: 'Sent you the details in DM {username} 📩' },
-        { ...blankReply('comment'), text: 'Check your DMs {username} ✨' },
-        { ...blankReply('dm', true), format: 'trips', text: 'Hey {username}! Here are the details you asked for 👇', options: { trips_limit: 5, trip_button: 'View trip' } },
-      ] },
-    },
-    {
-      name: 'Thank every comment', desc: 'Random thank-you replies', icon: <MessageCircle />,
-      rule: { ...blankRule('comment'), name: 'Thank every comment', trigger: 'any', replies: [
-        { ...blankReply('comment', true), text: 'Thank you {username} ❤️' },
-        { ...blankReply('comment'), text: 'Means a lot {username} 🙌' },
-        { ...blankReply('comment'), text: 'Glad you liked it {username} ✨' },
-      ] },
-    },
-  ];
-}
-
-export default function AutomationTab({ settings, inbox, media, profile, onChanged, onSync, syncing }: {
+export default function AutomationTab({ settings, inbox, media, profile, mutes = [], onChanged, onSync, syncing }: {
   settings: AutomationSettings | null; inbox: InboxData | null; media: IgMediaItem[]; profile?: { username?: string; picture?: string | null };
+  mutes?: { recipient_id: string; username: string | null; until: string }[];
   onChanged: () => void; onSync: (resume?: boolean) => void; syncing: boolean;
 }) {
   const { toast } = useAdminLive();
@@ -75,11 +27,19 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
   const [editing, setEditing] = useState<ReplyRule | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [site, setSite] = useState('');
+  const [cat, setCat] = useState<TemplateCategory | 'all'>('all');
 
-  const load = useCallback(() => fetch('/api/admin/instagram/rules', { cache: 'no-store' }).then((r) => r.json()).then((j) => { if (!j.error) { setData(j); setSite(j.siteUrlConfigured || ''); } }).catch(() => {}), []);
+  const load = useCallback(() => fetch('/api/admin/instagram/rules', { cache: 'no-store' }).then((r) => r.json()).then((j) => {
+    if (j.error) return;
+    // Rules saved before conditions existed get the defaults.
+    j.rules = (j.rules || []).map((r: ReplyRule) => ({ ...r, action: r.action || 'reply', conditions: { ...blankRule(r.channel).conditions, ...(r.conditions || {}) } }));
+    setData(j); setSite(j.siteUrlConfigured || '');
+  }).catch(() => {}), []);
   useEffect(() => { load(); }, [load]);
 
-  if (!settings || !data) return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"><Skeleton className="h-[520px] rounded-2xl" /><Skeleton className="h-72 rounded-2xl" /></div>;
+  const templates = useMemo(() => ruleTemplates(channel, data?.siteUrl || '', data?.destinations), [channel, data]);
+
+  if (!settings || !data) return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"><Skeleton className="h-[520px] rounded-2xl" /><Skeleton className="h-72 rounded-2xl" /></div>;
 
   const save = async (patch: Record<string, unknown>, msg?: string) => {
     setSaving(Object.keys(patch)[0]);
@@ -112,16 +72,8 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
   };
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="min-w-0 space-y-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <Segmented value={channel} onChange={(v) => setChannel(v as any)} options={[
-            { k: 'dm', l: <span className="inline-flex items-center gap-1.5"><Dot tone={settings.dm_enabled ? 'green' : 'gray'} />Messages</span> },
-            { k: 'comment', l: <span className="inline-flex items-center gap-1.5"><Dot tone={settings.comment_enabled ? 'green' : 'gray'} />Comments</span> },
-          ]} />
-          <p className="text-xs text-slate-500">Rules are checked top to bottom — the first one that matches replies.</p>
-        </div>
-
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-4">
         {paused && (
           <Banner tone="amber" icon={<PauseCircle className="h-4 w-4" />} title="Paused — Instagram asked us to slow down" action={<Button size="sm" onClick={() => onSync(true)}>Resume now</Button>}>
             Replies restart on their own at {new Date(settings.paused_until!).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.
@@ -129,21 +81,24 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
         )}
         {recentError && !paused && <Banner tone="rose" icon={<AlertTriangle className="h-4 w-4" />} title={`Something went wrong ${timeAgo(settings.last_error_at)}`}>{settings.last_error}</Banner>}
 
-        {/* Master switch */}
-        <Panel className={cx('overflow-hidden', on && 'ring-1 ring-emerald-200')}>
-          <div className={cx('flex items-center gap-4 px-5 py-4', on && 'bg-gradient-to-r from-emerald-50/80 to-white')}>
-            <IconChip icon={channel === 'dm' ? <MessagesSquare /> : <MessageCircle />} gradient={on} tone="purple" size={40} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-slate-900">{channel === 'dm' ? 'Auto reply to messages' : 'Auto reply to comments'} <span className={cx('ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold', on ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600')}>{on ? 'ON' : 'OFF'}</span></p>
-              <p className="mt-0.5 text-xs text-slate-500">{channel === 'dm' ? 'Answers new DMs using the rules below.' : 'Answers new comments on your latest posts using the rules below.'}</p>
-            </div>
-            <Switch label="Auto reply" on={on} disabled={saving !== null} onChange={(v) => save(channel === 'dm' ? { dm_enabled: v } : { comment_enabled: v }, v ? 'Auto reply is on' : 'Auto reply is off')} />
+        {/* Channel + master switch in one bar */}
+        <Panel className="overflow-hidden">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-5">
+            <Segmented value={channel} onChange={(v) => setChannel(v as any)} options={[
+              { k: 'dm', l: <span className="inline-flex items-center gap-1.5"><MessagesSquare className="h-3.5 w-3.5" />Messages<Dot tone={settings.dm_enabled ? 'green' : 'gray'} /></span> },
+              { k: 'comment', l: <span className="inline-flex items-center gap-1.5"><MessageCircle className="h-3.5 w-3.5" />Comments<Dot tone={settings.comment_enabled ? 'green' : 'gray'} /></span> },
+            ]} />
+            <p className="min-w-0 flex-1 text-xs text-slate-500">{channel === 'dm' ? 'Answers new DMs with the rules below.' : 'Answers new comments on your latest posts.'}</p>
+            <label className="flex shrink-0 items-center gap-2.5">
+              <span className={cx('text-[13px] font-semibold', on ? 'text-emerald-700' : 'text-slate-500')}>{on ? 'Auto reply on' : 'Auto reply off'}</span>
+              <Switch label="Auto reply" on={on} disabled={saving !== null} onChange={(v) => save(channel === 'dm' ? { dm_enabled: v } : { comment_enabled: v }, v ? 'Auto reply is on' : 'Auto reply is off')} />
+            </label>
           </div>
           {channel === 'comment' && (
-            <div className="flex items-center justify-between gap-4 border-t border-slate-100 px-5 py-3 text-xs">
+            <div className="flex items-center justify-between gap-4 border-t border-slate-100 px-4 py-2.5 text-xs sm:px-5">
               <span className="text-slate-600">Watch comments on your latest</span>
               <div className="relative">
-                <select value={settings.comment_posts_to_watch} onChange={(e) => save({ comment_posts_to_watch: Number(e.target.value) })} className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-xs text-slate-800">
+                <select value={settings.comment_posts_to_watch} onChange={(e) => save({ comment_posts_to_watch: Number(e.target.value) })} className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-xs font-medium text-slate-800">
                   {[3, 5, 10, 15, 25].map((n) => <option key={n} value={n}>{n} posts</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -154,10 +109,10 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
 
         {/* Rules */}
         <Panel className="overflow-hidden">
-          <PanelHeader icon={<Bot />} gradient title="Rules" description={`${rules.filter((r) => r.is_active).length} active · ${rules.reduce((s, r) => s + (r.stats?.sent || 0), 0)} replies sent this week`}
-            right={<Button variant="gradient" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setEditing(blankRule(channel))}>New rule</Button>} />
+          <PanelHeader title="Rules" description={`${rules.filter((r) => r.is_active).length} active · ${rules.reduce((s, r) => s + (r.stats?.sent || 0), 0)} sent this week · first match wins`}
+            right={<Button variant="primary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setEditing(blankRule(channel))}>New rule</Button>} />
           {rules.length === 0 ? (
-            <p className="px-5 py-8 text-center text-[13px] text-slate-500">No rules yet. Start from one of the ideas below.</p>
+            <p className="px-5 py-8 text-center text-[13px] text-slate-500">No rules yet. Start from a template below.</p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {rules.map((r, i) => <RuleRow key={r.id} rule={r} index={i} count={rules.length} media={media} onEdit={() => setEditing(r)} onToggle={(v) => toggleRule(r, v)} onMove={(d) => move(i, d)} />)}
@@ -165,24 +120,33 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
           )}
         </Panel>
 
-        {/* Starters */}
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Start from an idea</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {starters(channel, data.siteUrl).map((s) => (
-              <button key={s.name} onClick={() => setEditing(JSON.parse(JSON.stringify(s.rule)))}
-                className="group flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-pink-200 hover:shadow-md hover:shadow-pink-500/5">
-                <IconChip icon={s.icon} tone="pink" />
-                <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold text-slate-900">{s.name}</span><span className="block truncate text-xs text-slate-500">{s.desc}</span></span>
-                <Plus className="h-4 w-4 text-slate-300 group-hover:text-pink-500" />
-              </button>
-            ))}
+        <Simulator rules={rules} channel={channel} />
+
+        {/* Templates */}
+        <Panel className="overflow-hidden">
+          <PanelHeader title="Start from a template" description="Ready-made rules for common situations — opens in the editor, nothing is saved until you create it"
+            right={<Segmented size="xs" value={cat} onChange={(v) => setCat(v as any)} options={CATEGORIES.filter((c) => c.k === 'all' || templates.some((t) => t.category === c.k)).map((c) => ({ k: c.k, l: c.l }))} />} />
+          <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4">
+            {templates.filter((t) => cat === 'all' || t.category === cat).map((t) => {
+              const exists = rules.some((r) => r.name === t.rule.name);
+              return (
+                <button key={t.name} onClick={() => setEditing(JSON.parse(JSON.stringify(t.rule)))}
+                  className="group flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white p-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50/60">
+                  <IconChip icon={t.icon} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">{t.name}{exists && <span className="rounded bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-700">added</span>}</span>
+                    <span className="block truncate text-xs text-slate-500">{t.desc}</span>
+                  </span>
+                  <Plus className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-700" />
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </Panel>
       </div>
 
       {/* Side column */}
-      <aside className="space-y-5 lg:sticky lg:top-20">
+      <aside className="grid gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:block xl:space-y-4">
         <Panel>
           <div className="flex items-center gap-3 px-5 py-4">
             <Dot tone={paused ? 'amber' : stale ? 'gray' : 'green'} />
@@ -193,6 +157,34 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
             <Button size="sm" variant="soft" onClick={() => onSync()} loading={syncing}>Run now</Button>
           </div>
           {stale && !paused && <p className="border-t border-slate-100 px-5 py-3 text-xs leading-relaxed text-slate-500">Replies only go out while the background job runs — in Coolify add a Scheduled Task <code className="rounded bg-slate-100 px-1 font-mono">npm run ig:cron</code> every minute.</p>}
+        </Panel>
+
+        <Panel>
+          <PanelHeader icon={<Hand />} title="Hand over to your team" description="Keep the bot out of real conversations" />
+          <div className="space-y-3 px-5 py-4">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-600">After someone from the team replies in a chat, stay quiet there for</span>
+              <select value={settings.human_pause_hours ?? 12} onChange={(e) => save({ human_pause_hours: Number(e.target.value) }, 'Saved')}
+                className="h-8 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800">
+                {[0, 2, 6, 12, 24, 48, 168].map((h) => <option key={h} value={h}>{h === 0 ? 'Off' : h < 24 ? `${h} hours` : h === 168 ? '1 week' : `${h / 24} day${h > 24 ? 's' : ''}`}</option>)}
+              </select>
+            </label>
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-xs font-medium text-slate-700">Handed over now <span className="font-normal text-slate-400">· {mutes.length}</span></p>
+              {mutes.length === 0 ? <p className="mt-1 text-[11px] text-slate-400">Rules with “Then hand over to the team” add people here.</p> : (
+                <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto">
+                  {mutes.map((m) => (
+                    <li key={m.recipient_id} className="flex items-center gap-2 text-xs">
+                      <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="min-w-0 flex-1 truncate text-slate-800">@{m.username || m.recipient_id}</span>
+                      <span className="shrink-0 text-[11px] text-slate-400">until {new Date(m.until).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric' })}</span>
+                      <button onClick={() => save({ unmute: m.recipient_id }, `Bot is back on for @${m.username || 'them'}`)} className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100">Resume</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </Panel>
 
         <Panel>
@@ -211,7 +203,7 @@ export default function AutomationTab({ settings, inbox, media, profile, onChang
             {[
               'Only replies to new messages and comments after you switch it on.',
               'Skips chats your team already answered.',
-              'Each person is limited by the rule’s “how often”.',
+              'Each person is limited by the rule’s “how often”; rules can wait, cap per day, and hand over to the team.',
               'If Instagram refuses buttons, the message goes as text with links.',
               'At most 15 replies a minute; pauses itself if Instagram pushes back.',
             ].map((t) => <li key={t} className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />{t}</li>)}
@@ -252,22 +244,38 @@ function RuleRow({ rule, index, count, media, onEdit, onToggle, onMove }: {
   const active = rule.replies.filter((r) => r.is_active);
   const has = (f: (r: ReplyRule['replies'][number]) => boolean) => active.some(f);
   const thumbs = rule.media_ids.map((id) => media.find((m) => m.id === id)).filter(Boolean).slice(0, 3) as IgMediaItem[];
+  const c = rule.conditions || {};
   const when = rule.trigger === 'keywords'
-    ? <>{rule.match_type === 'exact' ? 'Is exactly' : 'Contains'} {rule.keywords.slice(0, 4).map((k) => <span key={k} className="mx-0.5 rounded-md bg-pink-50 px-1.5 py-0.5 font-medium text-pink-700">{k}</span>)}{rule.keywords.length > 4 && <span className="text-slate-400"> +{rule.keywords.length - 4}</span>}</>
-    : <>{rule.channel === 'dm' ? 'Any other message' : 'Any other comment'}</>;
+    ? <>{rule.match_type === 'exact' ? 'Is exactly' : rule.match_type === 'starts' ? 'Starts with' : c.keyword_logic === 'all' ? 'Has all of' : 'Contains'} {rule.keywords.slice(0, 4).map((k) => <span key={k} className="mx-0.5 rounded-md bg-pink-50 px-1.5 py-0.5 font-medium text-[#a3195b]">{k}</span>)}{rule.keywords.length > 4 && <span className="text-slate-400"> +{rule.keywords.length - 4}</span>}</>
+    : rule.trigger === 'media' ? <>Photo, video or shared post</> : rule.trigger === 'story' ? <>Story reply or mention</>
+    : <>{rule.channel === 'dm' ? 'Anything else' : 'Any other comment'}</>;
+  const silent = rule.action === 'ignore';
+  const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <li className={cx('group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50/60', !rule.is_active && 'opacity-55')}>
-      <div className="flex flex-col">
+    <li className={cx('group flex items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-50/70 sm:px-4', !rule.is_active && 'opacity-55')}>
+      <div className="flex flex-col opacity-40 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <button onClick={() => onMove(-1)} disabled={index === 0} className="rounded p-0.5 text-slate-300 hover:text-slate-700 disabled:invisible" aria-label="Move up"><ChevronUp className="h-3.5 w-3.5" /></button>
         <button onClick={() => onMove(1)} disabled={index === count - 1} className="rounded p-0.5 text-slate-300 hover:text-slate-700 disabled:invisible" aria-label="Move down"><ChevronDown className="h-3.5 w-3.5" /></button>
       </div>
-      <IconChip icon={rule.trigger === 'keywords' ? <Hash /> : rule.active_from != null ? <Moon /> : <MessagesSquare />} tone={rule.trigger === 'keywords' ? 'pink' : rule.active_from != null ? 'indigo' : 'purple'} />
+      <IconChip icon={silent ? <VolumeX /> : rule.trigger === 'keywords' ? <Hash /> : rule.trigger === 'media' ? <ImageIcon /> : rule.trigger === 'story' ? <Star /> : rule.active_from != null ? <Moon /> : <MessagesSquare />} />
       <button onClick={onEdit} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-[13px] font-semibold text-slate-900 group-hover:text-pink-700">{rule.name}</p>
+        <p className="truncate text-[13px] font-semibold text-slate-900 group-hover:text-slate-950">{rule.name}</p>
         <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{when}</p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <Tag>{active.length} {active.length === 1 ? 'reply' : 'replies'}{active.length > 1 ? (rule.reply_mode === 'random' ? ' · random' : ' · fixed') : ''}</Tag>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          {silent ? <Tag icon={<VolumeX className="h-3 w-3" />}>Stays silent</Tag> : <Tag>{active.length} {active.length === 1 ? 'reply' : 'replies'}{active.length > 1 ? (rule.reply_mode === 'random' ? ' · random' : ' · fixed') : ''}</Tag>}
+          {(c.exclude || []).length > 0 && <Tag icon={<CircleSlash className="h-3 w-3" />}>Skips {c.exclude!.length} word{c.exclude!.length > 1 ? 's' : ''}</Tag>}
+          {c.audience === 'new' && <Tag icon={<Users className="h-3 w-3" />}>First message</Tag>}
+          {c.audience === 'returning' && <Tag icon={<Users className="h-3 w-3" />}>Wrote before</Tag>}
+          {c.follows === 'followers' && <Tag icon={<Users className="h-3 w-3" />}>Followers</Tag>}
+          {c.follows === 'non_followers' && <Tag icon={<Users className="h-3 w-3" />}>Not following</Tag>}
+          {(c.min_followers || 0) > 0 && <Tag icon={<Users className="h-3 w-3" />}>{(c.min_followers! / 1000).toLocaleString('en-IN')}K+ followers</Tag>}
+          {(c.days || []).length > 0 && <Tag icon={<CalendarDays className="h-3 w-3" />}>{c.days!.map((d) => DAY[d]).join(', ')}</Tag>}
+          {(c.starts_on || c.ends_on) && <Tag icon={<CalendarDays className="h-3 w-3" />}>{c.starts_on ? fmtDay(c.starts_on) : 'now'} – {c.ends_on ? fmtDay(c.ends_on) : '…'}</Tag>}
+          {(c.delay_minutes || 0) > 0 && <Tag icon={<Timer className="h-3 w-3" />}>After {c.delay_minutes} min</Tag>}
+          {(c.daily_limit || 0) > 0 && <Tag>Max {c.daily_limit}/day</Tag>}
+          {(c.mute_hours || 0) > 0 && <Tag icon={<Hand className="h-3 w-3" />}>Hands over {c.mute_hours! >= 24 ? `${c.mute_hours! / 24}d` : `${c.mute_hours}h`}</Tag>}
+          {c.skip_tags && <Tag>Skips tag-only</Tag>}
           {has((r) => r.buttons.length > 0) && <Tag icon={<Link2 className="h-3 w-3" />}>Buttons</Tag>}
           {has((r) => r.format === 'card') && <Tag icon={<ImageIcon className="h-3 w-3" />}>Card</Tag>}
           {has((r) => r.format === 'trips') && <Tag icon={<Map className="h-3 w-3" />}>Trip cards</Tag>}
@@ -294,5 +302,73 @@ function RuleRow({ rule, index, count, media, onEdit, onToggle, onMove }: {
 }
 
 function Tag({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
-  return <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{icon}{children}</span>;
+  return <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 [&:not(:last-child)]:after:ml-1.5 [&:not(:last-child)]:after:text-slate-300 [&:not(:last-child)]:after:content-['·']">{icon}{children}</span>;
+}
+
+const fmtDay = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+/** Type a message and see which rule would answer — and why the others wouldn't. Same logic as the engine. */
+function Simulator({ rules, channel }: { rules: ReplyRule[]; channel: 'dm' | 'comment' }) {
+  const [text, setText] = useState('');
+  const [kind, setKind] = useState<MessageKind>('text');
+  const [isNew, setIsNew] = useState<'yes' | 'no'>('no');
+  const [follows, setFollows] = useState<'yes' | 'no' | 'unknown'>('yes');
+  const [followers, setFollowers] = useState(500);
+  const [when, setWhen] = useState('');
+  const isDm = channel === 'dm';
+
+  const result = useMemo(() => {
+    if (!text.trim() && kind === 'text') return null;
+    const now = when ? new Date(`${when}:00+05:30`) : new Date();
+    return matchRule(rules.map((r) => ({ ...r, conditions: r.conditions || {} })), {
+      channel, text, kind: isDm ? kind : 'text', now,
+      person: { isNew: isNew === 'yes', follows: follows === 'unknown' ? null : follows === 'yes', followers },
+    });
+  }, [rules, channel, text, kind, isNew, follows, followers, when, isDm]);
+
+  const hit = result?.rule;
+  return (
+    <Panel className="overflow-hidden">
+      <PanelHeader icon={<FlaskConical />} title="Test a message" description="Nothing is sent — see which rule would answer, and why" />
+      <div className="space-y-3 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap gap-2">
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={isDm ? 'e.g. manali trip price kitna hai?' : 'e.g. details please 🙌'}
+            className="h-9 min-w-[220px] flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-100" />
+          {isDm && <Segmented value={kind} onChange={(v) => setKind(v as MessageKind)} options={[{ k: 'text', l: 'Text' }, { k: 'media', l: 'Photo/share' }, { k: 'story', l: 'Story reply' }]} />}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+          {isDm && <span className="flex items-center gap-1.5">First message <Segmented size="xs" value={isNew} onChange={(v) => setIsNew(v as any)} options={[{ k: 'no', l: 'No' }, { k: 'yes', l: 'Yes' }]} /></span>}
+          <span className="flex items-center gap-1.5">Follows you <Segmented size="xs" value={follows} onChange={(v) => setFollows(v as any)} options={[{ k: 'yes', l: 'Yes' }, { k: 'no', l: 'No' }, { k: 'unknown', l: '?' }]} /></span>
+          <span className="flex items-center gap-1.5">Their followers
+            <select value={followers} onChange={(e) => setFollowers(Number(e.target.value))} className="h-6 rounded-md border border-slate-200 bg-white px-1 text-[11px]">
+              {[100, 500, 2000, 6000, 20000, 100000].map((n) => <option key={n} value={n}>{n.toLocaleString('en-IN')}</option>)}
+            </select>
+          </span>
+          <span className="flex items-center gap-1.5">At
+            <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className="h-6 rounded-md border border-slate-200 bg-white px-1 text-[11px]" />
+            {!when && <span className="text-slate-400">now (IST)</span>}
+          </span>
+        </div>
+
+        {result && (
+          <div className="rounded-lg border border-slate-200">
+            <div className={cx('flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-[13px]', hit ? (hit.action === 'ignore' ? 'bg-slate-50' : 'bg-emerald-50/60') : 'bg-amber-50/60')}>
+              {hit ? (hit.action === 'ignore' ? <VolumeX className="h-4 w-4 text-slate-500" /> : <Check className="h-4 w-4 text-emerald-600" />) : <X className="h-4 w-4 text-amber-600" />}
+              {hit ? <span><b className="font-semibold">{hit.name}</b> {hit.action === 'ignore' ? 'matches and stays silent' : 'would reply'}</span> : <span className="text-amber-800">No rule matches — nothing is sent</span>}
+              {hit && ((hit.conditions?.delay_minutes || 0) > 0 || hit.cooldown_hours > 0) && <span className="ml-auto text-[11px] text-slate-500">{[(hit.conditions?.delay_minutes || 0) > 0 && `after ${hit.conditions!.delay_minutes} min`, hit.cooldown_hours > 0 && `if not answered in ${hit.cooldown_hours}h`].filter(Boolean).join(' · ')}</span>}
+            </div>
+            <ul className="divide-y divide-slate-100">
+              {result.trace.map((t, i) => (
+                <li key={`${t.id || t.rule}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                  <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', t.ok ? 'bg-emerald-500' : 'bg-slate-300')} />
+                  <span className={cx('min-w-0 flex-1 truncate', t.ok ? 'font-medium text-slate-900' : 'text-slate-600')}>{t.rule}</span>
+                  <span className="shrink-0 text-right text-[11px] text-slate-400">{t.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
 }
