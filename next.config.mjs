@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Optional: lets a second local dev server run without sharing `.next`.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
   compress: true,
   images: {
@@ -18,7 +20,7 @@ const nextConfig = {
     instrumentationHook: true,
     // Node-only libs used by the in-process WhatsApp service — load them from
     // node_modules at runtime instead of bundling them.
-    serverComponentsExternalPackages: ['@whiskeysockets/baileys', 'pino', 'qrcode', 'jimp', 'link-preview-js', 'sharp'],
+    serverComponentsExternalPackages: ['@whiskeysockets/baileys', 'pino', 'qrcode', 'jimp', 'link-preview-js', 'sharp', 'unpdf'],
   },
   async headers() {
     return [
