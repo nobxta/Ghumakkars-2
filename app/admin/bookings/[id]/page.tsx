@@ -53,6 +53,7 @@ export default function AdminBookingDetailsPage() {
   // Internal notes
   const [internalNotes, setInternalNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   // Refund modal
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundAmount, setRefundAmount] = useState('');
@@ -392,6 +393,82 @@ export default function AdminBookingDetailsPage() {
     }
   };
 
+  // The primary traveller is often stored in `passengers` too — only list the others.
+  const extraPassengers = (booking.passengers || []).filter((p: any, i: number) => {
+    if (p?.is_primary === true) return false;
+    const samePerson =
+      String(p?.name || '').trim().toLowerCase() === String(passengerName).trim().toLowerCase() &&
+      (!p?.phone || String(p.phone).replace(/\D/g, '').slice(-10) === String(passengerPhone).replace(/\D/g, '').slice(-10));
+    return !(i === 0 && samePerson);
+  });
+  const waLink = `https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`;
+  const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+  // One payment instruction, used by both the banner and the summary.
+  const dueDate = (() => {
+    const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);
+    return due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+  })();
+  const showDue = !isReferred && remainingAmount > 0 && !isCancelled;
+  const dueText = status === 'seat_locked'
+    ? <>Collect <strong>{inr(remainingAmount)}</strong>{dueDate ? <> by <strong>{dueDate}</strong></> : null} to confirm this seat.</>
+    : <>Collect <strong>{inr(remainingAmount)}</strong>{dueDate ? <> by <strong>{dueDate}</strong></> : null}.</>;
+  const hasNotes = !!(booking.internal_notes || '').trim();
+  const sortedTxns = [...(booking.payment_transactions || [])].sort(
+    (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  const Line = ({ label, value, tone = 'text-gray-900', strong = false }: { label: React.ReactNode; value: React.ReactNode; tone?: string; strong?: boolean }) => (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className={`text-[13px] ${strong ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{label}</dt>
+      <dd className={`text-sm ${strong ? 'font-semibold' : 'font-medium'} ${tone}`}>{value}</dd>
+    </div>
+  );
+
+  // Financial summary — the ONLY place totals appear. Lives at the top of the sidebar
+  // (desktop) / right under the trip header (mobile) so it never needs scrolling to.
+  const financeCard = (
+    <div className="bg-white rounded-xl border border-[#ECECEE] p-4">
+      <h2 className="text-[13px] font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-gray-500" />Payment summary</h2>
+      {isReferred ? (
+        <dl className="space-y-1.5">
+          <Line label="Handed to partner" value={booking.referral_partner || '—'} />
+          <div className="pt-2 mt-1 border-t border-[#ECECEE]">
+            <Line strong label="Our commission" value={inr(parseFloat(String(booking.referral_commission || 0)) || 0)} />
+          </div>
+          <Line label="Dues" value="None" tone="text-green-700" />
+        </dl>
+      ) : (
+        <>
+          <dl className="space-y-1.5">
+            <Line label="Trip price" value={inr(listGross)} />
+            {couponDiscountRaw > 0 && <Line label={`Coupon${booking.coupon_code ? ` (${booking.coupon_code})` : ''}`} value={`−${inr(couponDiscountRaw)}`} />}
+            {walletUsed > 0 && <Line label="Wallet used" value={`−${inr(walletUsed)}`} />}
+            {money.addonsTotal > 0 && <Line label="Add-ons" value={`+${inr(money.addonsTotal)}`} />}
+            <div className="pt-2 mt-1 border-t border-[#ECECEE]">
+              <Line strong label="Total" value={inr(finalAmount)} />
+            </div>
+            <Line label="Paid" value={inr(paidAmount)} tone="text-green-700" />
+            {waivedAmount > 0 && (
+              <Line
+                label={<span className="flex items-center gap-1.5">Written off <button onClick={() => settleBalance(true)} className="text-[11px] font-semibold text-purple-700 hover:underline print:hidden">undo</button></span>}
+                value={`−${inr(waivedAmount)}`}
+                tone="text-gray-600"
+              />
+            )}
+            {money.refunded > 0 && <Line label="Refunded" value={`−${inr(money.refunded)}`} tone="text-red-600" />}
+          </dl>
+          <div className={`mt-3 rounded-lg px-3 py-2.5 flex items-baseline justify-between gap-3 ${remainingAmount > 0 ? 'bg-amber-50' : 'bg-green-50'}`}>
+            <span className={`text-[13px] font-medium ${remainingAmount > 0 ? 'text-amber-900' : 'text-green-800'}`}>Balance due</span>
+            <span className={`text-xl font-bold ${remainingAmount > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+              {remainingAmount > 0 ? inr(remainingAmount) : waivedAmount > 0 ? 'Settled' : 'None'}
+            </span>
+          </div>
+          {showDue && <p className="mt-2 text-xs text-gray-600">{dueText}</p>}
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="pb-8 tabular-nums print:bg-white print:pt-0 print:pb-0">
       {/* Print-only header */}
@@ -408,33 +485,35 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      {/* Sticky top header — the only place booking status appears */}
-      <div className="sticky top-12 sm:top-14 md:top-16 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
-        <div className="w-full h-14 flex items-center gap-3">
-          <Link href="/admin/bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
+      {/* Sticky booking toolbar (48px) — sits flush under the global header. The
+          only place booking status appears. */}
+      <div className="sticky top-14 md:top-16 z-30 -mx-3 sm:-mx-6 -mt-4 sm:-mt-6 px-3 sm:px-6 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
+        <div className="w-full h-12 flex items-center gap-2 sm:gap-3 min-w-0">
+          <Link href="/admin/bookings" title="Back to bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
+            <ArrowLeft className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Bookings</span>
           </Link>
-          <button onClick={copyId} title="Copy full booking ID" className="group inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-gray-900 hover:text-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded px-1">
+          <span className="h-4 w-px bg-gray-200" />
+          <button onClick={copyId} title="Copy full booking ID" className="group inline-flex items-center gap-1 font-mono text-[13px] font-semibold text-gray-900 hover:text-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded px-1">
             #{shortId}
-            <Copy className="h-3.5 w-3.5 text-gray-400 group-hover:text-purple-600" />
+            <Copy className="h-3 w-3 text-gray-500 group-hover:text-purple-600" />
           </button>
           {/* Booking Status and Payment Status are independent — show both. */}
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${bookingStatusChip(displayStatus)}`} title="Booking status">
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${bookingStatusChip(displayStatus)}`} title="Booking status">
             <Shield className="h-3 w-3" />{bookingStatusLabel(displayStatus)}
           </span>
           {isReferred ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700" title="Payment status">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-indigo-100 text-indigo-700" title="Payment status">
               <Gift className="h-3 w-3" />Settled
             </span>
           ) : (
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${paymentStatusChip(paymentStatus)}`} title="Payment status">
+            <span className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${paymentStatusChip(paymentStatus)}`} title="Payment status">
               <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
             </span>
           )}
           <button
             onClick={() => typeof window !== 'undefined' && window.print()}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="ml-auto inline-flex items-center gap-1.5 h-8 px-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-[13px] font-medium hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           >
             <Printer className="h-3.5 w-3.5 text-gray-500" />
             <span className="hidden sm:inline">Print</span>
@@ -442,52 +521,53 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      <div className="w-full py-3 sm:py-4 print:py-3">
+      <div className="w-full pt-4 print:py-3">
         {/* Conditional action banner — only when an admin action is required */}
         {(() => {
-          const pendingTxn = (booking.payment_transactions || []).find((t: any) => t.payment_status === 'pending');
+          const pendingTxn = sortedTxns.find((t: any) => t.payment_status === 'pending');
           if (pendingTxn) {
             return (
-              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-3.5 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2 print:hidden">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Clock className="h-4 w-4 text-amber-600 flex-shrink-0" />
                   <p className="text-sm text-amber-900">
-                    <span className="font-bold">₹{parseFloat(String(pendingTxn.amount || 0)).toLocaleString('en-IN')}</span> {pendingTxn.payment_type === 'remaining' ? 'remaining payment' : pendingTxn.payment_type === 'seat_lock' ? 'seat-lock payment' : 'payment'} is awaiting your approval.
+                    <span className="font-semibold">{inr(parseFloat(String(pendingTxn.amount || 0)))}</span> {pendingTxn.payment_type === 'remaining' ? 'remaining payment' : pendingTxn.payment_type === 'seat_lock' ? 'seat-lock payment' : 'payment'} is awaiting your approval.
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button disabled={reviewing} onClick={() => handleReviewPayment(pendingTxn, 'verified')} className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><CheckCircle className="h-4 w-4" /> Approve</button>
-                  <button disabled={reviewing} onClick={() => openTransactionModal(pendingTxn)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-red-600 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-50 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><XCircle className="h-4 w-4" /> Reject</button>
+                  <button disabled={reviewing} onClick={() => handleReviewPayment(pendingTxn, 'verified')} className="inline-flex items-center gap-1.5 h-8 px-3 bg-purple-600 text-white rounded-lg text-[13px] font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><CheckCircle className="h-3.5 w-3.5" /> Approve</button>
+                  <button disabled={reviewing} onClick={() => openTransactionModal(pendingTxn)} className="inline-flex items-center gap-1.5 h-8 px-3 bg-white text-red-600 border border-red-200 rounded-lg text-[13px] font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"><XCircle className="h-3.5 w-3.5" /> Reject</button>
                 </div>
               </div>
             );
           }
-          if (status === 'seat_locked' && remainingAmount > 0) {
+          if (status === 'seat_locked' && showDue) {
             return (
-              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 border-l-4 border-l-amber-500 p-3.5 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
-                <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                  <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                  <p className="text-sm text-amber-900"><span className="font-bold">₹{remainingAmount.toLocaleString('en-IN')}</span> balance due to confirm this seat. Record it when collected.</p>
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2 print:hidden">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Lock className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm text-amber-900">{dueText}</p>
                 </div>
-                <button onClick={() => setDrawerMode('payment')} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><IndianRupee className="h-4 w-4" />Record payment</button>
+                <button onClick={() => setDrawerMode('payment')} className="inline-flex items-center justify-center gap-1.5 h-8 px-3 bg-purple-600 text-white rounded-lg text-[13px] font-semibold hover:bg-purple-700 transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><IndianRupee className="h-3.5 w-3.5" />Record payment</button>
               </div>
             );
           }
           return null;
         })()}
 
-        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
-          {/* Right rail — Actions + Contact */}
-          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-[7.5rem] space-y-6 lg:mb-0">
-            {/* Actions — each opens its own focused panel */}
-            <div className="bg-white border border-[#ECECEE] rounded-2xl overflow-hidden print:hidden shadow-sm">
-              <p className="px-5 pt-4 pb-2 text-[11px] uppercase tracking-wider font-semibold text-gray-400 flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Actions</p>
-              <div className="px-2 pb-2 space-y-0.5">
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_312px] lg:items-start">
+          {/* Sidebar — payment summary + actions */}
+          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-32 space-y-4">
+            <div className="hidden lg:block">{financeCard}</div>
+
+            <div className="bg-white border border-[#ECECEE] rounded-xl overflow-hidden print:hidden">
+              <p className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wider font-semibold text-gray-500">Actions</p>
+              <div className="px-1.5 pb-1.5">
                 {!isCancelled ? (
                   <>
-                    <ActionRow onClick={() => setDrawerMode('payment')} icon={<IndianRupee className="h-4 w-4" />} tone="green" label="Record payment" sub="Cash, UPI, card, bank…" />
-                    <ActionRow onClick={() => { setStatusChoice((MANUAL_STATUSES as readonly string[]).includes(status) ? status : 'confirmed'); setStatusNotify(true); setDrawerMode('status'); }} icon={<Shield className="h-4 w-4" />} tone="purple" label="Change status" sub="Seat Locked / Confirmed" />
-                    <ActionRow onClick={() => setDrawerMode('referral')} icon={<Gift className="h-4 w-4" />} tone="indigo" label="Refer to partner" sub="Hand off · record commission" />
+                    <ActionRow onClick={() => setDrawerMode('payment')} icon={<IndianRupee className="h-4 w-4" />} tone="purple" label="Record payment" sub="Cash, UPI, card, bank…" />
+                    <ActionRow onClick={() => { setStatusChoice((MANUAL_STATUSES as readonly string[]).includes(status) ? status : 'confirmed'); setStatusNotify(true); setDrawerMode('status'); }} icon={<Shield className="h-4 w-4" />} tone="gray" label="Change status" sub="Seat Locked / Confirmed" />
+                    <ActionRow onClick={() => setDrawerMode('referral')} icon={<Gift className="h-4 w-4" />} tone="gray" label="Refer to partner" sub="Hand off · record commission" />
                     <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
                     <ActionRow onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setCancelNotify(true); setShowCancelModal(true); }} icon={<XCircle className="h-4 w-4" />} tone="red" label="Cancel booking" />
                   </>
@@ -495,253 +575,133 @@ export default function AdminBookingDetailsPage() {
                   <>
                     <ActionRow onClick={() => { setStatusChoice('seat_locked'); setStatusNotify(false); manageBooking({ action: 'set_status', status: 'seat_locked', notify: false }, 'Reopen this booking (back to Seat Locked)? No notification is sent.'); }} icon={<RotateCcw className="h-4 w-4" />} tone="purple" label="Reopen booking" />
                     {paidAmount > money.refunded && (
-                      <ActionRow onClick={() => { setRefundAmount(String(Math.max(0, paidAmount))); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} icon={<RotateCcw className="h-4 w-4" />} tone="rose" label="Record / issue refund" sub="Booking cancelled" />
+                      <ActionRow onClick={() => { setRefundAmount(String(Math.max(0, paidAmount))); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} icon={<RotateCcw className="h-4 w-4" />} tone="red" label="Record / issue refund" sub="Booking cancelled" />
                     )}
                     <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
                   </>
                 )}
               </div>
             </div>
-
-            {/* Contact */}
-            <div className="bg-white border border-[#ECECEE] rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Contact</h2>
-              <p className="font-semibold text-gray-900">{passengerName}</p>
-              {passengerPhone !== 'N/A' && (
-                <div className="flex items-center justify-between gap-2 mt-1.5">
-                  <span className="flex items-center gap-2 text-sm text-gray-700 min-w-0"><Phone className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerPhone}</span></span>
-                  <span className="flex gap-1.5 flex-shrink-0">
-                    <a href={`tel:${passengerPhone}`} title="Call" className="p-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors"><Phone className="h-3.5 w-3.5" /></a>
-                    <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"><MessageCircle className="h-3.5 w-3.5" /></a>
-                  </span>
-                </div>
-              )}
-              <p className="flex items-center gap-2 text-sm text-gray-700 mt-1.5 min-w-0"><Mail className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" /><span className="truncate">{passengerEmail}</span></p>
-            </div>
           </aside>
 
           {/* Main column */}
-          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-6 min-w-0">
+          <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 space-y-4 min-w-0">
 
-            {/* Booking Overview — the hero / first thing admins read */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
-                {(() => {
-                  const cover = booking.trips?.cover_image_url || booking.trips?.image_url;
-                  return cover ? (
-                    <img src={cover} alt={booking.trips?.title || ''} className="w-full sm:w-40 h-32 sm:h-28 rounded-lg object-cover flex-shrink-0 border border-[#ECECEE]" />
-                  ) : (
-                    <div className="w-full sm:w-40 h-32 sm:h-28 rounded-lg bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center flex-shrink-0"><MapPin className="h-6 w-6 text-purple-300" /></div>
-                  );
-                })()}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{booking.trips?.title || 'Trip'}</h1>
-                      <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-purple-600" />{booking.trips?.destination || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2.5">
-                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Calendar className="h-3 w-3" />Departure</p><p className="text-sm font-medium text-gray-900 mt-0.5">{fmtDate(booking.departure_date || booking.trips?.start_date)}</p></div>
-                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><MapPin className="h-3 w-3" />Pickup</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.pickup_point || '—'}</p></div>
-                    <div><p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1"><Users className="h-3 w-3" />Passengers</p><p className="text-sm font-medium text-gray-900 mt-0.5">{booking.number_of_participants || 1}</p></div>
-                  </div>
+            {/* Trip overview — compact */}
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              {(() => {
+                const cover = booking.trips?.cover_image_url || booking.trips?.image_url;
+                return cover ? (
+                  <img src={cover} alt={booking.trips?.title || ''} className="w-20 h-[60px] sm:w-24 sm:h-[72px] rounded-lg object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-20 h-[60px] sm:w-24 sm:h-[72px] rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0"><MapPin className="h-5 w-5 text-gray-400" /></div>
+                );
+              })()}
+              <div className="min-w-0 flex-1">
+                <h1 className="text-base sm:text-lg font-semibold text-gray-900 leading-snug truncate">{booking.trips?.title || 'Trip'}</h1>
+                <p className="text-[13px] text-gray-600 truncate">{booking.trips?.destination || '—'}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-gray-700">
+                  <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-gray-500" />{fmtDate(booking.departure_date || booking.trips?.start_date)}</span>
+                  <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-gray-500" />{booking.pickup_point || 'No pickup set'}</span>
+                  <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-gray-500" />{pax} {pax === 1 ? 'traveller' : 'travellers'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Traveller Details — primary content */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><User className="h-4 w-4 text-purple-600" />Traveller Details</h2>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg flex-shrink-0">{(passengerName[0] || '?').toUpperCase()}</div>
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-gray-900 truncate">{passengerName}</p>
-                    <p className="text-sm text-gray-500">{booking.primary_passenger_age ? `${booking.primary_passenger_age} yrs` : ''}{booking.primary_passenger_age && booking.primary_passenger_gender ? ' • ' : ''}<span className="capitalize">{booking.primary_passenger_gender || ''}</span></p>
-                  </div>
+            {/* Mobile: money right under the trip header */}
+            <div className="lg:hidden">{financeCard}</div>
+
+            {/* Traveller — the single place contact details + Call/WhatsApp live */}
+            <div className="bg-white rounded-xl border border-[#ECECEE] p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center font-semibold text-sm flex-shrink-0">{(passengerName[0] || '?').toUpperCase()}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold text-gray-900 truncate">{passengerName}</p>
+                  <p className="text-xs text-gray-600">
+                    Primary traveller
+                    {booking.primary_passenger_age ? ` · ${booking.primary_passenger_age} yrs` : ''}
+                    {booking.primary_passenger_gender ? <span className="capitalize"> · {booking.primary_passenger_gender}</span> : null}
+                  </p>
                 </div>
                 {passengerPhone !== 'N/A' && (
-                  <div className="flex gap-2 flex-shrink-0 print:hidden">
-                    <a href={`tel:${passengerPhone}`} className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold hover:bg-purple-100 transition-colors"><Phone className="h-4 w-4" />Call</a>
-                    <a href={`https://wa.me/91${String(passengerPhone).replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition-colors"><MessageCircle className="h-4 w-4" />WhatsApp</a>
+                  <div className="flex gap-1.5 flex-shrink-0 print:hidden">
+                    <a href={`tel:${passengerPhone}`} title="Call" className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-gray-200 text-gray-700 rounded-lg text-[13px] font-medium hover:bg-gray-50 transition-colors"><Phone className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span></a>
+                    <a href={waLink} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-gray-200 text-gray-700 rounded-lg text-[13px] font-medium hover:bg-gray-50 transition-colors"><MessageCircle className="h-3.5 w-3.5 text-green-600" /><span className="hidden sm:inline">WhatsApp</span></a>
                   </div>
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
-                <div className="flex items-center gap-2 min-w-0"><Phone className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Phone</span><span className="text-gray-900 truncate">{passengerPhone}</span></div>
-                <div className="flex items-center gap-2 min-w-0"><Mail className="h-4 w-4 text-gray-400 flex-shrink-0" /><span className="text-gray-500 w-14 flex-shrink-0">Email</span><span className="text-gray-900 truncate">{passengerEmail}</span></div>
-              </div>
+              <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div className="flex items-center gap-2 min-w-0"><dt className="text-gray-600 w-16 flex-shrink-0 text-[13px]">Phone</dt><dd className="text-gray-900 truncate">{passengerPhone}</dd></div>
+                <div className="flex items-center gap-2 min-w-0"><dt className="text-gray-600 w-16 flex-shrink-0 text-[13px]">Email</dt><dd className="text-gray-900 truncate">{passengerEmail}</dd></div>
+                {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+                  <div className="flex items-center gap-2 min-w-0 sm:col-span-2"><dt className="text-gray-600 w-16 flex-shrink-0 text-[13px]">Emergency</dt><dd className="text-gray-900 truncate">{booking.emergency_contact_name || '—'}{booking.emergency_contact_phone ? <span className="text-gray-600"> · {booking.emergency_contact_phone}</span> : ''}</dd></div>
+                )}
+              </dl>
 
-              {(booking.emergency_contact_name || booking.emergency_contact_phone) && (
+              {extraPassengers.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-[#ECECEE]">
-                  <p className="text-[11px] uppercase tracking-wide font-medium text-gray-500 flex items-center gap-1.5 mb-1"><Heart className="h-3 w-3 text-pink-500" />Emergency contact</p>
-                  <p className="text-sm text-gray-900">{booking.emergency_contact_name || '—'}{booking.emergency_contact_phone ? <span className="text-gray-500"> · {booking.emergency_contact_phone}</span> : ''}</p>
-                </div>
-              )}
-
-              <details className="mt-3 pt-3 border-t border-[#ECECEE] group" {...(booking.passengers && booking.passengers.length > 0 ? { open: true } : {})}>
-                <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
-                  <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
-                  Co-passengers ({booking.passengers?.length || 0})
-                </summary>
-                {booking.passengers && booking.passengers.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {booking.passengers.map((p: any, i: number) => (
-                      <div key={i} className="flex items-center gap-3 bg-[#FAFAFA] rounded-lg px-3 py-2">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{((p.name || 'P')[0]).toUpperCase()}</div>
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 mb-2">Other travellers ({extraPassengers.length})</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {extraPassengers.map((p: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2.5 bg-[#FAFAFA] rounded-lg px-2.5 py-1.5 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">{((p.name || 'P')[0]).toUpperCase()}</div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.name || `Passenger ${i + 1}`}</p>
-                          <p className="text-xs text-gray-500">{[p.age && `${p.age} yrs`, p.gender, p.phone].filter(Boolean).join(' · ') || '—'}</p>
+                          <p className="text-[13px] font-medium text-gray-900 truncate">{p.name || `Passenger ${i + 2}`}</p>
+                          <p className="text-xs text-gray-600 truncate">{[p.age && `${p.age} yrs`, p.gender, p.phone].filter(Boolean).join(' · ') || '—'}</p>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-400">No additional travellers on this booking.</p>
-                )}
-              </details>
-            </div>
-
-            {/* Booking Summary — the ONLY place totals appear */}
-            <div className="bg-white rounded-xl border border-[#ECECEE] p-4 sm:p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-purple-600" />Booking Summary</h2>
-              {isReferred ? (
-                // Referred to a partner: the trip money is settled with them — we only
-                // book our commission. No customer dues are shown.
-                <dl className="space-y-2">
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Handed to partner</dt><dd className="text-base font-medium text-gray-900">{booking.referral_partner || '—'}</dd></div>
-                  <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Our commission / profit</dt><dd className="text-2xl font-bold text-indigo-700">₹{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</dd></div>
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Dues</dt><dd className="text-base font-bold text-green-700">None</dd></div>
-                </dl>
-              ) : (
-              <dl className="space-y-2">
-                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Base Trip Amount</dt><dd className="text-base font-medium text-gray-900">₹{listGross.toLocaleString('en-IN')}</dd></div>
-                {couponDiscountRaw > 0 && (
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Coupon Discount {booking.coupon_code ? `(${booking.coupon_code})` : ''}</dt><dd className="text-base font-medium text-green-600">-₹{couponDiscountRaw.toLocaleString('en-IN')}</dd></div>
-                )}
-                {walletUsed > 0 && (
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-green-600">Wallet Used</dt><dd className="text-base font-medium text-green-600">-₹{walletUsed.toLocaleString('en-IN')}</dd></div>
-                )}
-                <div className="flex items-baseline justify-between pt-2 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Net Trip Price</dt><dd className="text-base font-semibold text-gray-900">₹{finalAmount.toLocaleString('en-IN')}</dd></div>
-                <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500">Paid</dt><dd className="text-base font-semibold text-green-700">₹{paidAmount.toLocaleString('en-IN')}</dd></div>
-                {waivedAmount > 0 && (
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-gray-500 flex items-center gap-1.5">Written off <button onClick={() => settleBalance(true)} className="text-[11px] font-semibold text-purple-600 hover:underline">(undo)</button></dt><dd className="text-base font-medium text-gray-500">-₹{waivedAmount.toLocaleString('en-IN')}</dd></div>
-                )}
-                {money.refunded > 0 && (
-                  <div className="flex items-baseline justify-between"><dt className="text-sm text-rose-600">Refunded</dt><dd className="text-base font-medium text-rose-600">-₹{money.refunded.toLocaleString('en-IN')}</dd></div>
-                )}
-                <div className="flex items-baseline justify-between pt-3 border-t border-[#ECECEE]"><dt className="text-sm font-medium text-gray-700">Remaining Offline Balance</dt><dd className={remainingAmount > 0 ? 'text-2xl font-bold text-orange-600' : 'text-base font-bold text-green-700'}>{remainingAmount > 0 ? `₹${remainingAmount.toLocaleString('en-IN')}` : waivedAmount > 0 ? 'Settled' : 'None'}</dd></div>
-              </dl>
-              )}
-              {/* Payment Status is independent of Booking Status — a confirmed booking can still owe a balance. */}
-              {!isReferred && remainingAmount > 0 && !['cancelled', 'rejected'].includes(status) && (
-                <div className="mt-3 flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 text-xs text-orange-800">
-                  <IndianRupee className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                  <span><strong>₹{remainingAmount.toLocaleString('en-IN')}</strong> to be collected offline during the trip.
-                  {(() => {
-                    const due = resolveDueDate(booking.departure_date || booking.trips?.start_date, booking.trips?.payment_due_days_before, dueDaysBefore);
-                    const pb = status === 'seat_locked' && due ? due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
-                    return pb ? <> Due by <strong>{pb}</strong>.</> : null;
-                  })()}
-                  </span>
                 </div>
               )}
             </div>
 
-        {/* Payment history — what happened, no totals */}
-        {booking.payment_transactions && booking.payment_transactions.length > 0 ? (
-          <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:shadow-none">
-            <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Receipt className="h-4 w-4 text-purple-600" />Payment History</h2>
-            </div>
-            <div className="p-4 sm:p-5 space-y-3">
-              {booking.payment_transactions
-                .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                .map((t: any, i: number) => {
-                  const isVerified = t.payment_status === 'verified';
-                  const isRejected = t.payment_status === 'rejected';
-                  const last = i === booking.payment_transactions.length - 1;
-                  return (
-                    <div key={t.id} className="relative flex gap-3">
-                      <div className="flex flex-col items-center flex-shrink-0 pt-1.5">
-                        <span className={`h-3 w-3 rounded-full ring-4 ring-white ${isVerified ? 'bg-green-500' : isRejected ? 'bg-red-500' : 'bg-amber-500'}`} />
-                        {!last && <span className="w-px flex-1 bg-[#ECECEE] my-1" />}
+        {/* Payment history — one compact row per payment; details on expand */}
+        <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:shadow-none">
+          <div className="px-4 py-2.5 border-b border-[#ECECEE]">
+            <h2 className="text-[13px] font-semibold text-gray-900 flex items-center gap-2"><Receipt className="h-4 w-4 text-gray-500" />Payment history</h2>
+          </div>
+          {sortedTxns.length > 0 ? (
+            <div className="divide-y divide-[#F1F1F3]">
+              {sortedTxns.map((t: any, i: number) => {
+                const isVerified = ['verified', 'partially_refunded', 'refunded'].includes(t.payment_status);
+                const isRejected = t.payment_status === 'rejected';
+                const isPending = t.payment_status === 'pending';
+                const method = (t.payment_mode || t.payment_type || 'payment').toString().replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+                const chip = isVerified ? 'bg-green-50 text-green-700' : isRejected ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800';
+                return (
+                  <details key={t.id} className="group" open={isPending || undefined}>
+                    <summary className="cursor-pointer list-none px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/70 focus-visible:outline-none focus-visible:bg-gray-50">
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-400 transition-transform group-open:rotate-90 flex-shrink-0 print:hidden" />
+                      <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-sm font-medium text-gray-900">#{i + 1} · {method}</span>
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded capitalize ${chip}`}>{String(t.payment_status || '').replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-gray-600 w-full sm:w-auto">{fmtDateTime(t.created_at)}</span>
                       </div>
-                      <div
-                        className={`flex-1 min-w-0 rounded-xl border p-3 sm:p-4 ${
-                          isVerified ? 'border-green-200 bg-green-50/60'
-                          : isRejected ? 'border-red-200 bg-red-50/60'
-                          : 'border-yellow-200 bg-yellow-50/60'
-                        }`}
-                      >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="flex items-center gap-2 flex-wrap min-w-0">
-                          <span className={`text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-md bg-white border ${
-                            isVerified ? 'border-green-200 text-green-700'
-                            : isRejected ? 'border-red-200 text-red-700'
-                            : 'border-yellow-200 text-yellow-700'
-                          }`}>
-                            #{i + 1} · {(t.payment_mode || t.payment_type || 'payment').toString().replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                          </span>
-                          <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                            isVerified ? 'bg-green-600 text-white'
-                            : isRejected ? 'bg-red-600 text-white'
-                            : 'bg-yellow-500 text-white'
-                          }`}>
-                            {t.payment_status}
-                          </span>
-                        </div>
-                        {isVerified ? (
-                          <p className="font-bold text-gray-900 flex items-baseline whitespace-nowrap"><IndianRupee className="h-4 w-4" />{parseFloat(String(t.amount)).toLocaleString('en-IN')}</p>
-                        ) : (
-                          <span className="text-xs text-gray-400 whitespace-nowrap">{isRejected ? 'not collected' : 'awaiting payment'}</span>
-                        )}
-                      </div>
-                      <div className="space-y-1 text-xs sm:text-sm text-gray-700">
-                        <div className="flex items-start gap-2">
-                          <span className="text-gray-500 font-medium min-w-[80px]">Txn ID:</span>
-                          <span className="font-mono break-all">{t.transaction_id}</span>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-gray-500 font-medium min-w-[80px]">Paid at:</span>
-                          <span>{fmtDateTime(t.created_at)}</span>
-                        </div>
-                        {t.payment_reviewed_at && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-gray-500 font-medium min-w-[80px]">Reviewed:</span>
-                            <span>{fmtDateTime(t.payment_reviewed_at)}</span>
-                          </div>
-                        )}
-                        {t.rejection_reason && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-gray-500 font-medium min-w-[80px]">Reason:</span>
-                            <span className="text-red-700 font-semibold">{t.rejection_reason}</span>
-                          </div>
-                        )}
-                      </div>
-                      {t.payment_status === 'pending' && (
-                        <button
-                          onClick={() => openTransactionModal(t)}
-                          className="mt-3 w-full sm:w-auto px-4 py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-bold hover:bg-purple-700 transition-colors print:hidden"
-                        >
-                          Review payment
-                        </button>
+                      {isVerified ? (
+                        <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">{inr(parseFloat(String(t.amount)) || 0)}</span>
+                      ) : (
+                        <span className="text-xs text-gray-600 whitespace-nowrap">{isRejected ? 'not collected' : `${inr(parseFloat(String(t.amount)) || 0)} pending`}</span>
                       )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    </summary>
+                    <dl className="px-4 pb-3 pl-[42px] space-y-1 text-[13px]">
+                      <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Txn ID</dt><dd className="font-mono text-gray-900 break-all">{t.transaction_id || '—'}</dd></div>
+                      {t.payment_reviewed_at && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Reviewed</dt><dd className="text-gray-900">{fmtDateTime(t.payment_reviewed_at)}</dd></div>}
+                      {Number(t.amount_refunded) > 0 && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Refunded</dt><dd className="text-red-700">{inr(Number(t.amount_refunded))}</dd></div>}
+                      {t.rejection_reason && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Reason</dt><dd className="text-red-700 font-medium">{t.rejection_reason}</dd></div>}
+                      {isPending && (
+                        <button onClick={() => openTransactionModal(t)} className="mt-1.5 h-8 px-3 bg-purple-600 text-white rounded-lg text-[13px] font-semibold hover:bg-purple-700 transition-colors print:hidden">Review payment</button>
+                      )}
+                    </dl>
+                  </details>
+                );
+              })}
             </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-[#ECECEE] p-8 text-center">
-            <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">No payments recorded yet.</p>
-            <p className="text-xs text-gray-400">Use Actions → Record payment when you collect one.</p>
-          </div>
-        )}
+          ) : (
+            <p className="px-4 py-3 text-sm text-gray-600">No payments recorded yet. Use <span className="font-medium text-gray-800">Record payment</span> when you collect one.</p>
+          )}
+        </div>
 
         {/* Add-ons & Upgrades — view + manage (only when the booking has any) */}
         {Array.isArray(booking.booking_addons) && booking.booking_addons.length > 0 && (
@@ -768,39 +728,50 @@ export default function AdminBookingDetailsPage() {
 
         {/* Referral details — ADMIN ONLY (never sent to the customer) */}
         {isReferred && (
-          <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden print:hidden">
-            <div className="px-4 sm:px-5 py-3 border-b border-indigo-100 bg-indigo-50/60 flex items-center gap-2">
-              <Gift className="h-4 w-4 text-indigo-600" />
-              <h2 className="text-sm font-semibold text-gray-900">Referral <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">admin-only</span></h2>
+          <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:hidden">
+            <div className="px-4 py-2.5 border-b border-[#ECECEE] flex items-center gap-2">
+              <Gift className="h-4 w-4 text-gray-500" />
+              <h2 className="text-[13px] font-semibold text-gray-900">Referral <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">admin-only</span></h2>
             </div>
-            <dl className="px-4 sm:px-5 py-3 space-y-2.5 text-sm">
-              <div className="flex justify-between gap-3"><dt className="text-gray-500">Referred to</dt><dd className="font-semibold text-gray-900">{booking.referral_partner || '—'}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-gray-500">Commission / profit</dt><dd className="font-semibold text-green-700">₹{(parseFloat(String(booking.referral_commission || 0)) || 0).toLocaleString('en-IN')}</dd></div>
-              {booking.referral_notes && <div className="pt-2 border-t border-gray-100"><dt className="text-gray-500 mb-1">Notes</dt><dd className="text-gray-800 whitespace-pre-wrap">{booking.referral_notes}</dd></div>}
+            <dl className="px-4 py-3 space-y-2 text-sm">
+              <div className="flex justify-between gap-3"><dt className="text-gray-600">Referred to</dt><dd className="font-semibold text-gray-900">{booking.referral_partner || '—'}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-gray-600">Commission / profit</dt><dd className="font-semibold text-gray-900">{inr(parseFloat(String(booking.referral_commission || 0)) || 0)}</dd></div>
+              {booking.referral_notes && <div className="pt-2 border-t border-gray-100"><dt className="text-gray-600 mb-1">Notes</dt><dd className="text-gray-800 whitespace-pre-wrap">{booking.referral_notes}</dd></div>}
             </dl>
           </div>
         )}
 
-        {/* Internal notes — ADMIN ONLY */}
-        <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:hidden">
-          <div className="px-4 sm:px-5 py-3 border-b border-[#ECECEE] flex items-center gap-2">
-            <StickyNote className="h-4 w-4 text-amber-500" />
-            <h2 className="text-sm font-semibold text-gray-900">Internal notes <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">admin-only</span></h2>
-          </div>
-          <div className="p-4 sm:p-5">
+        {/* Internal notes — ADMIN ONLY. Collapsed to one line until there's something to say. */}
+        {!hasNotes && !notesOpen ? (
+          <button
+            onClick={() => setNotesOpen(true)}
+            className="w-full bg-white rounded-xl border border-dashed border-gray-300 px-4 py-2.5 flex items-center gap-2 text-[13px] font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors print:hidden"
+          >
+            <StickyNote className="h-4 w-4 text-gray-500" />Add internal note
+            <span className="ml-auto text-[11px] font-normal text-gray-500">Never shown to the customer</span>
+          </button>
+        ) : (
+          <div className="bg-white rounded-xl border border-[#ECECEE] p-4 print:hidden">
+            <h2 className="text-[13px] font-semibold text-gray-900 mb-2 flex items-center gap-2"><StickyNote className="h-4 w-4 text-gray-500" />Internal notes <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">admin-only</span></h2>
             <textarea
               value={internalNotes}
               onChange={(e) => setInternalNotes(e.target.value)}
               rows={3}
-              placeholder="e.g. Customer will pay cash while boarding. Requested front seats. Called and confirmed."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              autoFocus={!hasNotes}
+              placeholder="e.g. Customer will pay cash while boarding. Requested front seats."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-900 bg-white resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
             />
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-[11px] text-gray-400">Never shown to the customer.</p>
-              <button onClick={saveInternalNotes} disabled={savingNotes || internalNotes === (booking.internal_notes || '')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-700 disabled:opacity-40"><Check className="h-3.5 w-3.5" />{savingNotes ? 'Saving…' : 'Save notes'}</button>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-gray-500">Never shown to the customer.</p>
+              <div className="flex gap-2">
+                {!hasNotes && (
+                  <button onClick={() => { setInternalNotes(''); setNotesOpen(false); }} className="h-8 px-3 rounded-lg text-[13px] text-gray-600 hover:bg-gray-100">Cancel</button>
+                )}
+                <button onClick={saveInternalNotes} disabled={savingNotes || internalNotes === (booking.internal_notes || '')} className="inline-flex items-center gap-1.5 h-8 px-3 bg-purple-600 text-white rounded-lg text-[13px] font-semibold hover:bg-purple-700 disabled:opacity-40"><Check className="h-3.5 w-3.5" />{savingNotes ? 'Saving…' : 'Save'}</button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
           </div>
         </div>
@@ -1141,12 +1112,9 @@ export default function AdminBookingDetailsPage() {
 }
 
 const ACTION_TONES: Record<string, { tile: string; label: string; hover: string }> = {
-  green: { tile: 'bg-green-50 text-green-600', label: 'text-gray-800', hover: 'hover:bg-green-50/60' },
-  purple: { tile: 'bg-purple-50 text-purple-600', label: 'text-gray-800', hover: 'hover:bg-purple-50/60' },
-  indigo: { tile: 'bg-indigo-50 text-indigo-600', label: 'text-gray-800', hover: 'hover:bg-indigo-50/60' },
-  gray: { tile: 'bg-gray-100 text-gray-500', label: 'text-gray-800', hover: 'hover:bg-gray-50' },
+  purple: { tile: 'bg-purple-50 text-purple-700', label: 'text-gray-900', hover: 'hover:bg-gray-50' },
+  gray: { tile: 'bg-gray-100 text-gray-600', label: 'text-gray-900', hover: 'hover:bg-gray-50' },
   red: { tile: 'bg-red-50 text-red-600', label: 'text-red-600', hover: 'hover:bg-red-50/70' },
-  rose: { tile: 'bg-rose-50 text-rose-600', label: 'text-rose-600', hover: 'hover:bg-rose-50/70' },
 };
 
 function ActionRow({ onClick, icon, tone, label, sub, disabled }: { onClick: () => void; icon: React.ReactNode; tone: keyof typeof ACTION_TONES | string; label: string; sub?: string; disabled?: boolean }) {
@@ -1155,14 +1123,14 @@ function ActionRow({ onClick, icon, tone, label, sub, disabled }: { onClick: () 
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${t.hover}`}
+      className={`group w-full min-h-[48px] flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${t.hover}`}
     >
-      <span className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${t.tile}`}>{icon}</span>
+      <span className={`flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0 ${t.tile}`}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-sm font-semibold ${t.label}`}>{label}</span>
-        {sub && <span className="block text-[11px] text-gray-400 truncate">{sub}</span>}
+        <span className={`block text-[13px] font-medium leading-tight ${t.label}`}>{label}</span>
+        {sub && <span className="block text-[11px] text-gray-600 truncate mt-0.5">{sub}</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
+      <ChevronRight className="h-3.5 w-3.5 text-gray-400 group-hover:text-gray-600 flex-shrink-0" />
     </button>
   );
 }

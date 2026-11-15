@@ -108,60 +108,59 @@ export default function AdminBookingAddons({
   const rows = addons || [];
 
   return (
-    <section className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+    <section className="rounded-xl bg-white border border-[#ECECEE] overflow-hidden">
+      <div className="px-4 py-2 border-b border-[#ECECEE] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-600" />
-          <h3 className="text-sm font-bold text-gray-900">Add-ons &amp; Upgrades</h3>
+          <Sparkles className="w-4 h-4 text-gray-500" />
+          <h3 className="text-[13px] font-semibold text-gray-900">Add-ons &amp; upgrades</h3>
         </div>
         <button type="button" onClick={openAdd} disabled={busy}
-          className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
+          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           <Plus className="w-3.5 h-3.5" /> Add
         </button>
       </div>
 
-      {err && <p className="px-5 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100">{err}</p>}
+      {err && <p className="px-4 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100">{err}</p>}
 
       {rows.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-gray-400">No add-ons on this booking.</p>
+        <p className="px-4 py-3 text-sm text-gray-600">No add-ons on this booking.</p>
       ) : (
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-[#F1F1F3]">
           {rows.map((row: any) => {
             const cancelled = row.status === 'cancelled';
             const editing = editId === row.id;
             return (
-              <div key={row.id} className={`px-5 py-3.5 ${cancelled ? 'opacity-60' : ''}`}>
-                <div className="flex items-start gap-3">
-                  <span className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 shrink-0">
-                    <AddonIcon iconKey={row.icon_key} className="w-[18px] h-[18px]" />
+              <div key={row.id} className={`px-4 py-2.5 ${cancelled ? 'opacity-60' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 shrink-0">
+                    <AddonIcon iconKey={row.icon_key} className="w-4 h-4" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className={`text-sm font-semibold text-gray-900 ${cancelled ? 'line-through' : ''}`}>{row.name}</p>
-                      {cancelled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Cancelled</span>}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">{row.payment_status || 'pending'}</span>
+                    <div className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap">
+                      <p className={`text-sm font-medium text-gray-900 ${cancelled ? 'line-through' : ''}`}>{row.name}</p>
+                      {Array.isArray(row.selected_passenger_names) && row.selected_passenger_names.length > 0 && (
+                        <span className="text-xs text-gray-600 truncate">· {row.selected_passenger_names.join(', ')}</span>
+                      )}
+                      {cancelled
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold">Cancelled</span>
+                        : <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold capitalize ${row.payment_status === 'paid' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-800'}`}>{row.payment_status || 'pending'}</span>}
                     </div>
-                    {Array.isArray(row.selected_passenger_names) && row.selected_passenger_names.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-0.5">{row.selected_passenger_names.join(', ')}</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-0.5">{calcLabelFromRow(row)}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{calcLabelFromRow(row)}</p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-sm font-bold text-gray-900 ${cancelled ? 'line-through' : ''}`}>{formatINR(row.addon_total)}</p>
-                    {!cancelled && (
-                      <div className="flex items-center gap-1 mt-1 justify-end">
-                        {(usesPassengerSelection(row.pricing_method) || usesQuantity(row.pricing_method)) && (
-                          <button type="button" onClick={() => (editing ? setEditId(null) : startEdit(row))} className="p-1.5 text-gray-400 hover:text-purple-600" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                        )}
-                        <button type="button" onClick={() => cancelRow(row)} className="p-1.5 text-gray-400 hover:text-amber-600" title="Cancel"><Ban className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => removeRow(row)} className="p-1.5 text-gray-400 hover:text-red-600" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    )}
-                  </div>
+                  <p className={`text-sm font-semibold text-gray-900 shrink-0 ${cancelled ? 'line-through' : ''}`}>{formatINR(row.addon_total)}</p>
+                  {!cancelled && (
+                    <div className="flex items-center shrink-0 -mr-1.5">
+                      {(usesPassengerSelection(row.pricing_method) || usesQuantity(row.pricing_method)) && (
+                        <button type="button" onClick={() => (editing ? setEditId(null) : startEdit(row))} className="p-1.5 rounded text-gray-500 hover:text-purple-700 hover:bg-gray-100" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                      )}
+                      <button type="button" onClick={() => cancelRow(row)} className="p-1.5 rounded text-gray-500 hover:text-amber-700 hover:bg-gray-100" title="Cancel add-on"><Ban className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => removeRow(row)} className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-gray-100" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
                 </div>
 
                 {editing && (
-                  <div className="mt-3 pl-12 space-y-2">
+                  <div className="mt-2 pl-10 space-y-2">
                     {usesPassengerSelection(row.pricing_method) && (
                       <div className="flex flex-wrap gap-1.5">
                         {paxList.map((p, i) => {
