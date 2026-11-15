@@ -51,6 +51,9 @@ export async function POST(
     if (bookingError || !booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
+    if (booking.partner_id || booking.booking_status === 'referred') {
+      return NextResponse.json({ error: 'This booking is with a partner. The customer pays the partner, so no reminder is sent.' }, { status: 400 });
+    }
 
     // Calculate remaining amount
     const totalPaid = booking.payment_transactions

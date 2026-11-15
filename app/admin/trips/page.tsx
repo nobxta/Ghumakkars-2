@@ -93,7 +93,7 @@ export default function AdminTripsPage() {
 
       // Compute pending amount (booked but not yet fully paid)
       const pendingAmount = (info.bookings || [])
-        .filter((b: any) => !['cancelled', 'rejected', 'referred'].includes(b.booking_status))
+        .filter((b: any) => !['cancelled', 'rejected', 'referred'].includes(b.booking_status) && !b.partner_id)
         .reduce((sum: number, b: any) => sum + moneyOf(b, info.trip).remaining, 0);
 
       let message: string;

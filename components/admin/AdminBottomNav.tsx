@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, MapPin, Calendar, Users, Settings, Tag, MoreHorizontal, CreditCard, BookUser, Gift, BarChart3, Bug } from 'lucide-react';
+import { LayoutDashboard, MapPin, Calendar, Users, Settings, Tag, MoreHorizontal, CreditCard, BookUser, Gift, BarChart3, Bug, Handshake } from 'lucide-react';
 import { useState } from 'react';
 
 export default function AdminBottomNav() {
@@ -18,6 +18,7 @@ export default function AdminBottomNav() {
 
   const moreItems = [
     { href: '/admin/payments', icon: CreditCard, label: 'Payments' },
+    { href: '/admin/partners', icon: Handshake, label: 'Partners' },
     { href: '/admin/contacts', icon: BookUser, label: 'Contacts' },
     { href: '/admin/coupons', icon: Tag, label: 'Coupons' },
     { href: '/admin/referrals', icon: Gift, label: 'Referrals' },

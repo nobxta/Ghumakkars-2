@@ -179,6 +179,8 @@ export default function AdminPaymentsPage() {
     const tripRevenue: Record<string, { name: string; amount: number }> = {};
 
     summaryRows.forEach(p => {
+      // Cash a customer paid straight to a partner never reached us.
+      if ((p as any).collected_by === 'partner') return;
       const amt = Number(p.amount || 0);
       const refAmt = Number(p.amount_refunded || 0);
       const paidAt = p.paid_at ? new Date(p.paid_at).getTime() : new Date(p.created_at).getTime();
@@ -394,7 +396,10 @@ export default function AdminPaymentsPage() {
                               <p className="text-xs text-gray-500 truncate max-w-xs">{p.trip_title || '—'}</p>
                             </td>
                             <td className={`${ui.td} ${ui.mono}`}>{p.razorpay_payment_id || p.transaction_id || '—'}</td>
-                            <td className={`${ui.td} text-gray-600`}>{methodName(p.payment_method || p.payment_mode)}</td>
+                            <td className={`${ui.td} text-gray-600`}>
+                              {methodName(p.payment_method || p.payment_mode)}
+                              {(p as any).collected_by === 'partner' && <span className="block text-[11px] font-semibold text-indigo-700">Paid to partner</span>}
+                            </td>
                             <td className={`${ui.num} font-semibold text-gray-900`}>{fmtINR(p.amount)}</td>
                             <td className={ui.num}>{p.amount_refunded ? fmtINR(p.amount_refunded) : '—'}</td>
                             <td className={ui.td}><Badge tone={b.tone}>{b.label}</Badge></td>
@@ -425,7 +430,7 @@ export default function AdminPaymentsPage() {
                           <p className="font-semibold text-gray-900 tabular-nums text-sm flex-shrink-0">{fmtINR(p.amount)}</p>
                         </div>
                         <div className="flex items-center justify-between gap-2 mt-2">
-                          <span className="text-xs text-gray-500 truncate">{fmtDate(p.paid_at || p.created_at)} · {methodName(p.payment_method || p.payment_mode)}</span>
+                          <span className="text-xs text-gray-500 truncate">{fmtDate(p.paid_at || p.created_at)} · {methodName(p.payment_method || p.payment_mode)}{(p as any).collected_by === 'partner' ? ' · paid to partner' : ''}</span>
                           <Badge tone={b.tone}>{b.label}</Badge>
                         </div>
                       </button>

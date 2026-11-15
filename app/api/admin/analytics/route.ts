@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { moneyOf } from '@/lib/booking-money';
 import { effectiveBookingStatus } from '@/lib/booking-status-labels';
+import { isPartnerBooking, partnerMoneyOf } from '@/lib/partner-money';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function GET() {
     admin
       .from('bookings')
       .select(
-        'id, trip_id, user_id, booking_status, number_of_participants, departure_date, payment_method, payment_mode, total_price, final_amount, coupon_code, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, referral_partner, referral_commission, is_offline_booking, college, primary_passenger_gender, pickup_point, created_at, trips(discounted_price, start_date, end_date), payment_transactions(id, amount, payment_status, amount_refunded, payment_method, payment_mode, payment_type, upi_provider, card_network, created_at, paid_at)',
+        'id, trip_id, user_id, booking_status, number_of_participants, departure_date, payment_method, payment_mode, total_price, final_amount, coupon_code, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, referral_partner, referral_commission, partner_id, partner_price, partners(name), is_offline_booking, college, primary_passenger_gender, pickup_point, created_at, trips(discounted_price, start_date, end_date), payment_transactions(id, amount, payment_status, amount_refunded, payment_method, payment_mode, payment_type, upi_provider, card_network, created_at, paid_at, collected_by)',
       )
       .limit(20000),
     admin.from('profiles').select('id, created_at, email_verified, college_name, university, gender, referred_by, role').limit(50000),
@@ -64,7 +65,8 @@ export async function GET() {
   const bookings = (bookingsRes.data || []).map((b: any) => {
     const trip = Array.isArray(b.trips) ? b.trips[0] : b.trips;
     const m = moneyOf(b);
-    const partner = b.booking_status === 'referred';
+    const partner = isPartnerBooking(b);
+    const partnerRel = Array.isArray(b.partners) ? b.partners[0] : b.partners;
     const dep = b.departure_date || trip?.start_date || null;
     (b.payment_transactions || []).forEach((t: any) => {
       payments.push({
@@ -113,8 +115,9 @@ export async function GET() {
       refunded: m.refunded,
       remaining: partner ? 0 : m.remaining,
       payStatus: partner ? 'partner' : m.status,
-      partner: partner ? norm(b.referral_partner) || 'Partner' : null,
-      commission: partner ? n(b.referral_commission) : 0,
+      partner: partner ? norm(partnerRel?.name || b.referral_partner) || 'Partner' : null,
+      // Our margin on a partner booking (customer price − partner price).
+      commission: partner ? partnerMoneyOf(b, trip).margin : 0,
       college: norm(b.college) || null,
       gender: (b.primary_passenger_gender || '').toLowerCase() || null,
       pickup: norm(b.pickup_point) || null,

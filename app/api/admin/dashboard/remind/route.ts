@@ -27,13 +27,15 @@ async function handlePOST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: bookings, error } = await admin
     .from('bookings')
-    .select('id, user_id, booking_status, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, is_offline_booking, primary_passenger_name, primary_passenger_phone, trips(title, start_date, discounted_price), payment_transactions(amount, payment_status, amount_refunded)')
+    .select('id, user_id, booking_status, partner_id, number_of_participants, departure_date, payment_method, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, is_offline_booking, primary_passenger_name, primary_passenger_phone, trips(title, start_date, discounted_price), payment_transactions(amount, payment_status, amount_refunded, collected_by)')
     .in('id', ids);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const results = await Promise.all(
     (bookings || []).map(async (b: any) => {
       const trip = Array.isArray(b.trips) ? b.trips[0] : b.trips;
+      // A partner booking's balance is paid to the partner, not to us.
+      if (b.partner_id || b.booking_status === 'referred') return { bookingId: b.id, ok: false, reason: 'With a partner' };
       const due = Math.max(0, owedOf(b) - paidOf(b));
       if (due <= 1) return { bookingId: b.id, ok: false, reason: 'No balance due' };
       if (!b.primary_passenger_phone) return { bookingId: b.id, ok: false, reason: 'No phone number' };

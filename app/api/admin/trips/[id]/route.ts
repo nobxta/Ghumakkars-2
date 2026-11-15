@@ -43,6 +43,7 @@ export async function GET(
           payment_mode,
           payment_method,
           payment_status,
+          collected_by,
           created_at
         ),
         booking_addons (
@@ -97,9 +98,10 @@ export async function GET(
       b.booking_status === 'pending' || b.booking_status === 'seat_locked'
     ) || [];
 
-    // Revenue excludes cancelled/rejected bookings (treated as refunded).
+    // Revenue excludes cancelled/rejected bookings (treated as refunded) and
+    // partner bookings (their money is settled with the partner; we earn a margin).
     const earningBookings = bookings?.filter((b: any) =>
-      !['cancelled', 'rejected'].includes(b.booking_status)
+      !['cancelled', 'rejected'].includes(b.booking_status) && !b.partner_id && b.booking_status !== 'referred'
     ) || [];
 
     // Money actually kept: ledger minus refunds (legacy offline rows fall back to

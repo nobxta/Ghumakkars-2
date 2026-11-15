@@ -9,8 +9,9 @@ import {
   GraduationCap, CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Check, X,
   Printer, Copy, FileText, Tag, Shield, MessageCircle, ChevronRight, Wallet, Receipt,
-  Gift, StickyNote, RotateCcw, Bell
+  Gift, StickyNote, RotateCcw, Bell, Handshake, Trash2, ExternalLink, Landmark, RefreshCw
 } from 'lucide-react';
+import { isPartnerBooking, partnerMoneyOf, partnerPriceFrom, PARTNER_SETTLEMENT_METHODS } from '@/lib/partner-money';
 import { resolveDueDate } from '@/lib/payment-due';
 import { moneyOf, seatLockBaseOf } from '@/lib/booking-money';
 import { bookingStatusLabel, paymentStatusLabel, bookingStatusChip, paymentStatusChip, MANUAL_STATUSES, effectiveBookingStatus } from '@/lib/booking-status-labels';
@@ -37,7 +38,7 @@ export default function AdminBookingDetailsPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelReasonPreset, setCancelReasonPreset] = useState('');
   // Each action opens its OWN focused panel (not one big stacked drawer).
-  const [drawerMode, setDrawerMode] = useState<null | 'payment' | 'status' | 'referral'>(null);
+  const [drawerMode, setDrawerMode] = useState<null | 'payment' | 'status' | 'referral' | 'settlement'>(null);
   const [dueDaysBefore, setDueDaysBefore] = useState<number>(5);
   // Record-payment form
   const [payMethod, setPayMethod] = useState<'cash' | 'upi' | 'card' | 'bank' | 'online'>('cash');
@@ -46,13 +47,31 @@ export default function AdminBookingDetailsPage() {
   // Change-status form
   const [statusChoice, setStatusChoice] = useState<string>('');
   const [statusNotify, setStatusNotify] = useState(true);
-  // Referral form
-  const [refPartner, setRefPartner] = useState('');
-  const [refCommission, setRefCommission] = useState('');
+  // Referral form — partner + partner price (what the partner keeps)
+  const [partners, setPartners] = useState<any[]>([]);
+  const [partnersLoaded, setPartnersLoaded] = useState(false);
+  const [refPartnerId, setRefPartnerId] = useState(''); // '' = none chosen, '__new' = add new
+  const [refNewName, setRefNewName] = useState('');
+  const [refNewPhone, setRefNewPhone] = useState('');
+  const [refBasis, setRefBasis] = useState<'per_person' | 'total'>('per_person');
+  const [refRate, setRefRate] = useState('');
   const [refNotes, setRefNotes] = useState('');
+  // Record-payment: who received the money (only for partner bookings)
+  const [payCollectedBy, setPayCollectedBy] = useState<'us' | 'partner'>('us');
+  // Partner settlement form
+  const [stlDirection, setStlDirection] = useState<'to_partner' | 'from_partner'>('to_partner');
+  const [stlAmount, setStlAmount] = useState('');
+  const [stlMethod, setStlMethod] = useState<string>('upi');
+  const [stlReference, setStlReference] = useState('');
+  const [stlNotes, setStlNotes] = useState('');
+  const [stlDate, setStlDate] = useState(() => new Date().toISOString().slice(0, 10));
   // Internal notes
   const [internalNotes, setInternalNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  // Razorpay payouts (settlements) for this booking's online payments
+  const [rzpSettle, setRzpSettle] = useState<{ byPayment: Record<string, any>; lastSyncedAt: string | null } | null>(null);
+  const [syncingSettle, setSyncingSettle] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   // Refund modal
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -179,6 +198,36 @@ export default function AdminBookingDetailsPage() {
     { value: 'other', label: 'Other (specify in notes)' },
   ];
 
+  const loadPartners = async () => {
+    try {
+      const res = await fetch('/api/admin/partners?lite=1');
+      const data = await res.json();
+      if (res.ok) setPartners(data.partners || []);
+    } catch { /* picker stays empty; "Add new partner" still works */ }
+    setPartnersLoaded(true);
+  };
+
+  const openReferral = () => {
+    if (!partnersLoaded) loadPartners();
+    setRefPartnerId(booking?.partner_id || '');
+    setRefNewName('');
+    setRefNewPhone('');
+    setRefBasis(booking?.partner_price_basis === 'total' ? 'total' : 'per_person');
+    setRefRate(booking?.partner_price_rate != null ? String(Number(booking.partner_price_rate)) : '');
+    setRefNotes(booking?.referral_notes || '');
+    setDrawerMode('referral');
+  };
+
+  const pickPartner = (id: string) => {
+    setRefPartnerId(id);
+    const p = partners.find((x) => x.id === id);
+    // Fill the partner's usual price when nothing is entered yet.
+    if (p && p.default_price_rate != null && !refRate) {
+      setRefBasis(p.default_price_basis === 'total' ? 'total' : 'per_person');
+      setRefRate(String(Number(p.default_price_rate)));
+    }
+  };
+
   useEffect(() => {
     checkUser();
     fetchBooking();
@@ -188,12 +237,19 @@ export default function AdminBookingDetailsPage() {
       .catch(() => {});
   }, [params.id]);
 
+  // Payout info for Razorpay payments — reload when payments change.
+  const rzpCount = (booking?.payment_transactions || []).filter((t: any) => t.payment_mode === 'razorpay' || String(t.transaction_id || '').startsWith('pay_')).length;
+  useEffect(() => {
+    if (booking?.id && rzpCount > 0) loadSettlements();
+  }, [booking?.id, rzpCount]);
+
   // Seed the editable admin-only fields whenever the booking (re)loads.
   useEffect(() => {
     if (!booking) return;
     setInternalNotes(booking.internal_notes || '');
-    setRefPartner(booking.referral_partner || '');
-    setRefCommission(booking.referral_commission != null && Number(booking.referral_commission) > 0 ? String(booking.referral_commission) : '');
+    setRefPartnerId(booking.partner_id || '');
+    setRefBasis(booking.partner_price_basis === 'total' ? 'total' : 'per_person');
+    setRefRate(booking.partner_price_rate != null ? String(Number(booking.partner_price_rate)) : '');
     setRefNotes(booking.referral_notes || '');
     setStatusChoice(booking.booking_status || 'pending');
   }, [booking?.id]);
@@ -215,6 +271,28 @@ export default function AdminBookingDetailsPage() {
     if (!profile || profile.role !== 'admin') {
       router.push('/');
       return;
+    }
+  };
+
+  const loadSettlements = async () => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${(params as any).id}/settlements`);
+      const data = await res.json();
+      if (res.ok) setRzpSettle({ byPayment: data.byPayment || {}, lastSyncedAt: data.lastSyncedAt || null });
+    } catch { /* payout info is optional */ }
+  };
+
+  const syncSettlements = async () => {
+    setSyncingSettle(true);
+    try {
+      const res = await fetch('/api/admin/settlements/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Could not sync with Razorpay');
+      }
+      await loadSettlements();
+    } finally {
+      setSyncingSettle(false);
     }
   };
 
@@ -372,7 +450,11 @@ export default function AdminBookingDetailsPage() {
   const paidAmount = money.paid;
   const remainingAmount = money.remaining;
   const paymentStatus = money.status; // 'pending' | 'partial' | 'paid' | 'refunded'
-  const isReferred = status === 'referred';
+  const isReferred = isPartnerBooking(booking);
+  const partnerSettlements: any[] = booking.partner_settlements || [];
+  const pm = partnerMoneyOf(booking, booking.trips, partnerSettlements);
+  const partnerName = booking.partner?.name || booking.referral_partner || 'Partner';
+  const partnerPhone = booking.partner?.phone ? String(booking.partner.phone) : '';
   const isCancelled = ['cancelled', 'rejected'].includes(status);
   // On Trip / Completed are auto-derived from the trip dates — never set by hand.
   const effStartDate = (booking.trips?.is_recurring && booking.departure_date) ? booking.departure_date : booking.trips?.start_date;
@@ -389,7 +471,10 @@ export default function AdminBookingDetailsPage() {
 
   const copyId = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(booking.id);
+      navigator.clipboard.writeText(booking.id).then(() => {
+        setIdCopied(true);
+        setTimeout(() => setIdCopied(false), 1500);
+      }).catch(() => {});
     }
   };
 
@@ -430,13 +515,65 @@ export default function AdminBookingDetailsPage() {
     <div className="bg-white rounded-xl border border-[#ECECEE] p-4">
       <h2 className="text-[13px] font-semibold text-gray-900 mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-gray-500" />Payment summary</h2>
       {isReferred ? (
-        <dl className="space-y-1.5">
-          <Line label="Handed to partner" value={booking.referral_partner || '—'} />
-          <div className="pt-2 mt-1 border-t border-[#ECECEE]">
-            <Line strong label="Our commission" value={inr(parseFloat(String(booking.referral_commission || 0)) || 0)} />
+        <>
+          {/* Printed receipts go to customers: show only their own numbers. */}
+          <dl className="hidden print:block space-y-1.5">
+            <Line label="Trip price" value={inr(pm.customerPrice)} />
+            <Line label="Paid" value={inr(pm.paidToUs + pm.paidToPartner)} />
+            <Line strong label="Balance due" value={inr(pm.customerDue)} />
+          </dl>
+          <div className="print:hidden">
+          <dl className="space-y-1.5">
+            <Line label={pm.cancelled ? 'Customer paid (cancelled)' : 'Customer price'} value={inr(pm.customerPrice)} />
+            {pm.isLegacy ? (
+              <Line label="Partner price" value={<button onClick={openReferral} className="text-[13px] font-semibold text-purple-700 hover:underline print:hidden">Add</button>} />
+            ) : (
+              <Line label="Partner price" value={`−${inr(pm.partnerPrice || 0)}`} />
+            )}
+            <div className="pt-2 mt-1 border-t border-[#ECECEE]">
+              <Line strong label="Your margin" value={inr(pm.margin)} tone={pm.margin < 0 ? 'text-red-600' : 'text-gray-900'} />
+            </div>
+          </dl>
+          <p className="mt-3 mb-1 text-[11px] uppercase tracking-wide font-semibold text-gray-500">Customer paid</p>
+          <dl className="space-y-1.5">
+            <Line label="To you" value={inr(pm.paidToUs)} tone="text-green-700" />
+            <Line label="To partner" value={inr(pm.paidToPartner)} />
+            {!pm.cancelled && <Line label="Still due" value={inr(pm.customerDue)} tone={pm.customerDue > 0 ? 'text-amber-700' : 'text-gray-900'} />}
+            {(pm.paidByUsToPartner > 0 || pm.paidByPartnerToUs > 0) && (
+              <>
+                <p className="pt-2 text-[11px] uppercase tracking-wide font-semibold text-gray-500">Settled</p>
+                {pm.paidByUsToPartner > 0 && <Line label="You paid partner" value={inr(pm.paidByUsToPartner)} />}
+                {pm.paidByPartnerToUs > 0 && <Line label="Partner paid you" value={inr(pm.paidByPartnerToUs)} />}
+              </>
+            )}
+          </dl>
+          <div className={`mt-3 rounded-lg px-3 py-2.5 ${pm.state === 'they_owe' ? 'bg-green-50' : pm.state === 'we_owe' ? 'bg-amber-50' : 'bg-gray-50'}`}>
+            {pm.state === 'untracked' ? (
+              <p className="text-[13px] text-gray-700">Older referral: settlement isn&apos;t tracked. <button onClick={openReferral} className="font-semibold text-purple-700 hover:underline print:hidden">Add partner price</button> to track it.</p>
+            ) : (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className={`text-[13px] font-medium ${pm.state === 'they_owe' ? 'text-green-800' : pm.state === 'we_owe' ? 'text-amber-900' : 'text-gray-700'}`}>
+                  {pm.state === 'they_owe' ? 'Partner owes you' : pm.state === 'we_owe' ? 'You owe partner' : 'Square with partner'}
+                </span>
+                <span className={`text-xl font-bold ${pm.state === 'they_owe' ? 'text-green-700' : pm.state === 'we_owe' ? 'text-amber-700' : 'text-gray-700'}`}>
+                  {pm.state === 'square' ? '₹0' : inr(Math.abs(pm.balance))}
+                </span>
+              </div>
+            )}
           </div>
-          <Line label="Dues" value="None" tone="text-green-700" />
-        </dl>
+          {!pm.isLegacy && pm.customerDue > 0 && !pm.cancelled && (
+            <p className="mt-2 text-xs text-gray-600">Assumes the partner collects the {inr(pm.customerDue)} still due at boarding. If you collect it, record it as yours.</p>
+          )}
+          {!pm.isLegacy && pm.state !== 'square' && (
+            <button
+              onClick={() => { setStlDirection(pm.state === 'they_owe' ? 'from_partner' : 'to_partner'); setStlAmount(String(Math.abs(pm.balance))); setStlMethod('upi'); setStlReference(''); setStlNotes(''); setStlDate(new Date().toISOString().slice(0, 10)); setDrawerMode('settlement'); }}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border border-gray-200 text-[13px] font-semibold text-gray-800 hover:bg-gray-50 print:hidden"
+            >
+              <Handshake className="h-4 w-4 text-gray-500" />Record settlement
+            </button>
+          )}
+          </div>
+        </>
       ) : (
         <>
           <dl className="space-y-1.5">
@@ -485,37 +622,53 @@ export default function AdminBookingDetailsPage() {
         </div>
       </div>
 
-      {/* Sticky booking toolbar (48px) — sits flush under the global header. The
-          only place booking status appears. */}
-      <div className="sticky top-14 md:top-16 z-30 -mx-3 sm:-mx-6 -mt-4 sm:-mt-6 px-3 sm:px-6 bg-white/90 backdrop-blur border-b border-[#ECECEE] print:hidden">
-        <div className="w-full h-12 flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link href="/admin/bookings" title="Back to bookings" className="inline-flex items-center text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Bookings</span>
+      {/* Sticky booking header — sits under the global header (z-20 keeps the
+          header's notification panel and menus above it). The only place booking
+          status appears. */}
+      <div className="sticky top-14 md:top-16 z-20 -mx-3 sm:-mx-6 -mt-4 sm:-mt-6 px-3 sm:px-6 bg-[#F8F9FB]/90 backdrop-blur-md border-b border-slate-200/70 print:hidden">
+        <div className="w-full h-14 flex items-center gap-3 min-w-0">
+          <Link
+            href="/admin/bookings"
+            aria-label="Back to bookings"
+            title="Back to bookings"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          >
+            <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="h-4 w-px bg-gray-200" />
-          <button onClick={copyId} title="Copy full booking ID" className="group inline-flex items-center gap-1 font-mono text-[13px] font-semibold text-gray-900 hover:text-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded px-1">
-            #{shortId}
-            <Copy className="h-3 w-3 text-gray-500 group-hover:text-purple-600" />
-          </button>
-          {/* Booking Status and Payment Status are independent — show both. */}
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${bookingStatusChip(displayStatus)}`} title="Booking status">
-            <Shield className="h-3 w-3" />{bookingStatusLabel(displayStatus)}
-          </span>
-          {isReferred ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap bg-indigo-100 text-indigo-700" title="Payment status">
-              <Gift className="h-3 w-3" />Settled
-            </span>
-          ) : (
-            <span className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${paymentStatusChip(paymentStatus)}`} title="Payment status">
-              <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
-            </span>
-          )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-[15px] font-semibold text-slate-900 truncate">{passengerName}</p>
+              {/* Booking Status and Payment Status are independent — show both. */}
+              <span className={`inline-flex flex-shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${bookingStatusChip(displayStatus)}`} title="Booking status">
+                <Shield className="h-3 w-3" />{bookingStatusLabel(displayStatus)}
+              </span>
+              {isReferred ? (
+                <span className="hidden sm:inline-flex flex-shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-indigo-50 text-indigo-700 max-w-[180px]" title="Handed to partner">
+                  <Handshake className="h-3 w-3 flex-shrink-0" /><span className="truncate">{partnerName}</span>
+                </span>
+              ) : (
+                <span className={`hidden sm:inline-flex flex-shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${paymentStatusChip(paymentStatus)}`} title="Payment status">
+                  <IndianRupee className="h-3 w-3" />{paymentStatusLabel(paymentStatus)}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={copyId}
+              title="Copy full booking ID"
+              className="group mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-purple-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded"
+            >
+              Booking <span className="font-mono font-medium text-slate-700 group-hover:text-purple-700">#{shortId}</span>
+              {idCopied ? <><Check className="h-3 w-3 text-green-600" /><span className="text-green-700">Copied</span></> : <Copy className="h-3 w-3" />}
+            </button>
+          </div>
+
           <button
             onClick={() => typeof window !== 'undefined' && window.print()}
-            className="ml-auto inline-flex items-center gap-1.5 h-8 px-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-[13px] font-medium hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            title="Print or save as PDF"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 h-9 px-3 bg-white border border-slate-200 text-slate-700 rounded-lg text-[13px] font-medium shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           >
-            <Printer className="h-3.5 w-3.5 text-gray-500" />
+            <Printer className="h-4 w-4 text-slate-500" />
             <span className="hidden sm:inline">Print</span>
           </button>
         </div>
@@ -565,17 +718,33 @@ export default function AdminBookingDetailsPage() {
               <div className="px-1.5 pb-1.5">
                 {!isCancelled ? (
                   <>
-                    <ActionRow onClick={() => setDrawerMode('payment')} icon={<IndianRupee className="h-4 w-4" />} tone="purple" label="Record payment" sub="Cash, UPI, card, bank…" />
-                    <ActionRow onClick={() => { setStatusChoice((MANUAL_STATUSES as readonly string[]).includes(status) ? status : 'confirmed'); setStatusNotify(true); setDrawerMode('status'); }} icon={<Shield className="h-4 w-4" />} tone="gray" label="Change status" sub="Seat Locked / Confirmed" />
-                    <ActionRow onClick={() => setDrawerMode('referral')} icon={<Gift className="h-4 w-4" />} tone="gray" label="Refer to partner" sub="Hand off · record commission" />
+                    <ActionRow onClick={() => { setPayCollectedBy('us'); setDrawerMode('payment'); }} icon={<IndianRupee className="h-4 w-4" />} tone="purple" label="Record payment" sub={isReferred ? 'To you or to the partner' : 'Cash, UPI, card, bank…'} />
+                    {isReferred ? (
+                      <>
+                        <ActionRow onClick={openReferral} icon={<Handshake className="h-4 w-4" />} tone="gray" label="Edit referral" sub={`${partnerName} · partner price`} />
+                        <ActionRow onClick={() => manageBooking({ action: 'clear_referral' }, `Take this booking back from ${partnerName}? It returns to its earlier status and holds seats on your trip again.`)} icon={<RotateCcw className="h-4 w-4" />} tone="gray" label="Remove referral" sub="Back to your own booking" />
+                      </>
+                    ) : (
+                      <>
+                        <ActionRow onClick={() => { setStatusChoice((MANUAL_STATUSES as readonly string[]).includes(status) ? status : 'confirmed'); setStatusNotify(true); setDrawerMode('status'); }} icon={<Shield className="h-4 w-4" />} tone="gray" label="Change status" sub="Seat Locked / Confirmed" />
+                        <ActionRow onClick={openReferral} icon={<Handshake className="h-4 w-4" />} tone="gray" label="Refer to partner" sub="Hand to another operator" />
+                      </>
+                    )}
                     <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
                     <ActionRow onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setCancelNotify(true); setShowCancelModal(true); }} icon={<XCircle className="h-4 w-4" />} tone="red" label="Cancel booking" />
                   </>
                 ) : (
                   <>
-                    <ActionRow onClick={() => { setStatusChoice('seat_locked'); setStatusNotify(false); manageBooking({ action: 'set_status', status: 'seat_locked', notify: false }, 'Reopen this booking (back to Seat Locked)? No notification is sent.'); }} icon={<RotateCcw className="h-4 w-4" />} tone="purple" label="Reopen booking" />
-                    {paidAmount > money.refunded && (
-                      <ActionRow onClick={() => { setRefundAmount(String(Math.max(0, paidAmount))); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} icon={<RotateCcw className="h-4 w-4" />} tone="red" label="Record / issue refund" sub="Booking cancelled" />
+                    {booking.partner_id ? (
+                      <ActionRow onClick={() => manageBooking({ action: 'set_status', status: 'referred', notify: false }, `Reopen this booking with ${partnerName}? No notification is sent.`)} icon={<RotateCcw className="h-4 w-4" />} tone="purple" label="Reopen booking" sub={`Back with ${partnerName}`} />
+                    ) : (
+                      <ActionRow onClick={() => { setStatusChoice('seat_locked'); setStatusNotify(false); manageBooking({ action: 'set_status', status: 'seat_locked', notify: false }, 'Reopen this booking (back to Seat Locked)? No notification is sent.'); }} icon={<RotateCcw className="h-4 w-4" />} tone="purple" label="Reopen booking" />
+                    )}
+                    {(isReferred ? pm.paidToUs : paidAmount) > 0.5 && (
+                      <ActionRow onClick={() => { setRefundAmount(String(Math.max(0, isReferred ? pm.paidToUs : paidAmount))); setRefundMethod('cash'); setRefundNotes(''); setShowRefundModal(true); }} icon={<RotateCcw className="h-4 w-4" />} tone="red" label="Record / issue refund" sub="Booking cancelled" />
+                    )}
+                    {booking.partner_id && !pm.isLegacy && (
+                      <ActionRow onClick={() => { setStlDirection(pm.balance < 0 ? 'from_partner' : 'to_partner'); setStlAmount(pm.balance ? String(Math.abs(pm.balance)) : ''); setStlMethod('upi'); setStlReference(''); setStlNotes(''); setStlDate(new Date().toISOString().slice(0, 10)); setDrawerMode('settlement'); }} icon={<Handshake className="h-4 w-4" />} tone="gray" label="Record settlement" sub={`With ${partnerName}`} />
                     )}
                     <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
                   </>
@@ -668,15 +837,26 @@ export default function AdminBookingDetailsPage() {
                 const isVerified = ['verified', 'partially_refunded', 'refunded'].includes(t.payment_status);
                 const isRejected = t.payment_status === 'rejected';
                 const isPending = t.payment_status === 'pending';
+                const byPartner = t.collected_by === 'partner';
                 const method = (t.payment_mode || t.payment_type || 'payment').toString().replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
                 const chip = isVerified ? 'bg-green-50 text-green-700' : isRejected ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800';
+                const st = rzpSettle?.byPayment?.[t.id];
+                const dayShort = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '');
+                const payoutChip = !st || !isVerified ? null
+                  : st.state === 'settled' ? { text: `In bank ${dayShort(st.settledAt)}`, cls: 'bg-gray-100 text-gray-700' }
+                  : st.state === 'on_hold' ? { text: 'Payout on hold', cls: 'bg-amber-50 text-amber-800' }
+                  : st.state === 'late' ? { text: 'Payout late', cls: 'bg-red-50 text-red-700' }
+                  : st.state === 'awaiting' ? { text: `Payout ~${dayShort(st.expected)}`, cls: 'bg-amber-50 text-amber-800' }
+                  : null;
                 return (
                   <details key={t.id} className="group" open={isPending || undefined}>
                     <summary className="cursor-pointer list-none px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/70 focus-visible:outline-none focus-visible:bg-gray-50">
                       <ChevronRight className="h-3.5 w-3.5 text-gray-400 transition-transform group-open:rotate-90 flex-shrink-0 print:hidden" />
                       <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className="text-sm font-medium text-gray-900">#{i + 1} · {method}</span>
+                        {byPartner && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 print:hidden">Paid to partner</span>}
                         <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded capitalize ${chip}`}>{String(t.payment_status || '').replace(/_/g, ' ')}</span>
+                        {payoutChip && <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded print:hidden ${payoutChip.cls}`}><Landmark className="h-3 w-3" />{payoutChip.text}</span>}
                         <span className="text-xs text-gray-600 w-full sm:w-auto">{fmtDateTime(t.created_at)}</span>
                       </div>
                       {isVerified ? (
@@ -690,8 +870,50 @@ export default function AdminBookingDetailsPage() {
                       {t.payment_reviewed_at && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Reviewed</dt><dd className="text-gray-900">{fmtDateTime(t.payment_reviewed_at)}</dd></div>}
                       {Number(t.amount_refunded) > 0 && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Refunded</dt><dd className="text-red-700">{inr(Number(t.amount_refunded))}</dd></div>}
                       {t.rejection_reason && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Reason</dt><dd className="text-red-700 font-medium">{t.rejection_reason}</dd></div>}
+                      {t.payment_review_notes && <div className="flex gap-2"><dt className="text-gray-600 w-20 flex-shrink-0">Notes</dt><dd className="text-gray-900">{t.payment_review_notes}</dd></div>}
+                      {st && isVerified && (
+                        <div className="mt-2 rounded-lg border border-[#ECECEE] bg-gray-50/60 px-3 py-2.5 print:hidden">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Landmark className="h-3.5 w-3.5 text-gray-500" />
+                            <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 flex-1">Razorpay payout</p>
+                            <Link href="/admin/payments?tab=settlements" className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 hover:underline">Settlements<ExternalLink className="h-3 w-3" /></Link>
+                          </div>
+                          {st.state === 'settled' || st.state === 'on_hold' ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                              <div><p className="text-[11px] text-gray-600">Paid by customer</p><p className="text-[13px] font-medium text-gray-900">{inr(st.gross)}</p></div>
+                              <div><p className="text-[11px] text-gray-600">Fee + GST</p><p className="text-[13px] font-medium text-gray-900">−₹{Number(st.fee).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+                              <div><p className="text-[11px] text-gray-600">Reached your bank</p><p className="text-[13px] font-semibold text-gray-900">₹{Number(st.net).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+                              <div><p className="text-[11px] text-gray-600">{st.state === 'on_hold' ? 'Status' : 'Settled on'}</p><p className="text-[13px] font-medium text-gray-900">{st.state === 'on_hold' ? 'On hold by Razorpay' : fmtDate(st.settledAt)}</p></div>
+                              <div className="min-w-0"><p className="text-[11px] text-gray-600">UTR</p><p className="text-[13px] font-mono text-gray-900 truncate" title={st.utr || ''}>{st.utr || '—'}</p></div>
+                              <div className="min-w-0"><p className="text-[11px] text-gray-600">Payout</p><p className="text-[13px] font-mono text-gray-900 truncate" title={st.settlementId}>{st.settlementId}</p>{st.payoutAmount != null && <p className="text-[11px] text-gray-600">of {inr(st.payoutAmount)} total</p>}</div>
+                            </div>
+                          ) : (
+                            <p className="text-[13px] text-gray-700">
+                              {st.state === 'late'
+                                ? <>Not in a payout yet. Razorpay usually pays 2 working days after the payment, so it was expected by <strong>{fmtDate(st.expected)}</strong>.</>
+                                : <>Not paid out yet. Razorpay usually pays 2 working days after the payment: expect it around <strong>{fmtDate(st.expected)}</strong>.</>}
+                            </p>
+                          )}
+                          {(st.refunds || []).length > 0 && (
+                            <ul className="mt-2 pt-2 border-t border-[#ECECEE] space-y-0.5">
+                              {st.refunds.map((r: any) => (
+                                <li key={r.refundId} className="text-xs text-gray-700">Refund {inr(r.amount)} taken from payout <span className="font-mono">{r.settlementId}</span>{r.settledAt ? ` on ${fmtDate(r.settledAt)}` : ''}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {st.state !== 'settled' && (
+                            <p className="mt-1.5 text-[11px] text-gray-600">
+                              {rzpSettle?.lastSyncedAt ? `Last checked with Razorpay ${fmtDateTime(rzpSettle.lastSyncedAt)}. ` : 'Not checked with Razorpay yet. '}
+                              <button onClick={syncSettlements} disabled={syncingSettle} className="inline-flex items-center gap-1 font-semibold text-purple-700 hover:underline disabled:opacity-50"><RefreshCw className={`h-3 w-3 ${syncingSettle ? 'animate-spin' : ''}`} />{syncingSettle ? 'Checking…' : 'Check now'}</button>
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {isPending && (
                         <button onClick={() => openTransactionModal(t)} className="mt-1.5 h-8 px-3 bg-purple-600 text-white rounded-lg text-[13px] font-semibold hover:bg-purple-700 transition-colors print:hidden">Review payment</button>
+                      )}
+                      {byPartner && (
+                        <button disabled={managing} onClick={() => manageBooking({ action: 'delete_partner_collection', transaction_row_id: t.id }, `Delete this ₹${(parseFloat(String(t.amount)) || 0).toLocaleString('en-IN')} payment to the partner?`)} className="mt-1.5 inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 text-red-600 rounded-lg text-[13px] font-medium hover:bg-red-50 disabled:opacity-50 print:hidden"><Trash2 className="h-3.5 w-3.5" />Delete</button>
                       )}
                     </dl>
                   </details>
@@ -726,18 +948,71 @@ export default function AdminBookingDetailsPage() {
           </div>
         )}
 
-        {/* Referral details — ADMIN ONLY (never sent to the customer) */}
+        {/* Partner — ADMIN ONLY (never sent to the customer) */}
         {isReferred && (
           <div className="bg-white rounded-xl border border-[#ECECEE] overflow-hidden print:hidden">
             <div className="px-4 py-2.5 border-b border-[#ECECEE] flex items-center gap-2">
-              <Gift className="h-4 w-4 text-gray-500" />
-              <h2 className="text-[13px] font-semibold text-gray-900">Referral <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">admin-only</span></h2>
+              <Handshake className="h-4 w-4 text-gray-500" />
+              <h2 className="text-[13px] font-semibold text-gray-900 flex-1">Partner <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">admin-only</span></h2>
+              {booking.partner_id && (
+                <Link href={`/admin/partners/${booking.partner_id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 hover:underline">Partner account<ExternalLink className="h-3 w-3" /></Link>
+              )}
             </div>
-            <dl className="px-4 py-3 space-y-2 text-sm">
-              <div className="flex justify-between gap-3"><dt className="text-gray-600">Referred to</dt><dd className="font-semibold text-gray-900">{booking.referral_partner || '—'}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-gray-600">Commission / profit</dt><dd className="font-semibold text-gray-900">{inr(parseFloat(String(booking.referral_commission || 0)) || 0)}</dd></div>
-              {booking.referral_notes && <div className="pt-2 border-t border-gray-100"><dt className="text-gray-600 mb-1">Notes</dt><dd className="text-gray-800 whitespace-pre-wrap">{booking.referral_notes}</dd></div>}
-            </dl>
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold text-gray-900 truncate">{partnerName}</p>
+                  <p className="text-xs text-gray-600">
+                    {pm.isLegacy
+                      ? 'Older referral · no partner price yet'
+                      : booking.partner_price_basis === 'per_person'
+                        ? `Partner price ${inr(Number(booking.partner_price_rate) || 0)} × ${pax} = ${inr(pm.partnerPrice || 0)}`
+                        : `Partner price ${inr(pm.partnerPrice || 0)} total`}
+                    {booking.referred_at ? ` · handed over ${fmtDate(booking.referred_at)}` : ''}
+                  </p>
+                </div>
+                <a
+                  href={`https://wa.me/${partnerPhone ? `91${partnerPhone.replace(/\D/g, '').slice(-10)}` : ''}?text=${encodeURIComponent([
+                    `Booking handed over: ${booking.trips?.title || 'Trip'}`,
+                    `Departure: ${fmtDate(booking.departure_date || booking.trips?.start_date)}`,
+                    `Traveller: ${passengerName} (${pax} ${pax === 1 ? 'person' : 'people'})${passengerPhone !== 'N/A' ? ` · ${passengerPhone}` : ''}`,
+                    ...extraPassengers.map((x: any) => `+ ${x.name || 'Traveller'}${x.age ? `, ${x.age}` : ''}${x.phone ? ` · ${x.phone}` : ''}`),
+                    booking.pickup_point ? `Pickup: ${booking.pickup_point}` : '',
+                    pm.customerDue > 0 ? `To collect at boarding: ₹${pm.customerDue.toLocaleString('en-IN')}` : 'Customer has paid in full.',
+                    `Ref: #${shortId}`,
+                  ].filter(Boolean).join('\n'))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-gray-200 text-gray-700 rounded-lg text-[13px] font-medium hover:bg-gray-50 flex-shrink-0"
+                  title="Send the traveller details to the partner on WhatsApp"
+                >
+                  <MessageCircle className="h-3.5 w-3.5 text-green-600" />Share details
+                </a>
+              </div>
+              {booking.referral_notes && <p className="mt-2 text-[13px] text-gray-800 whitespace-pre-wrap">{booking.referral_notes}</p>}
+
+              <div className="mt-3 pt-3 border-t border-[#ECECEE]">
+                <p className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 mb-1.5">Settlements</p>
+                {partnerSettlements.length === 0 ? (
+                  <p className="text-[13px] text-gray-600">Nothing settled on this booking yet.</p>
+                ) : (
+                  <ul className="divide-y divide-[#F1F1F3]">
+                    {partnerSettlements.map((st: any) => (
+                      <li key={st.id} className="py-1.5 flex items-center gap-3 text-[13px]">
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${st.direction === 'to_partner' ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-700'}`}>
+                          {st.direction === 'to_partner' ? 'You paid' : 'You received'}
+                        </span>
+                        <span className="text-gray-600 min-w-0 flex-1 truncate">
+                          {fmtDate(st.settled_on)} · {String(st.method || '').toUpperCase()}{st.reference ? ` · ${st.reference}` : ''}{st.notes ? ` · ${st.notes}` : ''}
+                        </span>
+                        <span className="font-semibold text-gray-900 whitespace-nowrap">{inr(Number(st.amount) || 0)}</span>
+                        <button disabled={managing} onClick={() => manageBooking({ action: 'delete_partner_settlement', settlement_id: st.id }, `Delete this ₹${(Number(st.amount) || 0).toLocaleString('en-IN')} settlement?`)} title="Delete settlement" className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-gray-100 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -804,15 +1079,15 @@ export default function AdminBookingDetailsPage() {
       `}</style>
 
       {/* Focused action panel — shows ONLY the action the admin picked */}
-      {drawerMode && !isCancelled && (
+      {drawerMode && (!isCancelled || drawerMode === 'settlement') && (
         <div className="fixed inset-0 z-50 print:hidden" onClick={() => setDrawerMode(null)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
           <div className="absolute right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-[toast-in_0.2s_ease-out]" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-[#ECECEE] px-5 py-4 flex items-center gap-3 z-10">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${drawerMode === 'payment' ? 'bg-green-50 text-green-600' : drawerMode === 'status' ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                {drawerMode === 'payment' ? <IndianRupee className="h-[18px] w-[18px]" /> : drawerMode === 'status' ? <Shield className="h-[18px] w-[18px]" /> : <Gift className="h-[18px] w-[18px]" />}
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
+                {drawerMode === 'payment' ? <IndianRupee className="h-[18px] w-[18px]" /> : drawerMode === 'status' ? <Shield className="h-[18px] w-[18px]" /> : <Handshake className="h-[18px] w-[18px]" />}
               </span>
-              <h2 className="text-base font-bold text-gray-900 flex-1">{drawerMode === 'payment' ? 'Record a payment' : drawerMode === 'status' ? 'Change booking status' : 'Refer to a partner'}</h2>
+              <h2 className="text-base font-bold text-gray-900 flex-1">{drawerMode === 'payment' ? 'Record a payment' : drawerMode === 'status' ? 'Change booking status' : drawerMode === 'settlement' ? `Settle with ${partnerName}` : isReferred ? 'Edit referral' : 'Refer to a partner'}</h2>
               <button onClick={() => setDrawerMode(null)} className="p-1.5 rounded-lg hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"><X className="h-5 w-5 text-gray-600" /></button>
             </div>
 
@@ -820,6 +1095,19 @@ export default function AdminBookingDetailsPage() {
               {/* ── Record Payment ── */}
               {drawerMode === 'payment' && (
                 <div>
+                  {isReferred && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold text-gray-700 mb-1.5">Received by</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([['us', 'You', 'Razorpay, UPI, cash to you'], ['partner', partnerName, 'e.g. cash on the bus']] as const).map(([v, label, sub]) => (
+                          <button key={v} type="button" onClick={() => setPayCollectedBy(v)} className={`px-3 py-2 rounded-xl border-2 text-left transition-colors ${payCollectedBy === v ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                            <span className="block text-sm font-semibold text-gray-900 truncate">{label}</span>
+                            <span className="block text-[11px] text-gray-600">{sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2.5">
                     <div className="relative">
                       <IndianRupee className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -835,11 +1123,16 @@ export default function AdminBookingDetailsPage() {
                     <input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="Reference ID (optional)" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500" />
                     <textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} rows={2} placeholder="Notes (optional) — e.g. Collected while boarding" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500" />
                   </div>
-                  <button disabled={managing || !cashAmount} onClick={async () => { await manageBooking({ action: 'record_payment', amount: cashAmount, method: payMethod, reference: payReference, notes: payNotes }); setPayReference(''); setPayNotes(''); setDrawerMode(null); }} className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all hover:shadow-lg hover:shadow-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record payment</button>
-                  <p className="text-[11px] text-gray-400 mt-2 text-center">Updates Paid, Remaining and Payment Status automatically. Booking status is never changed.</p>
+                  <button disabled={managing || !cashAmount} onClick={async () => { await manageBooking({ action: 'record_payment', amount: cashAmount, method: payMethod, reference: payReference, notes: payNotes, collected_by: isReferred ? payCollectedBy : 'us' }); setPayReference(''); setPayNotes(''); setDrawerMode(null); }} className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all hover:shadow-lg hover:shadow-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"><Check className="h-4 w-4" />Record payment</button>
+                  <p className="text-[11px] text-gray-500 mt-2 text-center">
+                    {isReferred && payCollectedBy === 'partner'
+                      ? 'Lowers what the customer still owes. Not counted as money you collected.'
+                      : 'Updates Paid, Remaining and Payment Status automatically. Booking status is never changed.'}
+                  </p>
 
-                  {/* Settle — when the amount already collected is the final deal and nothing more is due. */}
-                  {remainingAmount > 0 && (
+                  {/* Settle — when the amount already collected is the final deal and nothing more is due.
+                      Not for partner bookings: money paid to the partner is recorded above instead. */}
+                  {remainingAmount > 0 && !isReferred && (
                     <div className="mt-4 pt-4 border-t border-dashed border-[#ECECEE]">
                       <button disabled={managing} onClick={async () => { await settleBalance(false); setDrawerMode(null); }} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-sm font-semibold hover:bg-amber-100 disabled:opacity-50 transition-colors"><Check className="h-4 w-4" />Nothing more due — settle at ₹{paidAmount.toLocaleString('en-IN')}</button>
                       <p className="text-[11px] text-gray-400 mt-1.5 text-center">Writes off the remaining ₹{remainingAmount.toLocaleString('en-IN')}. Marks the booking paid in full.</p>
@@ -886,21 +1179,139 @@ export default function AdminBookingDetailsPage() {
               )}
 
               {/* ── Refer to a partner ── */}
-              {drawerMode === 'referral' && (
+              {drawerMode === 'referral' && (() => {
+                const rate = parseFloat(refRate);
+                const hasRate = Number.isFinite(rate) && rate >= 0 && refRate !== '';
+                const partnerPrice = hasRate ? partnerPriceFrom(refBasis, rate, pax) : null;
+                const preview = hasRate
+                  ? partnerMoneyOf({ ...booking, partner_id: booking.partner_id || 'new', booking_status: 'referred', partner_price: partnerPrice }, booking.trips, partnerSettlements)
+                  : null;
+                const chosen = partners.find((x) => x.id === refPartnerId);
+                const canSave = !managing && hasRate && (refPartnerId === '__new' ? !!refNewName.trim() : !!refPartnerId);
+                const label = refPartnerId === '__new' ? (refNewName.trim() || 'new partner') : (chosen?.name || partnerName);
+                return (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">Partner</label>
+                    <select
+                      value={refPartnerId}
+                      onChange={(e) => pickPartner(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                    >
+                      <option value="">{partnersLoaded ? 'Choose a partner…' : 'Loading partners…'}</option>
+                      {partners.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                      {booking.partner_id && !partners.some((x) => x.id === booking.partner_id) && <option value={booking.partner_id}>{partnerName}</option>}
+                      <option value="__new">+ Add a new partner</option>
+                    </select>
+                    {refPartnerId === '__new' && (
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input value={refNewName} onChange={(e) => setRefNewName(e.target.value)} placeholder="Partner / company name" className="px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                        <input value={refNewPhone} onChange={(e) => setRefNewPhone(e.target.value)} placeholder="Phone (optional)" inputMode="tel" className="px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                      </div>
+                    )}
+
+                    <label className="block text-xs font-semibold text-gray-700 mt-4 mb-1.5">Partner price <span className="font-normal text-gray-500">(what the partner keeps)</span></label>
+                    <div className="flex gap-2">
+                      <div className="inline-flex rounded-xl border border-gray-300 p-0.5 bg-gray-50 flex-shrink-0">
+                        {([['per_person', 'Per traveller'], ['total', 'Total']] as const).map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setRefBasis(v)} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${refBasis === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'}`}>{l}</button>
+                        ))}
+                      </div>
+                      <div className="relative flex-1">
+                        <IndianRupee className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input type="number" min="0" value={refRate} onChange={(e) => setRefRate(e.target.value)} placeholder={refBasis === 'per_person' ? 'Per traveller' : 'Total'} className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                      </div>
+                    </div>
+                    {refBasis === 'per_person' && hasRate && (
+                      <p className="mt-1 text-xs text-gray-600">{inr(rate)} × {pax} {pax === 1 ? 'traveller' : 'travellers'} = {inr(partnerPrice || 0)}</p>
+                    )}
+
+                    {preview && (
+                      <div className="mt-4 rounded-xl border border-[#ECECEE] bg-gray-50/60 p-3 space-y-1.5 text-[13px]">
+                        <div className="flex justify-between"><span className="text-gray-600">Customer price</span><span className="font-medium text-gray-900">{inr(preview.customerPrice)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Partner price</span><span className="font-medium text-gray-900">−{inr(preview.partnerPrice || 0)}</span></div>
+                        <div className="flex justify-between pt-1.5 border-t border-[#ECECEE]"><span className="font-medium text-gray-800">Your margin</span><span className={`font-semibold ${preview.margin < 0 ? 'text-red-600' : 'text-gray-900'}`}>{inr(preview.margin)}</span></div>
+                        <div className="pt-1.5 border-t border-[#ECECEE] text-gray-700">
+                          You hold {inr(preview.paidToUs)}{preview.paidToPartner > 0 ? `, partner got ${inr(preview.paidToPartner)}` : ''}{preview.customerDue > 0 ? `, ${inr(preview.customerDue)} still due` : ''}.{' '}
+                          <span className="font-semibold">
+                            {preview.state === 'they_owe'
+                              ? `${label} will owe you ${inr(-preview.balance)}`
+                              : preview.state === 'we_owe'
+                                ? `You'll owe ${label} ${inr(preview.balance)}`
+                                : 'Nothing to settle'}
+                          </span>
+                          {preview.customerDue > 0 ? ' once they collect the rest at boarding.' : '.'}
+                        </div>
+                        {preview.margin < 0 && <p className="text-xs text-red-600">The partner price is higher than what the customer pays, so you lose money on this booking.</p>}
+                      </div>
+                    )}
+
+                    <label className="block text-xs font-semibold text-gray-700 mt-4 mb-1.5">Notes</label>
+                    <textarea value={refNotes} onChange={(e) => setRefNotes(e.target.value)} rows={2} placeholder="Internal notes, never shown to the customer" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+
+                    {!isReferred && (
+                      <p className="mt-3 text-[11px] text-gray-600">The traveller frees their seat on your trip. The customer still sees their booking as Confirmed and never sees the partner or prices.</p>
+                    )}
+                    <button
+                      disabled={!canSave}
+                      onClick={async () => {
+                        await manageBooking({
+                          action: 'set_referral',
+                          partner_id: refPartnerId === '__new' ? undefined : refPartnerId,
+                          new_partner: refPartnerId === '__new' ? { name: refNewName.trim(), phone: refNewPhone.trim() } : undefined,
+                          price_basis: refBasis,
+                          price_rate: refRate,
+                          notes: refNotes,
+                        }, isReferred ? undefined : `Hand this booking to ${label}?`);
+                        setDrawerMode(null);
+                        if (refPartnerId === '__new') setPartnersLoaded(false);
+                      }}
+                      className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-3 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                    >
+                      <Handshake className="h-4 w-4" />{isReferred ? 'Save referral' : 'Hand to partner'}
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* ── Settle with the partner ── */}
+              {drawerMode === 'settlement' && (
                 <div>
-                  <div className="space-y-2.5">
-                    <input value={refPartner} onChange={(e) => setRefPartner(e.target.value)} placeholder="Partner / company name" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                  <p className="text-xs font-semibold text-gray-700 mb-1.5">Who paid whom</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([['to_partner', 'You paid partner'], ['from_partner', 'Partner paid you']] as const).map(([v, l]) => (
+                      <button key={v} type="button" onClick={() => setStlDirection(v)} className={`px-3 py-2.5 rounded-xl border-2 text-sm font-semibold transition-colors ${stlDirection === v ? 'border-purple-500 bg-purple-50 text-gray-900' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}>{l}</button>
+                    ))}
+                  </div>
+                  <div className="mt-3 space-y-2.5">
                     <div className="relative">
                       <IndianRupee className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input type="number" min="0" value={refCommission} onChange={(e) => setRefCommission(e.target.value)} placeholder="Commission / profit" className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                      <input type="number" min="1" value={stlAmount} onChange={(e) => setStlAmount(e.target.value)} placeholder="Amount" className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
                     </div>
-                    <textarea value={refNotes} onChange={(e) => setRefNotes(e.target.value)} rows={3} placeholder="Internal referral notes (never shown to the customer)" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select value={stlMethod} onChange={(e) => setStlMethod(e.target.value)} className="px-3 py-2.5 text-sm border border-gray-300 rounded-xl bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                        {PARTNER_SETTLEMENT_METHODS.map((m) => <option key={m} value={m}>{m === 'upi' ? 'UPI' : m === 'bank' ? 'Bank transfer' : m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                      </select>
+                      <input type="date" value={stlDate} onChange={(e) => setStlDate(e.target.value)} className="px-3 py-2.5 text-sm border border-gray-300 rounded-xl bg-white text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                    </div>
+                    <input value={stlReference} onChange={(e) => setStlReference(e.target.value)} placeholder="UTR / reference (optional)" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
+                    <input value={stlNotes} onChange={(e) => setStlNotes(e.target.value)} placeholder="Note (optional)" className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl text-gray-900 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500" />
                   </div>
-                  <div className="mt-3 flex items-start gap-2 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2.5 text-[11px] text-indigo-700">
-                    <Gift className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                    <span>Revenue counts your <strong>commission</strong> instead of the trip price. The customer keeps a normal status and never sees any of this.</span>
-                  </div>
-                  <button disabled={managing} onClick={async () => { await manageBooking({ action: 'set_referral', partner: refPartner, commission: refCommission, notes: refNotes }, `Mark this booking as REFERRED to "${refPartner || 'partner'}"?`); setDrawerMode(null); }} className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-3 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all hover:shadow-lg hover:shadow-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Gift className="h-4 w-4" />{isReferred ? 'Update referral' : 'Mark as referred'}</button>
+                  {!pm.isLegacy && (
+                    <p className="mt-3 text-xs text-gray-600">
+                      Right now: {pm.state === 'they_owe' ? `${partnerName} owes you ${inr(-pm.balance)}` : pm.state === 'we_owe' ? `you owe ${partnerName} ${inr(pm.balance)}` : 'square'}.
+                    </p>
+                  )}
+                  <button
+                    disabled={managing || !(parseFloat(stlAmount) > 0)}
+                    onClick={async () => {
+                      await manageBooking({ action: 'record_partner_settlement', direction: stlDirection, amount: stlAmount, method: stlMethod, reference: stlReference, notes: stlNotes, settled_on: stlDate });
+                      setDrawerMode(null);
+                    }}
+                    className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-3 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                  >
+                    <Check className="h-4 w-4" />Record settlement
+                  </button>
+                  <p className="text-[11px] text-gray-500 mt-2 text-center">Paying several bookings at once? Record it on the partner&apos;s account page.</p>
                 </div>
               )}
             </div>

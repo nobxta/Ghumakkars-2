@@ -135,7 +135,8 @@ async function handlePOST(request: NextRequest) {
         payment_amount: newTotalPaid,
         final_amount: bookingTotal,
         payment_status: 'pending',
-        booking_status: 'remaining_submitted',
+        // A partner booking stays with the partner; only its money changes.
+        booking_status: booking.booking_status === 'referred' ? 'referred' : 'remaining_submitted',
       })
       .eq('id', bookingId);
 

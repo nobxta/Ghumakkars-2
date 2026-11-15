@@ -107,8 +107,9 @@ function MiniFigure({ label, value, sub }: { label: string; value: string; sub?:
 
 /* ───────────────────────── Money health (ring) ───────────────────────── */
 
-export function MoneyHealth({ collected, outstanding, outstandingBookings, partnerCommission }: {
+export function MoneyHealth({ collected, outstanding, outstandingBookings, partnerCommission, partnersOweYou = 0, youOwePartners = 0 }: {
   collected: number; outstanding: number; outstandingBookings: number; partnerCommission: number;
+  partnersOweYou?: number; youOwePartners?: number;
 }) {
   const expected = collected + outstanding;
   const pct = expected > 0 ? collected / expected : 0;
@@ -130,7 +131,13 @@ export function MoneyHealth({ collected, outstanding, outstandingBookings, partn
         <div className="min-w-0 flex-1 space-y-3">
           <Legend dot="bg-emerald-500" label="In the bank" value={inrShort(collected)} title={inr(collected)} />
           <Legend dot="bg-amber-300" label={`Still due · ${outstandingBookings} booking${outstandingBookings === 1 ? '' : 's'}`} value={inrShort(outstanding)} title={inr(outstanding)} tone="text-amber-600" />
-          {partnerCommission > 0 && <Legend dot="bg-violet-400" label="Partner commission" value={inrShort(partnerCommission)} title={inr(partnerCommission)} tone="text-violet-700" />}
+          {partnerCommission !== 0 && <Legend dot="bg-violet-400" label="Partner margin" value={inrShort(partnerCommission)} title={inr(partnerCommission)} tone="text-violet-700" />}
+          {(partnersOweYou > 0 || youOwePartners > 0) && (
+            <a href="/admin/partners" className="block rounded-lg bg-white/70 border border-slate-200/70 px-2.5 py-1.5 text-[11px] text-slate-600 hover:border-violet-200">
+              {partnersOweYou > 0 && <span className="block">Partners owe you <b className="text-emerald-700">{inr(partnersOweYou)}</b></span>}
+              {youOwePartners > 0 && <span className="block">You owe partners <b className="text-amber-700">{inr(youOwePartners)}</b></span>}
+            </a>
+          )}
         </div>
       </div>
     </Card>

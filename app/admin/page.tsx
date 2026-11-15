@@ -210,6 +210,8 @@ export default function AdminDashboard() {
             outstanding={d.outstanding || 0}
             outstandingBookings={d.outstandingBookings || 0}
             partnerCommission={d.partnerCommission || 0}
+            partnersOweYou={d.partnersOweYou || 0}
+            youOwePartners={d.youOwePartners || 0}
           />
           <div className="relative min-h-[320px] flex-1">
             <LiveActivity className="lg:absolute lg:inset-0" />

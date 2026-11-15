@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { paidOf, owedOf as fullOf } from '@/lib/booking-money';
 import { countOpenProblems } from '@/lib/log-explain';
+import { isPartnerBooking, partnerMoneyOf, partnerAccountOf } from '@/lib/partner-money';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,15 +11,16 @@ export const dynamic = 'force-dynamic';
 const isActive = (b: any) => !['cancelled', 'rejected'].includes(b.booking_status);
 // Same rule as the Bookings page: "Collected" is customer money on our own
 // (non-partner) bookings. Referred bookings are settled with the partner; what we
-// earn on them is the commission, reported separately (partnerCommission).
-const isPartner = (b: any) => b.booking_status === 'referred';
+// earn on them is the margin, reported separately (partnerCommission).
+const isPartner = (b: any) => isPartnerBooking(b);
 const revenueOf = (b: any): number => (isPartner(b) ? 0 : paidOf(b));
-const commissionOf = (b: any): number => (isPartner(b) ? parseFloat(String(b.referral_commission || 0)) || 0 : 0);
+const commissionOf = (b: any): number => (isPartner(b) ? partnerMoneyOf(b, tripOf(b)).margin : 0);
 const dueOf = (b: any): number => (isPartner(b) ? 0 : Math.max(0, fullOf(b) - paidOf(b)));
 const num = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
 const tripOf = (b: any) => (Array.isArray(b.trips) ? b.trips[0] : b.trips) || null;
 
-const SEATED = ['confirmed', 'seat_locked', 'remaining_submitted', 'on_trip', 'completed', 'referred'];
+// Travellers riding with us. Referred travellers go with the partner.
+const SEATED = ['confirmed', 'seat_locked', 'remaining_submitted', 'on_trip', 'completed'];
 const DEPARTURE_WINDOW_DAYS = 14;
 
 // The business runs on India time, but the server runs in UTC. "Today" must start
@@ -71,7 +73,7 @@ export async function GET(req: Request) {
 
   const [
     usersCountRes, verifiedCountRes, usersTodayRes, usersRangeRes, usersPrevRes,
-    adminProfileRes, tripsRes, bookingsRes, errorsRes, usersSeriesRes,
+    adminProfileRes, tripsRes, bookingsRes, errorsRes, usersSeriesRes, settlementsRes,
   ] = await Promise.all([
     admin.from('profiles').select('*', { count: 'exact', head: true }),
     admin.from('profiles').select('*', { count: 'exact', head: true }).eq('email_verified', true),
@@ -83,11 +85,12 @@ export async function GET(req: Request) {
       .select('id, title, destination, discounted_price, max_participants, start_date, end_date, is_recurring, recurrence_day, recurrence_weeks_ahead, custom_dates, duration_days, is_active, status, cover_image_url, image_url')
       .order('start_date', { ascending: true }),
     admin.from('bookings')
-      .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, payment_mode, payment_status, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, referral_commission, is_offline_booking, user_id, created_at, primary_passenger_name, primary_passenger_phone, primary_passenger_email, trips(title, discounted_price, start_date), payment_transactions(id, amount, payment_status, amount_refunded, created_at, transaction_id, payment_mode, payment_method, payment_type)')
+      .select('id, trip_id, booking_status, number_of_participants, departure_date, payment_method, payment_mode, payment_status, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, addons_total, amount_paid, referral_commission, partner_id, partner_price, is_offline_booking, user_id, created_at, primary_passenger_name, primary_passenger_phone, primary_passenger_email, trips(title, discounted_price, start_date), payment_transactions(id, amount, payment_status, amount_refunded, created_at, transaction_id, payment_mode, payment_method, payment_type, collected_by)')
       .order('created_at', { ascending: false })
       .limit(10000),
     admin.from('error_logs').select('level, category, process, message, code, status, resolved').eq('resolved', false).limit(2000),
     admin.from('profiles').select('created_at').gte('created_at', rangeStart.toISOString()).lte('created_at', rangeEnd.toISOString()).limit(20000),
+    admin.from('partner_settlements').select('partner_id, booking_id, direction, amount').limit(20000),
   ]);
 
   const tripsData = tripsRes.data || [];
@@ -98,6 +101,24 @@ export async function GET(req: Request) {
 
   const collected = active.reduce((s, b) => s + revenueOf(b), 0);
   const partnerCommission = active.reduce((s, b) => s + commissionOf(b), 0);
+
+  // Who owes whom across all partners (each partner's account netted first).
+  const byPartner = new Map<string, any[]>();
+  // Include partners whose only activity so far is a settlement.
+  (settlementsRes.data || []).forEach((x: any) => { if (x.partner_id && !byPartner.has(x.partner_id)) byPartner.set(x.partner_id, []); });
+  bookings.forEach((b: any) => {
+    if (!b.partner_id) return;
+    const list = byPartner.get(b.partner_id) || [];
+    list.push(b);
+    byPartner.set(b.partner_id, list);
+  });
+  let partnersOweYou = 0;
+  let youOwePartners = 0;
+  byPartner.forEach((list, pid) => {
+    const acc = partnerAccountOf(list, (settlementsRes.data || []).filter((x: any) => x.partner_id === pid) as any);
+    partnersOweYou += acc.theyOwe;
+    youOwePartners += acc.weOwe;
+  });
   const outstanding = active.reduce((s, b) => s + dueOf(b), 0);
   const outstandingBookings = active.filter((b) => dueOf(b) > 1).length;
 
@@ -345,7 +366,7 @@ export async function GET(req: Request) {
     verifiedUsers: verifiedCountRes.count || 0,
     newUsersToday: usersTodayRes.count || 0,
     activeBookings: active.length,
-    collected, outstanding, outstandingBookings, partnerCommission,
+    collected, outstanding, outstandingBookings, partnerCommission, partnersOweYou, youOwePartners,
     activeTrips: tripsData.filter((t: any) => t.is_active !== false && t.status !== 'cancelled' && t.status !== 'completed').length,
     collectedToday, collectedThisWeek, newBookingsToday,
     pendingApproval, seatLockWithBalance,

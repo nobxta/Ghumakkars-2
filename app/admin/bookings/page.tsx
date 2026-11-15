@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { bookingStatusLabel, effectiveBookingStatus } from '@/lib/booking-status-labels';
 import { moneyOf } from '@/lib/booking-money';
+import { isPartnerBooking, partnerMoneyOf } from '@/lib/partner-money';
 import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 
 type Booking = any;
@@ -197,20 +198,34 @@ function needsReview(booking: Booking) {
 
 function isReferralBooking(booking: Booking) {
   return Boolean(
-    booking.booking_status === 'referred' ||
+    isPartnerBooking(booking) ||
       booking.referral_partner ||
       Number(booking.referral_commission || 0) > 0
   );
 }
 
 function partnerLabel(booking: Booking) {
-  return booking.referral_partner || 'Partner not set';
+  return booking.partner?.name || booking.referral_partner || 'Partner not set';
 }
 
+function partnerMoney(booking: Booking) {
+  return partnerMoneyOf(booking, booking.trips, booking.partner_settlements || []);
+}
+
+/** Our margin on a partner booking (customer price − partner price). */
 function commissionAmount(booking: Booking) {
-  if (booking.referral_commission != null && booking.referral_commission !== '')
-    return Number(booking.referral_commission);
-  return null;
+  const m = partnerMoney(booking);
+  if (m.isLegacy && (booking.referral_commission == null || booking.referral_commission === '')) return null;
+  return m.margin;
+}
+
+/** One-line settlement state for a partner booking. */
+function settlementLine(booking: Booking): { text: string; tone: string } {
+  const m = partnerMoney(booking);
+  if (m.state === 'untracked') return { text: 'Settlement not tracked', tone: 'text-slate-500' };
+  if (m.state === 'they_owe') return { text: `Partner owes you ${fmtMoney(-m.balance)}`, tone: 'text-emerald-700' };
+  if (m.state === 'we_owe') return { text: `You owe partner ${fmtMoney(m.balance)}`, tone: 'text-amber-700' };
+  return { text: 'Settled with partner', tone: 'text-slate-600' };
 }
 
 function paymentState(booking: Booking) {
@@ -513,6 +528,8 @@ export default function AdminBookingsPage() {
         return false;
       if (sourceFilter === 'direct' && isReferralBooking(booking)) return false;
       if (sourceFilter === 'referral' && !isReferralBooking(booking)) return false;
+      if (sourceFilter === 'partner_owes' && (!isReferralBooking(booking) || partnerMoney(booking).state !== 'they_owe')) return false;
+      if (sourceFilter === 'we_owe' && (!isReferralBooking(booking) || partnerMoney(booking).state !== 'we_owe')) return false;
       if (quick === 'needs_review' && !needsReview(booking)) return false;
       if (quick === 'referrals' && !isReferralBooking(booking)) return false;
       if (
@@ -581,7 +598,7 @@ export default function AdminBookingsPage() {
     optionFilter !== 'all' &&
       `Option: ${optionFilter === 'seat_lock' ? 'Seat Lock' : titleCase(optionFilter)}`,
     sourceFilter !== 'all' &&
-      `Source: ${sourceFilter === 'referral' ? 'Partner Bookings' : 'Direct'}`,
+      `Source: ${sourceFilter === 'referral' ? 'Partner Bookings' : sourceFilter === 'partner_owes' ? 'Partner owes you' : sourceFilter === 'we_owe' ? 'You owe partner' : 'Direct'}`,
     quick !== 'all' &&
       `Quick: ${quick === 'referrals' ? 'Partner Bookings' : titleCase(quick)}`,
   ].filter(Boolean) as string[];
@@ -750,13 +767,21 @@ export default function AdminBookingsPage() {
     }
   };
 
-  const localPartnerCommission = bookings.reduce((sum, booking) => {
+  const partnerRows = bookings.filter(isReferralBooking);
+  const localPartnerCommission = partnerRows.reduce((sum, booking) => {
     const amount = commissionAmount(booking);
-    return isReferralBooking(booking) && amount != null && Number.isFinite(amount)
-      ? sum + amount
-      : sum;
+    return amount != null && Number.isFinite(amount) ? sum + amount : sum;
   }, 0);
-  const localPartnerBookings = bookings.filter(isReferralBooking).length;
+  const localPartnerBookings = partnerRows.length;
+  // Per-booking settlement totals (lump-sum settlements are on the Partners page).
+  const localPartnerOwes = partnerRows.reduce((s, b) => {
+    const m = partnerMoney(b);
+    return m.balance < 0 ? s - m.balance : s;
+  }, 0);
+  const localWeOwe = partnerRows.reduce((s, b) => {
+    const m = partnerMoney(b);
+    return m.balance > 0 ? s + m.balance : s;
+  }, 0);
 
   const summaryData = summary
     ? {
@@ -764,6 +789,8 @@ export default function AdminBookingsPage() {
         referralCommission: {
           total: localPartnerCommission,
           count: localPartnerBookings,
+          theyOwe: localPartnerOwes,
+          weOwe: localWeOwe,
         },
       }
     : {
@@ -782,6 +809,8 @@ export default function AdminBookingsPage() {
         referralCommission: {
           total: localPartnerCommission,
           count: localPartnerBookings,
+          theyOwe: localPartnerOwes,
+          weOwe: localWeOwe,
         },
       };
 
@@ -1010,7 +1039,7 @@ export default function AdminBookingsPage() {
           </div>
         </button>
 
-        {/* Card 3: Partner Commission */}
+        {/* Card 3: Partner Margin */}
         <button
           onClick={() =>
             setQuick(quick === 'referrals' ? 'all' : 'referrals')
@@ -1026,7 +1055,7 @@ export default function AdminBookingsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Partner Commission
+              Partner Margin
             </p>
             <p className="mt-0.5 text-xl font-bold tracking-tight text-[#7541F5] tabular-nums">
               {fmtMoney(summaryData.referralCommission?.total || 0)}
@@ -1034,6 +1063,12 @@ export default function AdminBookingsPage() {
             <p className="mt-0.5 text-xs text-slate-500 truncate">
               {summaryData.referralCommission?.count || 0} partner booking
               {Number(summaryData.referralCommission?.count || 0) === 1 ? '' : 's'}
+              {Number(summaryData.referralCommission?.theyOwe || 0) > 0 && (
+                <> · owe you {fmtMoney(summaryData.referralCommission.theyOwe)}</>
+              )}
+              {Number(summaryData.referralCommission?.weOwe || 0) > 0 && (
+                <> · you owe {fmtMoney(summaryData.referralCommission.weOwe)}</>
+              )}
             </p>
           </div>
         </button>
@@ -1345,6 +1380,8 @@ export default function AdminBookingsPage() {
                   <option value="all">All sources</option>
                   <option value="direct">Direct</option>
                   <option value="referral">Partner Bookings</option>
+                  <option value="partner_owes">Partner owes you</option>
+                  <option value="we_owe">You owe partner</option>
                 </select>
                 <SortIcon />
               </div>
@@ -1520,7 +1557,7 @@ export default function AdminBookingsPage() {
                         {referral ? (
                           <div className="rounded-lg bg-purple-50/70 border border-purple-100 p-2">
                             <span className="block text-[10px] font-bold uppercase tracking-wider text-[#7541F5]">
-                              Our Commission
+                              Our Margin
                             </span>
                             {amount == null ? (
                               <span className="text-xs text-slate-500 font-medium">
@@ -1531,8 +1568,8 @@ export default function AdminBookingsPage() {
                                 {fmtMoney(amount)}
                               </span>
                             )}
-                            <span className="block text-[10px] text-slate-500 mt-0.5">
-                              Partner operated
+                            <span className={`block text-[10px] font-medium mt-0.5 ${settlementLine(booking).tone}`}>
+                              {settlementLine(booking).text}
                             </span>
                           </div>
                         ) : (
@@ -1640,7 +1677,7 @@ export default function AdminBookingsPage() {
                               </div>
                               {amount != null && (
                                 <div className="text-[11px] text-slate-500">
-                                  Comm:{' '}
+                                  Margin:{' '}
                                   <span className="font-semibold text-[#7541F5]">
                                     {fmtMoney(amount)}
                                   </span>
@@ -1901,14 +1938,15 @@ export default function AdminBookingsPage() {
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[#7541F5]">
-                            Our Commission
+                            Our Margin
                           </span>
                           <span className="font-bold text-[#7541F5] tabular-nums">
                             {amount == null ? 'Not set' : fmtMoney(amount)}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Operated by {partnerLabel(booking)}
+                          Operated by {partnerLabel(booking)} ·{' '}
+                          <span className={`font-medium ${settlementLine(booking).tone}`}>{settlementLine(booking).text}</span>
                         </p>
                       </div>
                     ) : (

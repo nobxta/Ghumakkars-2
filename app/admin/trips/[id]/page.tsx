@@ -27,12 +27,14 @@ import {
 } from 'lucide-react';
 import { tripDepartures, scheduleLabel, formatDeparture, toDateString } from '@/lib/recurrence';
 import { moneyOf } from '@/lib/booking-money';
+import { isPartnerBooking, partnerMoneyOf } from '@/lib/partner-money';
 import OfflineBookingForm from '@/components/admin/OfflineBookingForm';
 import { AdminDetailSkeleton } from '@/components/ui/Skeleton';
 
 // Byte-order mark so Excel opens UTF-8 CSVs correctly (otherwise ₹ shows as â‚¹).
 const BOM = '\uFEFF';
 // Bookings whose travellers are actually going on the trip (incl. partner bookings).
+// Used for manifests/exports, where partner travellers are listed and labelled.
 const TRAVELLING_STATUSES = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
 
 export default function AdminTripDetailsPage() {
@@ -217,6 +219,8 @@ export default function AdminTripDetailsPage() {
   const bookingFull = (b: any): number => bookingMoney(b).owed;
   const bookingRemaining = (b: any): number => {
     if (['cancelled', 'rejected'].includes(b.booking_status)) return 0;
+    // A partner booking's balance is collected by the partner, not by us.
+    if (isPartnerBooking(b)) return 0;
     return bookingMoney(b).remaining;
   };
 
@@ -273,14 +277,23 @@ export default function AdminTripDetailsPage() {
     confirmedBookings: confirmedBookings.length,
     seatLockedBookings: seatLockedBookings.length,
     pendingBookings: pendingBookings.length,
+    // Our own travellers (seat holders). Partner travellers are counted separately.
     totalParticipants: bookings
-      .filter((b: any) => TRAVELLING_STATUSES.includes(b.booking_status))
+      .filter((b: any) => TRAVELLING_STATUSES.includes(b.booking_status) && !isPartnerBooking(b))
       .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0),
-    // Revenue counts only money we are actually keeping: cancelled/rejected
-    // bookings are treated as refunded and drop out of earnings.
+    partnerParticipants: bookings
+      .filter((b: any) => isPartnerBooking(b) && !['cancelled', 'rejected'].includes(b.booking_status))
+      .reduce((s: number, b: any) => s + (Number(b.number_of_participants) || 1), 0),
+    // Revenue counts only money we are actually keeping on our own bookings:
+    // cancelled/rejected bookings are treated as refunded and drop out. Partner
+    // bookings earn us their margin instead (shown alongside).
     revenue: bookings.reduce((s: number, b: any) => {
-      if (['cancelled', 'rejected'].includes(b.booking_status)) return s;
+      if (['cancelled', 'rejected'].includes(b.booking_status) || isPartnerBooking(b)) return s;
       return s + bookingPaid(b);
+    }, 0),
+    partnerMargin: bookings.reduce((s: number, b: any) => {
+      if (!isPartnerBooking(b) || ['rejected'].includes(b.booking_status)) return s;
+      return s + partnerMoneyOf(b, trip).margin;
     }, 0),
     // Balance still to collect across active bookings (e.g. seat-lock balance).
     outstanding: bookings.reduce((s: number, b: any) => s + bookingRemaining(b), 0),
@@ -1059,6 +1072,7 @@ export default function AdminTripDetailsPage() {
                   <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">{selectedBatch !== 'all' ? 'Batch revenue' : 'Revenue'}</span></div>
                   <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5 text-green-600" />₹{collected.toLocaleString()}</p>
                   <p className="text-[11px] font-medium">{outstanding > 0 ? <span className="text-orange-600">₹{outstanding.toLocaleString()} to collect</span> : <span className="text-gray-400">fully collected</span>}</p>
+                  {batchMetrics.partnerMargin !== 0 && <p className="text-[11px] font-medium text-indigo-700">+ ₹{Math.round(batchMetrics.partnerMargin).toLocaleString()} partner margin</p>}
                 </div>
                 <div className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Bookings</span></div>
@@ -1068,7 +1082,7 @@ export default function AdminTripDetailsPage() {
                 <div className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Participants</span></div>
                   <p className="text-lg font-bold text-gray-900 leading-tight flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-blue-600" />{pax}</p>
-                  <p className="text-[11px] text-gray-400">travelling this {selectedBatch !== 'all' ? 'departure' : 'trip'}</p>
+                  <p className="text-[11px] text-gray-400">travelling this {selectedBatch !== 'all' ? 'departure' : 'trip'}{batchMetrics.partnerParticipants > 0 ? ` · +${batchMetrics.partnerParticipants} with partners` : ''}</p>
                 </div>
                 <div className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5 text-gray-500"><span className="text-[10px] font-semibold uppercase tracking-wide">Occupancy</span></div>

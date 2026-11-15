@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { moneyOf } from '@/lib/booking-money';
+import { isPartnerBooking, partnerMoneyOf } from '@/lib/partner-money';
 
 export const runtime = "nodejs";
 
@@ -43,8 +44,10 @@ export async function GET(request: NextRequest) {
           rejection_reason,
           paid_at,
           manual_payment_snapshot,
+          collected_by,
           created_at
         ),
+        partner:partners ( id, name, phone, contact_name, upi_id, default_price_basis, default_price_rate ),
         booking_addons (
           id, trip_addon_id, name, description, icon_key, category, pricing_method, unit_price,
           selected_passenger_ids, selected_passenger_names, quantity, room_occupancy, room_count,
@@ -109,10 +112,31 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = bookings || [];
-    const activeRows = rows.filter((booking: any) => !['cancelled', 'rejected', 'referred'].includes(String(booking.booking_status)));
+
+    // Settlements recorded against partner bookings (admin-only table).
+    const partnerBookingIds = rows.filter((b: any) => isPartnerBooking(b)).map((b: any) => b.id);
+    const settlementsByBooking = new Map<string, any[]>();
+    if (partnerBookingIds.length > 0) {
+      const { data: settlements } = await adminClient
+        .from('partner_settlements')
+        .select('id, partner_id, booking_id, direction, amount, method, reference, notes, settled_on, created_at')
+        .in('booking_id', partnerBookingIds)
+        .order('settled_on', { ascending: true });
+      for (const st of settlements || []) {
+        const list = settlementsByBooking.get(st.booking_id) || [];
+        list.push(st);
+        settlementsByBooking.set(st.booking_id, list);
+      }
+    }
+    rows.forEach((b: any) => {
+      b.partner_settlements = settlementsByBooking.get(b.id) || [];
+    });
+    const isActive = (booking: any) =>
+      !['cancelled', 'rejected', 'referred'].includes(String(booking.booking_status)) && !isPartnerBooking(booking);
+    const activeRows = rows.filter(isActive);
     const summary = rows.reduce((acc: any, booking: any) => {
       const money = moneyOf(booking as any, (booking as any).trips);
-      const active = !['cancelled', 'rejected', 'referred'].includes(String(booking.booking_status));
+      const active = isActive(booking);
       if (active) {
         acc.collected += money.paid;
         acc.outstanding += money.remaining;
@@ -123,14 +147,14 @@ export async function GET(request: NextRequest) {
         (booking.payment_transactions || []).some((p: any) => p.payment_status === 'pending') ||
         (booking.payment_mode === 'cash' && ['cash_pending', 'pending_cash'].includes(String(booking.payment_status)));
       if (needsReview) acc.needsReview += 1;
-      const referralAmount = parseFloat(String((booking.referral?.reward_amount ?? booking.referral_commission) || 0));
-      if ((booking.referral || booking.booking_status === 'referred' || booking.referral_partner) && Number.isFinite(referralAmount)) {
-        const status = String(booking.referral?.reward_status || '').toLowerCase();
-        if (status !== 'cancelled') {
-          acc.referralCommission.total += referralAmount;
-          if (status === 'credited') acc.referralCommission.settled += referralAmount;
-          if (status === 'pending') acc.referralCommission.pending += referralAmount;
-        }
+      // Partner bookings: our margin + who owes whom. (The customer "refer a
+      // friend" reward in booking.referral is a different thing — not counted here.)
+      if (isPartnerBooking(booking)) {
+        const pm = partnerMoneyOf(booking, booking.trips, booking.partner_settlements);
+        acc.referralCommission.total += pm.margin;
+        acc.referralCommission.count += 1;
+        if (pm.balance < 0) acc.referralCommission.theyOwe += -pm.balance;
+        if (pm.balance > 0) acc.referralCommission.weOwe += pm.balance;
       }
       return acc;
     }, {
@@ -142,8 +166,9 @@ export async function GET(request: NextRequest) {
       byBookingStatus: {},
       referralCommission: {
         total: 0,
-        settled: 0,
-        pending: 0,
+        count: 0,
+        theyOwe: 0,
+        weOwe: 0,
       },
     });
 

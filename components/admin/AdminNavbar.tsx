@@ -126,7 +126,7 @@ export default function AdminNavbar({ onMenuToggle, isCollapsed = false }: Admin
   return (
     <>
       <header
-        className={`fixed top-0 right-0 left-0 z-30 h-14 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[left] duration-200 ease-out md:h-16 ${
+        className={`fixed top-0 right-0 left-0 z-[45] h-14 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[left] duration-200 ease-out md:h-16 ${
           isCollapsed ? 'md:left-[72px]' : 'md:left-64'
         }`}
       >

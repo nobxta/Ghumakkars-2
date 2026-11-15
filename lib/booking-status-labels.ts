@@ -56,7 +56,7 @@ export function bookingStatusLabel(status?: string | null): string {
     case 'on_trip': return 'On Trip';
     case 'completed': return 'Completed';
     case 'cancelled': return 'Cancelled';
-    case 'referred': return 'Referred';
+    case 'referred': return 'With partner';
     case 'remaining_submitted': return 'Seat Locked';
     case 'pending':
     default: return 'Pending';

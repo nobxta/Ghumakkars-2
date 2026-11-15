@@ -75,7 +75,7 @@ export function OverviewTab({ d, r, prevR, g, compare, cur, prev }: Ctx) {
     { m: 'users', label: 'New sign-ups', value: num(cur.newUsers), delta: delta(cur.newUsers, prev.newUsers), sub: `prev ${prev.newUsers}`, color: SERIES[6], icon: <UserCheck /> },
     { m: 'aov', label: 'Avg. booking value', value: inr(cur.aov), delta: delta(cur.aov, prev.aov), sub: 'Owed per own booking', color: SERIES[4], icon: <Target /> },
     { label: 'Sign-up → booking', value: pct(cur.conversion, 1), delta: delta(cur.conversion, prev.conversion), sub: 'New users who booked', color: SERIES[5], icon: <Filter /> },
-    { label: 'Partner commission', value: inr(cur.commission), delta: delta(cur.commission, prev.commission), sub: 'From referred bookings', color: SERIES[6], icon: <Handshake /> },
+    { label: 'Partner margin', value: inr(cur.commission), delta: delta(cur.commission, prev.commission), sub: 'Customer price minus partner price', color: SERIES[6], icon: <Handshake /> },
     { label: 'Outstanding now', value: inr(outstanding), delta: undefined as unknown as null, sub: 'Balance due, all live bookings', color: SERIES[7], icon: <Clock /> },
   ];
 
@@ -223,7 +223,7 @@ export function RevenueTab({ d, r, prevR, g, compare, cur, prev, onTrip }: Ctx) 
         <Card title="Outstanding by trip" icon={<Clock />} subtitle="Balance due today · click to filter">
           <HBarList rows={outstandingByTrip} format={inr} color={SERIES[3]} max={6} onSelect={onTrip} />
         </Card>
-        <Card title="Partner commission" icon={<Handshake />} subtitle="Referred bookings in range">
+        <Card title="Partner margin" icon={<Handshake />} subtitle="Referred bookings in range">
           {partners.length ? <HBarList rows={partners} format={inr} color={SERIES[6]} max={6} /> : <Empty height={150} text="No partner bookings in range" />}
         </Card>
       </div>
@@ -508,7 +508,7 @@ export function InsightsTab({ d, r, prevR, cur, prev }: Ctx) {
         <Card title="How numbers are counted" icon={<Info />}>
           <ul className="list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-slate-600">
             <li><b>Revenue</b> = verified payments minus refunds, dated by payment time, on your own bookings.</li>
-            <li><b>Partner (referred)</b> bookings count only their commission, not trip revenue.</li>
+            <li><b>Partner (referred)</b> bookings count only your margin (customer price minus partner price), not trip revenue.</li>
             <li><b>Bookings / travellers</b> are dated by booking creation and exclude cancelled.</li>
             <li><b>Previous period</b> is the same length immediately before the selected range.</li>
             <li>All days and hours are India time (IST).</li>

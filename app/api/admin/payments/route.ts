@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error: sErr } = await applyFilters(
       admin
         .from('v_payments_admin')
-        .select('amount, amount_refunded, payment_status, payment_method, payment_mode, paid_at, created_at, trip_title')
+        .select('amount, amount_refunded, payment_status, payment_method, payment_mode, paid_at, created_at, trip_title, collected_by')
         .order('created_at', { ascending: false })
         .limit(10000)
     );

@@ -6,13 +6,17 @@ import { revalidateTripById } from '@/lib/revalidate-trips';
 import { markBookingAddonsPaid } from '@/lib/addons-server';
 import { SEAT_STATUSES } from '@/lib/booking-admin-sync';
 import { withErrorLog } from '@/lib/error-log';
+import { partnerPriceFrom, PARTNER_SETTLEMENT_METHODS } from '@/lib/partner-money';
 
 export const runtime = 'nodejs';
 
 // Booking statuses that occupy a seat on the trip.
 const COUNTED = SEAT_STATUSES;
 // Statuses an admin may set from the Change-Status modal (+ hidden `pending`).
+// `referred` is set only through set_referral (or reopening a cancelled partner booking).
 const ALLOWED_STATUS = ['pending', 'seat_locked', 'confirmed', 'on_trip', 'completed', 'cancelled', 'referred'];
+// Statuses a booking can go back to when its referral is removed.
+const RESTORABLE = ['pending', 'seat_locked', 'confirmed', 'remaining_submitted'];
 const PAYMENT_MODES = ['cash', 'upi', 'card', 'bank', 'online', 'razorpay'];
 
 /**
@@ -24,7 +28,14 @@ const PAYMENT_MODES = ['cash', 'upi', 'card', 'bank', 'online', 'razorpay'];
  *                         (Razorpay refunds go through /api/admin/payments/[id]/refund.)
  *   set_status          — changes Booking Status only. NEVER changes payment.
  *                         `notify` gates the customer email/WhatsApp.
- *   set_referral        — saves partner/commission/notes and marks status referred.
+ *   set_referral        — hands the booking to a partner (or edits that): partner +
+ *                         partner price. Status becomes `referred`, seats are freed.
+ *   clear_referral      — undoes a referral and restores the previous status.
+ *   record_payment      — `collected_by: 'partner'` records money the customer paid
+ *                         the partner directly (e.g. cash at boarding).
+ *   delete_partner_collection — removes such a row (typo / wrong amount).
+ *   record_partner_settlement / delete_partner_settlement — money between us and
+ *                         the partner for this booking.
  *   save_internal_notes — admin-only operational notes.
  */
 async function handlePOST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -39,7 +50,7 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
 
     const { data: b, error: fetchErr } = await adminClient
       .from('bookings')
-      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, addons_total, departure_date')
+      .select('id, trip_id, user_id, booking_status, payment_method, is_offline_booking, number_of_participants, total_price, final_amount, coupon_discount, wallet_amount_used, waived_amount, amount_paid, addons_total, departure_date, partner_id, partner_price, referral_commission, referral_status_before')
       .eq('id', id)
       .single();
     if (fetchErr || !b) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
@@ -57,7 +68,8 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
 
     // Pull the full ledger once; reused for money math + recompute.
     const loadLedger = async () =>
-      (await adminClient.from('payment_transactions').select('amount, payment_status, amount_refunded').eq('booking_id', id)).data || [];
+      (await adminClient.from('payment_transactions').select('amount, payment_status, amount_refunded, collected_by').eq('booking_id', id)).data || [];
+    const isPartner = !!b.partner_id || b.booking_status === 'referred';
 
     const moneyFromLedger = (txns: any[]) => {
       const paid = txns
@@ -109,18 +121,23 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
       const mode = PAYMENT_MODES.includes(body.method) ? body.method : 'cash';
       const reference = body.reference ? String(body.reference).slice(0, 120) : '';
       const notes = body.notes ? String(body.notes).slice(0, 500) : '';
+      const collectedBy = body.collected_by === 'partner' ? 'partner' : 'us';
+      if (collectedBy === 'partner' && !b.partner_id) {
+        return NextResponse.json({ error: 'Only a booking handed to a partner can have money collected by the partner.' }, { status: 400 });
+      }
 
       await adminClient.from('payment_transactions').insert([{
         booking_id: id,
         user_id: b.user_id,
-        transaction_id: reference || `MANUAL_${mode.toUpperCase()}_${Date.now()}`,
+        collected_by: collectedBy,
+        transaction_id: reference || `${collectedBy === 'partner' ? 'BOARDING' : 'MANUAL'}_${mode.toUpperCase()}_${Date.now()}`,
         amount,
         payment_type: 'offline',
         payment_status: 'verified',
         payment_mode: mode,
         payment_reviewed_at: new Date().toISOString(),
         payment_reviewed_by: auth.user.id,
-        payment_review_notes: notes || 'Recorded in person by admin',
+        payment_review_notes: notes || (collectedBy === 'partner' ? 'Paid to the trip operator' : 'Recorded in person by admin'),
       }]);
 
       const money = await syncPaymentMirrors();
@@ -131,7 +148,9 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({
         success: true,
         ...money,
-        message: `Payment of ₹${amount.toLocaleString('en-IN')} recorded. Payment status: ${money.status}.`,
+        message: collectedBy === 'partner'
+          ? `₹${amount.toLocaleString('en-IN')} paid to the partner recorded.`
+          : `Payment of ₹${amount.toLocaleString('en-IN')} recorded. Payment status: ${money.status}.`,
       });
     }
 
@@ -146,7 +165,7 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
       }
       const notes = body.notes ? String(body.notes).slice(0, 500) : '';
 
-      const txns = await loadLedger();
+      const txns = (await loadLedger()).filter((t: any) => t.collected_by !== 'partner');
       const { effective } = moneyFromLedger(txns);
       if (amount > effective + 0.5) {
         return NextResponse.json({ error: `Cannot refund ₹${amount.toLocaleString('en-IN')} — only ₹${effective.toLocaleString('en-IN')} was collected.` }, { status: 400 });
@@ -159,6 +178,7 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
         .select('id, amount, amount_refunded, payment_mode')
         .eq('booking_id', id)
         .eq('payment_status', 'verified')
+        .eq('collected_by', 'us')
         .neq('payment_mode', 'razorpay')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -202,6 +222,13 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
       if (status === b.booking_status) {
         return NextResponse.json({ error: 'Booking is already in that status' }, { status: 400 });
       }
+      // Partner bookings: only cancel, or reopen a cancelled one back to the partner.
+      if (status === 'referred' && !(b.partner_id && b.booking_status === 'cancelled')) {
+        return NextResponse.json({ error: 'Use “Refer to partner” to hand a booking to a partner.' }, { status: 400 });
+      }
+      if (b.partner_id && !['cancelled', 'referred'].includes(status)) {
+        return NextResponse.json({ error: 'This booking is with a partner. Remove the referral first to change its status.' }, { status: 400 });
+      }
       // Cancelling is destructive — require explicit confirmation.
       if (status === 'cancelled' && !body.confirm) {
         return NextResponse.json({ error: 'Cancellation requires confirmation' }, { status: 400 });
@@ -233,25 +260,175 @@ async function handlePOST(request: NextRequest, { params }: { params: { id: stri
     }
 
     // ───────────────────────── set_referral ─────────────────────────
+    // Hand the booking to a partner, or edit an existing referral.
     if (action === 'set_referral') {
-      const partner = body.partner ? String(body.partner).slice(0, 200) : null;
-      const commission = body.commission != null && body.commission !== '' ? parseFloat(String(body.commission)) : 0;
-      if (Number.isNaN(commission) || commission < 0) {
-        return NextResponse.json({ error: 'Enter a valid commission amount' }, { status: 400 });
+      if (['cancelled', 'rejected'].includes(String(b.booking_status))) {
+        return NextResponse.json({ error: 'Reopen the booking before handing it to a partner.' }, { status: 400 });
       }
-      const refNotes = body.notes ? String(body.notes).slice(0, 1000) : null;
 
-      const wasCounted = COUNTED.includes(b.booking_status);
-      if (!wasCounted) await adjustSeats(pax);
+      // Partner: an existing one, or create one on the spot.
+      let partner: { id: string; name: string } | null = null;
+      if (body.partner_id) {
+        const { data } = await adminClient.from('partners').select('id, name').eq('id', String(body.partner_id)).maybeSingle();
+        partner = data;
+      } else if (body.new_partner?.name && String(body.new_partner.name).trim()) {
+        const name = String(body.new_partner.name).trim().slice(0, 120);
+        const { data: existing } = await adminClient.from('partners').select('id, name').ilike('name', name).maybeSingle();
+        if (existing) {
+          partner = existing;
+        } else {
+          const { data: created, error: createErr } = await adminClient.from('partners').insert([{
+            name,
+            phone: body.new_partner.phone ? String(body.new_partner.phone).slice(0, 30) : null,
+            default_price_basis: body.price_basis === 'total' ? 'total' : 'per_person',
+            default_price_rate: body.price_basis === 'total' ? null : (parseFloat(String(body.price_rate)) || null),
+            created_by: auth.user.id,
+          }]).select('id, name').single();
+          if (createErr) return NextResponse.json({ error: createErr.message }, { status: 400 });
+          partner = created;
+        }
+      }
+      if (!partner) return NextResponse.json({ error: 'Choose a partner' }, { status: 400 });
+
+      const basis = body.price_basis === 'total' ? 'total' : 'per_person';
+      const rate = parseFloat(String(body.price_rate));
+      if (Number.isNaN(rate) || rate < 0) {
+        return NextResponse.json({ error: 'Enter the partner price' }, { status: 400 });
+      }
+      const partnerPrice = partnerPriceFrom(basis, rate, pax);
+      const margin = Math.round((owed - partnerPrice) * 100) / 100;
+      const refNotes = body.notes != null ? String(body.notes).slice(0, 1000) : null;
+
+      const already = !!b.partner_id || b.booking_status === 'referred';
+      const updates: Record<string, unknown> = {
+        partner_id: partner.id,
+        partner_price: partnerPrice,
+        partner_price_basis: basis,
+        partner_price_rate: rate,
+        referral_partner: partner.name, // kept for older readers
+        referral_commission: margin, // snapshot of our margin
+        referral_notes: refNotes,
+      };
+      if (!already) {
+        updates.booking_status = 'referred';
+        updates.referral_status_before = b.booking_status || 'pending';
+        updates.referred_at = new Date().toISOString();
+        updates.referred_by = auth.user.id;
+      }
+      await adminClient.from('bookings').update(updates).eq('id', id);
+
+      // The partner runs the trip, so the traveller frees their seat on ours.
+      if (!already && COUNTED.includes(b.booking_status)) await adjustSeats(-pax);
+
+      return NextResponse.json({
+        success: true,
+        bookingStatus: 'referred',
+        margin,
+        partnerPrice,
+        message: already
+          ? `Referral updated: partner price ₹${partnerPrice.toLocaleString('en-IN')}, your margin ₹${margin.toLocaleString('en-IN')}.`
+          : `Handed to ${partner.name}. Your margin: ₹${margin.toLocaleString('en-IN')}.`,
+      });
+    }
+
+    // ───────────────────────── clear_referral ─────────────────────────
+    if (action === 'clear_referral') {
+      if (!isPartner) return NextResponse.json({ error: 'This booking is not with a partner.' }, { status: 400 });
+
+      const [{ count: partnerRows }, { count: settlementRows }] = await Promise.all([
+        adminClient.from('payment_transactions').select('id', { count: 'exact', head: true }).eq('booking_id', id).eq('collected_by', 'partner'),
+        adminClient.from('partner_settlements').select('id', { count: 'exact', head: true }).eq('booking_id', id),
+      ]);
+      if ((partnerRows || 0) > 0 || (settlementRows || 0) > 0) {
+        return NextResponse.json({
+          error: 'This booking has payments to the partner or settlements recorded. Delete those first, then remove the referral.',
+        }, { status: 400 });
+      }
+
+      let restoreTo = String(b.booking_status);
+      if (b.booking_status === 'referred') {
+        const before = String(b.referral_status_before || '');
+        if (RESTORABLE.includes(before)) {
+          restoreTo = before;
+        } else {
+          const { effective } = moneyFromLedger(await loadLedger());
+          restoreTo = effective >= owed - 1 && effective > 0 ? 'confirmed' : effective > 0 ? 'seat_locked' : 'pending';
+        }
+      }
 
       await adminClient.from('bookings').update({
-        booking_status: 'referred',
-        referral_partner: partner,
-        referral_commission: commission,
-        referral_notes: refNotes,
+        booking_status: restoreTo,
+        partner_id: null,
+        partner_price: null,
+        partner_price_basis: null,
+        partner_price_rate: null,
+        referral_partner: null,
+        referral_commission: 0,
+        referral_notes: null,
+        referral_status_before: null,
+        referred_at: null,
+        referred_by: null,
       }).eq('id', id);
 
-      return NextResponse.json({ success: true, bookingStatus: 'referred', message: 'Booking marked as referred.' });
+      if (b.booking_status === 'referred' && COUNTED.includes(restoreTo)) await adjustSeats(pax);
+
+      return NextResponse.json({ success: true, bookingStatus: restoreTo, message: `Referral removed. Booking is back to ${restoreTo.replace('_', ' ')}.` });
+    }
+
+    // ───────────────────────── delete_partner_collection ─────────────────────────
+    if (action === 'delete_partner_collection') {
+      const txnId = String(body.transaction_row_id || '');
+      const { data: row } = await adminClient
+        .from('payment_transactions')
+        .select('id, collected_by, amount')
+        .eq('id', txnId)
+        .eq('booking_id', id)
+        .maybeSingle();
+      if (!row || row.collected_by !== 'partner') {
+        return NextResponse.json({ error: 'Payment to partner not found' }, { status: 404 });
+      }
+      await adminClient.from('payment_transactions').delete().eq('id', row.id);
+      const money = await syncPaymentMirrors();
+      return NextResponse.json({ success: true, ...money, message: `Removed ₹${Number(row.amount).toLocaleString('en-IN')} paid to partner.` });
+    }
+
+    // ───────────────────────── record_partner_settlement ─────────────────────────
+    if (action === 'record_partner_settlement') {
+      if (!b.partner_id) return NextResponse.json({ error: 'This booking is not with a partner.' }, { status: 400 });
+      const direction = body.direction === 'from_partner' ? 'from_partner' : body.direction === 'to_partner' ? 'to_partner' : null;
+      if (!direction) return NextResponse.json({ error: 'Choose who paid whom' }, { status: 400 });
+      const amount = parseFloat(String(body.amount));
+      if (Number.isNaN(amount) || amount <= 0) return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 });
+      const method = (PARTNER_SETTLEMENT_METHODS as readonly string[]).includes(body.method) ? body.method : 'upi';
+      const settledOn = /^\d{4}-\d{2}-\d{2}$/.test(String(body.settled_on || '')) ? String(body.settled_on) : new Date().toISOString().slice(0, 10);
+
+      const { error: insErr } = await adminClient.from('partner_settlements').insert([{
+        partner_id: b.partner_id,
+        booking_id: id,
+        direction,
+        amount,
+        method,
+        reference: body.reference ? String(body.reference).slice(0, 120) : null,
+        notes: body.notes ? String(body.notes).slice(0, 500) : null,
+        settled_on: settledOn,
+        created_by: auth.user.id,
+      }]);
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 400 });
+      return NextResponse.json({
+        success: true,
+        message: direction === 'to_partner'
+          ? `Recorded ₹${amount.toLocaleString('en-IN')} paid to the partner.`
+          : `Recorded ₹${amount.toLocaleString('en-IN')} received from the partner.`,
+      });
+    }
+
+    // ───────────────────────── delete_partner_settlement ─────────────────────────
+    if (action === 'delete_partner_settlement') {
+      const sid = String(body.settlement_id || '');
+      const { data: row } = await adminClient.from('partner_settlements').select('id').eq('id', sid).eq('booking_id', id).maybeSingle();
+      if (!row) return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+      await adminClient.from('partner_settlements').delete().eq('id', row.id);
+      return NextResponse.json({ success: true, message: 'Settlement removed.' });
     }
 
     // ───────────────────────── settle_balance ─────────────────────────

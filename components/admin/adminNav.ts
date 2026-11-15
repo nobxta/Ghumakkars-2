@@ -11,6 +11,7 @@ import {
   Bug,
   BookUser,
   Instagram,
+  Handshake,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -42,6 +43,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { href: '/admin/trips', label: 'Trips', icon: MapPin, keywords: 'tours packages departures' },
       { href: '/admin/bookings', label: 'Bookings', icon: Calendar, keywords: 'orders reservations passengers' },
       { href: '/admin/payments', label: 'Payments', icon: CreditCard, keywords: 'transactions refunds upi cash' },
+      { href: '/admin/partners', label: 'Partners', icon: Handshake, keywords: 'partner operators referred commission margin settlement owe' },
     ],
   },
   {

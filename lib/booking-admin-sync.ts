@@ -8,8 +8,12 @@ import { revalidateTripById } from '@/lib/revalidate-trips';
  * payment mirrors on `bookings` are recomputed from the ledger.
  */
 
-// Booking statuses that occupy a seat on the trip.
-export const SEAT_STATUSES = ['confirmed', 'seat_locked', 'on_trip', 'completed', 'referred'];
+// Booking statuses that occupy a seat on the trip. Referred bookings do NOT:
+// the partner runs the trip, so the traveller frees their seat on ours.
+export const SEAT_STATUSES = ['confirmed', 'seat_locked', 'on_trip', 'completed'];
+// Statuses a payment confirmation must never overwrite (seat holders + partner
+// bookings — a referred customer paying online must stay with the partner).
+export const CLAIM_LOCKED_STATUSES = [...SEAT_STATUSES, 'referred'];
 
 export const occupiesSeat = (status?: string | null) => SEAT_STATUSES.includes(String(status || ''));
 
@@ -39,7 +43,7 @@ export async function claimBookingSeats(
     .from('bookings')
     .update(update)
     .eq('id', bookingId)
-    .or(`booking_status.is.null,booking_status.not.in.(${SEAT_STATUSES.join(',')})`)
+    .or(`booking_status.is.null,booking_status.not.in.(${CLAIM_LOCKED_STATUSES.join(',')})`)
     .select('id, trip_id, number_of_participants');
   if (error) throw error;
   const row = data?.[0];
