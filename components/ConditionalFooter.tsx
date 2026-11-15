@@ -28,6 +28,7 @@ function shouldHideFooter(p: string): boolean {
   if (p.startsWith('/profile')) return true;
   if (p.startsWith('/wallet')) return true;
   if (p.startsWith('/referral')) return true;
+  if (p.startsWith('/verify')) return true;
   if (p.startsWith('/bookings')) return true;
   if (p.startsWith('/booking-success')) return true;
   return false;

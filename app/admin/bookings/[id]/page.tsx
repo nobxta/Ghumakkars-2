@@ -73,6 +73,7 @@ export default function AdminBookingDetailsPage() {
   const [rzpSettle, setRzpSettle] = useState<{ byPayment: Record<string, any>; lastSyncedAt: string | null } | null>(null);
   const [syncingSettle, setSyncingSettle] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  const [ticketBusy, setTicketBusy] = useState<null | 'print' | 'download'>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   // Refund modal
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -470,6 +471,56 @@ export default function AdminBookingDetailsPage() {
   const passengerEmail = booking.primary_passenger_email || booking.profiles?.email || 'N/A';
   const passengerPhone = booking.primary_passenger_phone || booking.profiles?.phone || 'N/A';
 
+  /** The customer's ticket PDF — the same file they download and get on WhatsApp. */
+  const fetchTicket = async (): Promise<{ url: string; filename: string }> => {
+    const res = await fetch(`/api/bookings/${booking.id}/ticket`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('failed');
+    const filename = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] || `Ghumakkars-Ticket-${shortId}.pdf`;
+    return { url: URL.createObjectURL(await res.blob()), filename };
+  };
+
+  const printTicket = async () => {
+    if (ticketBusy) return;
+    setTicketBusy('print');
+    try {
+      const { url } = await fetchTicket();
+      // Print through the browser's PDF viewer; fall back to opening it in a tab.
+      if ((navigator as any).pdfViewerEnabled === false) { window.open(url, '_blank', 'noopener'); return; }
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      frame.src = url;
+      frame.onload = () => {
+        try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
+        catch { window.open(url, '_blank', 'noopener'); }
+        setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60_000);
+      };
+      document.body.appendChild(frame);
+    } catch {
+      alert('Could not load the ticket. Please try again.');
+    } finally {
+      setTicketBusy(null);
+    }
+  };
+
+  const downloadTicket = async () => {
+    if (ticketBusy) return;
+    setTicketBusy('download');
+    try {
+      const { url, filename } = await fetchTicket();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      alert('Could not download the ticket. Please try again.');
+    } finally {
+      setTicketBusy(null);
+    }
+  };
+
   const copyId = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(booking.id).then(() => {
@@ -665,12 +716,13 @@ export default function AdminBookingDetailsPage() {
           </div>
 
           <button
-            onClick={() => typeof window !== 'undefined' && window.print()}
-            title="Print or save as PDF"
+            onClick={printTicket}
+            disabled={!!ticketBusy}
+            title="Print the customer's ticket"
             className="inline-flex flex-shrink-0 items-center gap-1.5 h-9 px-3 bg-white border border-slate-200 text-slate-700 rounded-lg text-[13px] font-medium shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           >
             <Printer className="h-4 w-4 text-slate-500" />
-            <span className="hidden sm:inline">Print</span>
+            <span className="hidden sm:inline">{ticketBusy === 'print' ? 'Preparing…' : 'Print ticket'}</span>
           </button>
         </div>
       </div>
@@ -731,7 +783,8 @@ export default function AdminBookingDetailsPage() {
                         <ActionRow onClick={openReferral} icon={<Handshake className="h-4 w-4" />} tone="gray" label="Refer to partner" sub="Hand to another operator" />
                       </>
                     )}
-                    <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
+                    <ActionRow onClick={printTicket} disabled={!!ticketBusy} icon={<Printer className="h-4 w-4" />} tone="gray" label={ticketBusy === 'print' ? 'Preparing ticket…' : 'Print ticket'} sub="Same PDF the customer gets" />
+                    <ActionRow onClick={downloadTicket} disabled={!!ticketBusy} icon={<FileText className="h-4 w-4" />} tone="gray" label={ticketBusy === 'download' ? 'Downloading…' : 'Download ticket PDF'} />
                     <ActionRow onClick={() => { setCancelReason(''); setCancelReasonPreset(''); setCancelNotify(true); setShowCancelModal(true); }} icon={<XCircle className="h-4 w-4" />} tone="red" label="Cancel booking" />
                   </>
                 ) : (
@@ -747,7 +800,8 @@ export default function AdminBookingDetailsPage() {
                     {booking.partner_id && !pm.isLegacy && (
                       <ActionRow onClick={() => { setStlDirection(pm.balance < 0 ? 'from_partner' : 'to_partner'); setStlAmount(pm.balance ? String(Math.abs(pm.balance)) : ''); setStlMethod('upi'); setStlReference(''); setStlNotes(''); setStlDate(new Date().toISOString().slice(0, 10)); setDrawerMode('settlement'); }} icon={<Handshake className="h-4 w-4" />} tone="gray" label="Record settlement" sub={`With ${partnerName}`} />
                     )}
-                    <ActionRow onClick={() => typeof window !== 'undefined' && window.print()} icon={<Printer className="h-4 w-4" />} tone="gray" label="Print / Download PDF" />
+                    <ActionRow onClick={printTicket} disabled={!!ticketBusy} icon={<Printer className="h-4 w-4" />} tone="gray" label={ticketBusy === 'print' ? 'Preparing ticket…' : 'Print ticket'} sub="Same PDF the customer gets" />
+                    <ActionRow onClick={downloadTicket} disabled={!!ticketBusy} icon={<FileText className="h-4 w-4" />} tone="gray" label={ticketBusy === 'download' ? 'Downloading…' : 'Download ticket PDF'} />
                   </>
                 )}
               </div>

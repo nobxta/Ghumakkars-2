@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
   CreditCard, IndianRupee, Lock, CheckCircle,
   AlertCircle, XCircle, Calendar, Package, Eye, QrCode, Save, Tag,
-  MessageCircle, Download, Sparkles, ChevronRight, Copy, FileText, Check
+  MessageCircle, Download, Sparkles, ChevronRight, Copy, FileText, Check, Printer
 } from 'lucide-react';
 import { IMG } from '@/lib/image';
 import { resolveDueDate } from '@/lib/payment-due';
@@ -489,128 +489,26 @@ export default function BookingDetailsPage() {
     }
   };
 
-  /** Open a dedicated clean print window with just the ticket info. */
-  const handlePrintTicket = () => {
-    const w = window.open('', '_blank', 'width=820,height=1100');
-    if (!w) return;
-    const allPassengers = [
-      { name: booking.primary_passenger_name, age: booking.primary_passenger_age, gender: booking.primary_passenger_gender, phone: booking.primary_passenger_phone, isPrimary: true },
-      ...additionalPassengers.map((p: any) => ({ ...p, isPrimary: false })),
-    ];
-    const passengerRows = allPassengers.map((p: any, i: number) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${p.name || '—'}${p.isPrimary ? ' <span style="background:#ede9fe;color:#6d28d9;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:600;">PRIMARY</span>' : ''}</td>
-        <td>${p.age || '—'}</td>
-        <td style="text-transform:capitalize;">${p.gender || '—'}</td>
-        <td>${p.phone || '—'}</td>
-      </tr>`).join('');
-    const addonsList: any[] = Array.isArray((booking as any).booking_addons)
-      ? (booking as any).booking_addons.filter((a: any) => a.status !== 'cancelled') : [];
-    const addonRowsHtml = addonsList.map((a: any) => {
-      const names = (Array.isArray(a.selected_passenger_names) && a.selected_passenger_names.length)
-        ? a.selected_passenger_names.join(', ') : '—';
-      return `<tr><td>${a.name}</td><td>${names}</td><td>${calcLabelFromRow(a)}</td><td style="text-align:right;">₹${(Number(a.addon_total) || 0).toLocaleString('en-IN')}</td></tr>`;
-    }).join('');
-    w.document.write(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Trip Ticket · ${trip?.title || ''} · ${shortId}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; background: #fff; padding: 40px; line-height: 1.5; }
-  .ticket { max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-  .header { background: #7c3aed; color: #fff; padding: 24px 28px; }
-  .brand { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.8; margin-bottom: 4px; }
-  .ref { font-family: 'Courier New', monospace; font-size: 12px; opacity: 0.9; margin-top: 8px; }
-  h1 { font-size: 24px; font-weight: 700; }
-  .body { padding: 28px; }
-  .row { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 20px; }
-  .col { flex: 1; min-width: 180px; }
-  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; font-weight: 600; margin-bottom: 4px; }
-  .value { font-size: 15px; font-weight: 600; color: #0f172a; }
-  .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-  .section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; font-weight: 700; margin-bottom: 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
-  th { background: #f9fafb; color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-  .pay-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
-  .pay-row.total { border-top: 1px solid #e5e7eb; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 700; }
-  .stamp { display: inline-block; padding: 4px 10px; border: 2px solid #16a34a; color: #15803d; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-radius: 4px; transform: rotate(-4deg); }
-  .footer { padding: 16px 28px; background: #f9fafb; font-size: 11px; color: #6b7280; text-align: center; border-top: 1px solid #e5e7eb; }
-  .important { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 14px; margin-top: 16px; font-size: 12px; color: #9a3412; }
-  @page { margin: 12mm; size: A4; }
-  @media print { body { padding: 0; } .ticket { border: none; box-shadow: none; } }
-</style>
-</head><body>
-<div class="ticket">
-  <div class="header">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <p class="brand">Ghumakkars · Trip Ticket</p>
-        <h1>${trip?.title || 'Trip'}</h1>
-        <p style="margin-top:4px;font-size:13px;opacity:0.9;">${trip?.destination || ''}</p>
-        <p class="ref">REF #${shortId}</p>
-      </div>
-      ${status === 'confirmed' ? '<div class="stamp">Confirmed</div>' : status === 'seat_locked' ? '<div class="stamp" style="border-color:#ea580c;color:#c2410c;">Seat Locked</div>' : ''}
-    </div>
-  </div>
-  <div class="body">
-    <div class="row">
-      <div class="col"><p class="label">Departure</p><p class="value">${fmtDate(effectiveStart)}</p></div>
-      <div class="col"><p class="label">Return</p><p class="value">${fmtDate(effectiveEnd)}</p></div>
-      <div class="col"><p class="label">Duration</p><p class="value">${trip?.duration_text || (trip?.duration_days ? `${trip.duration_days} days` : '—')}</p></div>
-      <div class="col"><p class="label">Travellers</p><p class="value">${booking.number_of_participants}</p></div>
-    </div>
-    ${(booking as any).pickup_point ? `<div class="row"><div class="col"><p class="label">Pickup point</p><p class="value">${(booking as any).pickup_point}</p></div></div>` : ''}
-
-    <div class="section">
-      <h2>Travellers</h2>
-      <table>
-        <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Gender</th><th>Phone</th></tr></thead>
-        <tbody>${passengerRows}</tbody>
-      </table>
-    </div>
-
-    ${(booking.emergency_contact_name || booking.emergency_contact_phone) ? `
-    <div class="section">
-      <h2>Emergency Contact</h2>
-      <div class="row" style="margin:0;">
-        <div class="col"><p class="label">Name</p><p class="value">${booking.emergency_contact_name || '—'}</p></div>
-        <div class="col"><p class="label">Phone</p><p class="value">${booking.emergency_contact_phone || '—'}</p></div>
-      </div>
-    </div>` : ''}
-
-    ${addonsList.length > 0 ? `
-    <div class="section">
-      <h2>Add-ons &amp; Upgrades</h2>
-      <table>
-        <thead><tr><th>Add-on</th><th>Travellers</th><th>Calculation</th><th style="text-align:right;">Amount</th></tr></thead>
-        <tbody>${addonRowsHtml}</tbody>
-      </table>
-    </div>` : ''}
-
-    <div class="section">
-      <h2>Payment</h2>
-      <div class="pay-row"><span>Base package</span><span>₹${totalAmount.toLocaleString('en-IN')}</span></div>
-      ${addonsTotal > 0 ? `<div class="pay-row"><span>Add-ons &amp; upgrades</span><span>₹${addonsTotal.toLocaleString('en-IN')}</span></div>` : ''}
-      ${couponDiscount > 0 ? `<div class="pay-row" style="color:#15803d;"><span>Coupon (${booking.coupon_code || ''})</span><span>−₹${couponDiscount.toLocaleString('en-IN')}</span></div>` : ''}
-      ${walletUsed > 0 ? `<div class="pay-row" style="color:#6d28d9;"><span>Wallet used</span><span>−₹${walletUsed.toLocaleString('en-IN')}</span></div>` : ''}
-      <div class="pay-row total"><span>Grand total</span><span>₹${finalAmount.toLocaleString('en-IN')}</span></div>
-      <div class="pay-row"><span>Amount paid</span><span>₹${Math.max(paidAmount, finalAmount - remainingAmount).toLocaleString('en-IN')}</span></div>
-      ${remainingAmount > 0 ? `<div class="pay-row" style="color:#c2410c;font-weight:700;"><span>Pending balance</span><span>₹${remainingAmount.toLocaleString('en-IN')}</span></div>` : ''}
-      ${(booking.reference_id || booking.transaction_id) ? `<p style="margin-top:10px;font-size:11px;color:#6b7280;">Txn ID: <span style="font-family:'Courier New',monospace;color:#0f172a;">${booking.reference_id || booking.transaction_id}</span></p>` : ''}
-    </div>
-
-    <div class="important">
-      <strong>Please carry:</strong> a printout or digital copy of this ticket + a valid government photo ID (Aadhaar / Driving Licence / Passport). Reach the pickup point 30 minutes before departure.
-    </div>
-  </div>
-  <div class="footer">
-    Booked on ${new Date(booking.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · Support: support@ghumakkars.in · +91 82180 20972
-  </div>
-</div>
-<script>setTimeout(() => { window.print(); }, 300);</script>
-</body></html>`);
-    w.document.close();
+  /** Print the official ticket PDF (same file as Download / WhatsApp). */
+  const handlePrintTicket = async () => {
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/ticket`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('failed');
+      const url = URL.createObjectURL(await res.blob());
+      // Print through the browser's PDF viewer; phones without one just open it.
+      if ((navigator as any).pdfViewerEnabled === false) { window.open(url, '_blank', 'noopener'); return; }
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      frame.src = url;
+      frame.onload = () => {
+        try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
+        catch { window.open(url, '_blank', 'noopener'); }
+        setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60_000);
+      };
+      document.body.appendChild(frame);
+    } catch {
+      setToast({ type: 'error', title: 'Could not print ticket', message: 'Please try again in a moment.' });
+    }
   };
 
   return (
@@ -693,7 +591,7 @@ export default function BookingDetailsPage() {
 
         {/* ─────────── QUICK ACTIONS ─────────── */}
         <div className="mb-4 sm:mb-6 -mx-4 sm:mx-0">
-          <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-5 overflow-x-auto sm:overflow-visible gap-2 sm:gap-3 px-4 sm:px-0 scrollbar-hide">
+          <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-fr overflow-x-auto sm:overflow-visible gap-2 sm:gap-3 px-4 sm:px-0 scrollbar-hide">
             {whatsappLink && (
               <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
                 <MessageCircle className="h-5 w-5 text-green-600" />
@@ -711,6 +609,10 @@ export default function BookingDetailsPage() {
             <button onClick={handleDownloadTicket} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
               <Download className="h-5 w-5 text-gray-700" />
               <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Download ticket</span>
+            </button>
+            <button onClick={handlePrintTicket} className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
+              <Printer className="h-5 w-5 text-gray-700" />
+              <span className="text-xs sm:text-sm font-semibold text-gray-900 text-left">Print ticket</span>
             </button>
             <Link href="/trips" className="flex-shrink-0 sm:flex-shrink min-w-[120px] sm:min-w-0 bg-white border border-gray-200 rounded-2xl px-4 py-3 sm:py-4 hover:border-purple-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col items-start gap-1.5">
               <Sparkles className="h-5 w-5 text-fuchsia-600" />

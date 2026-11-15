@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPendingCashBooking, moneyOf, pendingCashOf, seatLockBaseOf } from '@/lib/booking-money';
+import { getSiteUrl } from '@/lib/site-url';
 
 export interface TicketPassenger {
   name?: string;
@@ -27,6 +28,9 @@ export interface TicketAddon {
 }
 
 export interface TicketData {
+  bookingId?: string;
+  /** PNG data URL of a QR code linking to the booking page (server-generated). */
+  qrDataUrl?: string;
   ref: string;
   status: string;
   tripTitle: string;
@@ -153,6 +157,7 @@ export async function loadTicketData(bookingId: string): Promise<TicketData | nu
   const pendingCashMoney = pendingCashOf(booking as any, trip as any);
 
   return {
+    bookingId: String(booking.id),
     ref,
     status,
     tripTitle: trip.title || 'Trip',
@@ -187,191 +192,484 @@ export function ticketFilename(t: TicketData): string {
   return `Ghumakkars-Ticket-${slug}-${t.ref}.pdf`;
 }
 
-const PURPLE: [number, number, number] = [124, 58, 237];
-const GRAY: [number, number, number] = [107, 114, 128];
-const DARK: [number, number, number] = [15, 23, 42];
+/** Public "is this ticket valid?" page the QR code opens — no login needed. */
+export function ticketVerifyUrl(bookingId: string): string {
+  return `${getSiteUrl()}/verify/${bookingId}`;
+}
 
-/** Build the ticket PDF. Works identically in the browser and in Node. */
-export function buildTicketDoc(t: TicketData): jsPDF {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+/** Poppins faces (assets/pdf-fonts, OFL, subset incl. ₹): [file, family, style]. */
+const TICKET_FONT_FILES: Array<[string, string, string]> = [
+  ['Poppins-Regular', 'Poppins', 'normal'],
+  ['Poppins-SemiBold', 'Poppins', 'bold'],
+  ['Poppins-Bold', 'PoppinsHeavy', 'normal'],
+];
+export type TicketFonts = Record<string, string>;
+let fontCache: TicketFonts | null = null;
+
+/** Server only: base64 TTF data for the ticket fonts, or null if unavailable. */
+export async function loadTicketFonts(): Promise<TicketFonts | null> {
+  if (fontCache) return fontCache;
+  try {
+    const { readFile } = await import('fs/promises');
+    const path = await import('path');
+    const out: TicketFonts = {};
+    await Promise.all(TICKET_FONT_FILES.map(async ([file]) => {
+      const buf = await readFile(path.join(process.cwd(), 'assets', 'pdf-fonts', `${file}.ttf`));
+      out[file] = buf.toString('base64');
+    }));
+    fontCache = out;
+    return out;
+  } catch {
+    return null; // falls back to Helvetica
+  }
+}
+
+type RGB = [number, number, number];
+
+// Brand palette (matches tailwind `primary` / violet scale).
+const C = {
+  brand: [109, 40, 217] as RGB, // violet-700/800 — hero
+  brandDeep: [76, 29, 149] as RGB, // violet-900 — headings
+  brandInk: [46, 16, 101] as RGB, // violet-950 — ref / QR
+  brandMid: [139, 92, 246] as RGB, // violet-500 — lines on hero
+  brandMuted: [196, 181, 253] as RGB, // violet-300 — labels on hero
+  brandLine: [221, 214, 254] as RGB, // violet-200
+  brandSoft: [245, 243, 255] as RGB, // violet-50
+  ink: [17, 24, 39] as RGB,
+  body: [55, 65, 81] as RGB,
+  muted: [107, 114, 128] as RGB,
+  faint: [156, 163, 175] as RGB,
+  line: [229, 231, 235] as RGB,
+  white: [255, 255, 255] as RGB,
+  green: [21, 128, 61] as RGB,
+  greenSoft: [220, 252, 231] as RGB,
+  amber: [180, 83, 9] as RGB,
+  amberSoft: [254, 243, 199] as RGB,
+  red: [185, 28, 28] as RGB,
+  redSoft: [254, 226, 226] as RGB,
+  slate: [75, 85, 99] as RGB,
+  slateSoft: [243, 244, 246] as RGB,
+};
+
+function statusBadge(status: string): { label: string; fg: RGB; bg: RGB } {
+  switch (status) {
+    case 'confirmed': return { label: 'CONFIRMED', fg: C.green, bg: C.greenSoft };
+    case 'completed': return { label: 'COMPLETED', fg: C.green, bg: C.greenSoft };
+    case 'seat_locked': return { label: 'SEAT LOCKED', fg: C.amber, bg: C.amberSoft };
+    case 'remaining_submitted': return { label: 'PAYMENT IN REVIEW', fg: C.amber, bg: C.amberSoft };
+    case 'cancelled': return { label: 'CANCELLED', fg: C.red, bg: C.redSoft };
+    default: return { label: 'PENDING', fg: C.slate, bg: C.slateSoft };
+  }
+}
+
+const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
+
+/**
+ * Build the ticket PDF. Works in the browser and in Node. Pass `fonts`
+ * (from `loadTicketFonts`) to typeset in Poppins with a real ₹ sign; without
+ * them it falls back to Helvetica and "Rs".
+ */
+export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+  const hasFonts = !!fonts && TICKET_FONT_FILES.every(([file]) => !!fonts[file]);
+  if (hasFonts) {
+    for (const [file, family, style] of TICKET_FONT_FILES) {
+      doc.addFileToVFS(`${file}.ttf`, fonts![file]);
+      doc.addFont(`${file}.ttf`, family, style);
+    }
+  }
+  const FAM = hasFonts ? 'Poppins' : 'helvetica';
+  const money = (n: number) => (hasFonts ? '₹' : 'Rs ') + Number(n || 0).toLocaleString('en-IN');
+  const calcText = (s: string) => (hasFonts ? s.replace(/Rs /g, '₹').replace(/ x /g, ' × ') : s);
   const W = 210;
+  const H = 297;
   const M = 14;
+  const CW = W - M * 2;
+  const BOTTOM = H - 20; // keep clear of the footer
 
-  // ── Header band ──
-  doc.setFillColor(...PURPLE);
-  doc.rect(0, 0, W, 42, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('GHUMAKKARS  ·  TRIP TICKET', M, 13);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(19);
-  doc.text(doc.splitTextToSize(t.tripTitle, 120)[0], M, 24);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  if (t.destination) doc.text(t.destination, M, 31);
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(9);
-  doc.text(`REF #${t.ref}`, M, 38);
-
-  // Status stamp (top-right)
-  const stamp = t.status === 'confirmed' ? 'CONFIRMED' : t.status === 'seat_locked' ? 'SEAT LOCKED' : '';
-  if (stamp) {
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(0.6);
-    const sw = 46, sx = W - M - sw, sy = 12;
-    doc.roundedRect(sx, sy, sw, 11, 2, 2, 'S');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(stamp, sx + sw / 2, sy + 7.3, { align: 'center' });
-  }
-
-  // ── Detail fields ──
-  let y = 56;
-  const field = (x: number, label: string, value: string) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...GRAY);
-    doc.text(label.toUpperCase(), x, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...DARK);
-    doc.text(value || '—', x, y + 6);
+  const font = (style: 'normal' | 'bold' | 'heavy', size: number, color: RGB) => {
+    if (style === 'heavy') doc.setFont(hasFonts ? 'PoppinsHeavy' : 'helvetica', hasFonts ? 'normal' : 'bold');
+    else doc.setFont(FAM, style);
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
   };
-  const col = (210 - M * 2) / 4;
-  field(M, 'Departure', t.departure);
-  field(M + col, 'Return', t.ret);
-  field(M + col * 2, 'Duration', t.duration);
-  field(M + col * 3, 'Travellers', String(t.travellers));
+  /** Small tracked uppercase label. */
+  const label = (text: string, x: number, y: number, color: RGB, align: 'left' | 'right' | 'center' = 'left', size = 7) => {
+    const cs = 0.35;
+    font('bold', size, color);
+    const w = doc.getTextWidth(text) + cs * (text.length - 1);
+    const x0 = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+    doc.text(text, x0, y, { charSpace: cs });
+    return w;
+  };
+  const section = (title: string, y: number) => {
+    doc.setFillColor(...C.brand);
+    doc.roundedRect(M, y - 3.1, 1.3, 4, 0.6, 0.6, 'F');
+    const w = label(title, M + 3.6, y, C.brandDeep, 'left', 7.5);
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.2);
+    doc.line(M + 3.6 + w + 3, y - 1.2, W - M, y - 1.2);
+  };
+  /** Booking reference — heavy, letter-spaced, centred. */
+  const refText = (ref: string, cx: number, y: number, size: number) => {
+    const cs = 0.6;
+    font('heavy', size, C.brandInk);
+    const w = doc.getTextWidth(ref) + cs * (ref.length - 1);
+    doc.text(ref, cx - w / 2, y, { charSpace: cs });
+  };
+  const ensureSpace = (y: number, need: number) => {
+    if (y + need <= BOTTOM) return y;
+    doc.addPage();
+    return 20;
+  };
 
-  if (t.pickupPoint) {
-    y += 16;
-    field(M, 'Pickup point', t.pickupPoint);
+  // ── Brand bar ─────────────────────────────────────────────
+  doc.setFillColor(...C.brand);
+  doc.rect(0, 0, W, 2.2, 'F');
+  font('heavy', 17, C.brand);
+  doc.text('Ghumakkars', M, 14.5);
+  const brandW = doc.getTextWidth('Ghumakkars');
+  label('TRAVEL AGENCY', M + brandW + 3, 14.3, C.faint, 'left', 6.5);
+  label('E-TICKET', W - M, 9.8, C.brand, 'right', 7);
+  font('normal', 8.5, C.muted);
+  doc.text(`Booked on ${t.bookedOn}`, W - M, 14.5, { align: 'right' });
+
+  // ── Hero ticket ───────────────────────────────────────────
+  const hy = 20;
+  const hh = 60;
+  const stubW = 48;
+  const splitX = W - M - stubW;
+  doc.setFillColor(...C.brand);
+  doc.roundedRect(M, hy, CW, hh, 4, 4, 'F');
+
+  const lx = M + 8;
+  const rx = splitX - 8;
+
+  // Status pill (top-right of the main part)
+  const badge = statusBadge(t.status);
+  font('bold', 6.8, badge.fg);
+  const pw = doc.getTextWidth(badge.label) + 0.3 * (badge.label.length - 1) + 7;
+  doc.setFillColor(...badge.bg);
+  doc.roundedRect(rx - pw, hy + 6.2, pw, 5.6, 2.8, 2.8, 'F');
+  doc.text(badge.label, rx - pw + 3.5, hy + 10, { charSpace: 0.3 });
+
+  label('TRIP TICKET', lx, hy + 10.2, C.brandMuted);
+
+  // Title (max 2 lines)
+  font('heavy', 18, C.white);
+  let titleLines: string[] = doc.splitTextToSize(t.tripTitle || 'Trip', rx - lx);
+  if (titleLines.length > 2) {
+    titleLines = titleLines.slice(0, 2);
+    titleLines[1] = titleLines[1].replace(/\s*\S*$/, '') + '...';
+  }
+  let ty = hy + 19.5;
+  for (const l of titleLines) { doc.text(l, lx, ty); ty += 7.4; }
+  if (t.destination) {
+    font('normal', 9.5, C.brandLine);
+    doc.text(doc.splitTextToSize(t.destination, rx - lx)[0], lx, ty - 1.4);
   }
 
-  // ── Travellers table ──
-  y += 16;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(...GRAY);
-  doc.text('TRAVELLERS', M, y);
+  // Journey row: departs —— duration —— returns
+  const sepY = hy + 38.5;
+  doc.setDrawColor(...C.brandMid);
+  doc.setLineWidth(0.25);
+  doc.line(lx, sepY, rx, sepY);
+  label('DEPARTS', lx, hy + 45.5, C.brandMuted);
+  label('RETURNS', rx, hy + 45.5, C.brandMuted, 'right');
+  font('bold', 12.5, C.white);
+  const depW = doc.getTextWidth(t.departure);
+  const retW = doc.getTextWidth(t.ret);
+  doc.text(t.departure, lx, hy + 52.5);
+  doc.text(t.ret, rx, hy + 52.5, { align: 'right' });
+  const a = lx + depW + 5;
+  const b = rx - retW - 5;
+  let durationInHero = false;
+  if (b - a > 18) {
+    const ly = hy + 50.5;
+    doc.setDrawColor(...C.brandMuted);
+    doc.setLineWidth(0.3);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(a, ly, b, ly);
+    doc.setLineDashPattern([], 0);
+    doc.setFillColor(...C.white);
+    doc.circle(a, ly, 0.8, 'F');
+    doc.circle(b, ly, 0.8, 'F');
+    if (t.duration && t.duration !== '—') {
+      font('bold', 7, C.white);
+      const dw = doc.getTextWidth(t.duration) + 6;
+      if (dw < b - a - 4) {
+        durationInHero = true;
+        doc.setFillColor(...C.brandDeep);
+        doc.roundedRect((a + b) / 2 - dw / 2, ly - 2.6, dw, 5.2, 2.6, 2.6, 'F');
+        doc.text(t.duration, (a + b) / 2, ly + 0.9, { align: 'center' });
+      }
+    }
+  }
+
+  // Perforation + notches
+  doc.setDrawColor(...C.brandMid);
+  doc.setLineWidth(0.35);
+  doc.setLineDashPattern([1.3, 1.1], 0);
+  doc.line(splitX, hy + 5, splitX, hy + hh - 5);
+  doc.setLineDashPattern([], 0);
+  doc.setFillColor(...C.white);
+  doc.circle(splitX, hy, 3, 'F');
+  doc.circle(splitX, hy + hh, 3, 'F');
+
+  // Stub: QR + reference
+  const sx = splitX + 4.5;
+  const sw = stubW - 9;
+  const sc = sx + sw / 2;
+  doc.setFillColor(...C.white);
+  doc.roundedRect(sx, hy + 4.5, sw, hh - 9, 2.5, 2.5, 'F');
+  if (t.qrDataUrl) {
+    const q = 27;
+    doc.addImage(t.qrDataUrl, 'PNG', sc - q / 2, hy + 8.5, q, q);
+    label('BOOKING REF', sc, hy + 40.5, C.muted, 'center', 5.8);
+    refText(t.ref, sc, hy + 46.2, 11);
+    font('normal', 5.8, C.faint);
+    doc.text('Scan to verify this ticket', sc, hy + 50.6, { align: 'center' });
+  } else {
+    label('BOOKING REF', sc, hy + 24, C.muted, 'center', 6.5);
+    refText(t.ref, sc, hy + 32, 14);
+  }
+
+  // ── Quick facts strip ─────────────────────────────────────
+  let y = hy + hh + 5;
+  {
+    const pickup = t.pickupPoint || '—';
+    const cells = [
+      // Duration already sits on the hero's journey line when it fits there.
+      ...(durationInHero ? [] : [{ k: 'DURATION', v: t.duration || '—', w: 40 }]),
+      { k: 'TRAVELLERS', v: `${t.travellers} ${t.travellers === 1 ? 'person' : 'people'}`, w: 36 },
+    ];
+    const used = cells.reduce((s, c) => s + c.w, 0);
+    cells.push({ k: 'PICKUP POINT', v: pickup, w: CW - used });
+    const pickupIdx = cells.length - 1;
+    font('bold', 10, C.ink);
+    const pickupLines: string[] = doc.splitTextToSize(pickup, cells[pickupIdx].w - 12).slice(0, 2);
+    const sh = 15 + (pickupLines.length - 1) * 4.6;
+    doc.setFillColor(...C.brandSoft);
+    doc.roundedRect(M, y, CW, sh, 3, 3, 'F');
+    let cx = M;
+    cells.forEach((c, i) => {
+      if (i > 0) {
+        doc.setDrawColor(...C.brandLine);
+        doc.setLineWidth(0.25);
+        doc.line(cx, y + 3.5, cx, y + sh - 3.5);
+      }
+      label(c.k, cx + 6, y + 5.8, C.brand, 'left', 6.5);
+      font('bold', 10, C.ink);
+      doc.text(i === pickupIdx ? pickupLines : [c.v], cx + 6, y + 11.2);
+      cx += c.w;
+    });
+    y += sh + 9;
+  }
+
+  // ── Travellers ────────────────────────────────────────────
+  const tableBase = {
+    margin: { left: M, right: M, top: 18, bottom: 22 },
+    theme: 'plain' as const,
+    styles: {
+      font: FAM,
+      fontSize: 9,
+      textColor: C.ink,
+      cellPadding: { top: 2.3, bottom: 2.3, left: 3, right: 3 },
+      lineColor: C.line,
+      lineWidth: { bottom: 0.2 },
+      valign: 'middle' as const,
+    },
+    headStyles: { fillColor: C.brandSoft, textColor: C.brandDeep, fontStyle: 'bold' as const, fontSize: 7, lineWidth: 0 },
+  };
+  y = ensureSpace(y, 30);
+  section('TRAVELLERS', y);
   autoTable(doc, {
+    ...tableBase,
     startY: y + 3,
-    margin: { left: M, right: M },
-    head: [['#', 'Name', 'Age', 'Gender', 'Phone']],
+    head: [['#', 'NAME', 'AGE', 'GENDER', 'PHONE']],
     body: t.passengers.map((p, i) => [
       String(i + 1),
-      (p.name || '—') + (p.isPrimary ? '  (Primary)' : ''),
+      p.name || '—',
       p.age != null && p.age !== '' ? String(p.age) : '—',
-      p.gender ? String(p.gender) : '—',
+      cap(p.gender ? String(p.gender) : '') || '—',
       p.phone ? String(p.phone) : '—',
     ]),
-    styles: { fontSize: 9, cellPadding: 2.5, textColor: DARK },
-    headStyles: { fillColor: [249, 250, 251], textColor: GRAY, fontStyle: 'bold', fontSize: 8 },
-    columnStyles: { 0: { cellWidth: 10 } },
-    theme: 'grid',
-    tableLineColor: [243, 244, 246],
-    tableLineWidth: 0.1,
+    columnStyles: {
+      0: { cellWidth: 10, textColor: C.faint },
+      1: { fontStyle: 'bold' },
+      2: { cellWidth: 18 },
+      3: { cellWidth: 26 },
+      4: { cellWidth: 40 },
+    },
+    didDrawCell: (data: any) => {
+      if (data.section !== 'body' || data.column.index !== 1) return;
+      if (!t.passengers[data.row.index]?.isPrimary) return;
+      doc.setFont(FAM, 'bold');
+      doc.setFontSize(9);
+      const nameW = doc.getTextWidth(String(data.cell.text?.[0] ?? ''));
+      const bx = data.cell.x + data.cell.padding('left') + nameW + 2.5;
+      const by = data.cell.y + data.cell.height / 2 - 2;
+      if (bx + 12 > data.cell.x + data.cell.width) return;
+      doc.setFillColor(...C.brandSoft);
+      doc.roundedRect(bx, by, 11, 4, 2, 2, 'F');
+      doc.setFontSize(5.8);
+      doc.setTextColor(...C.brand);
+      doc.text('LEAD', bx + 5.5, by + 2.8, { align: 'center', charSpace: 0.2 });
+    },
   });
-  y = (doc as any).lastAutoTable.finalY + 12;
+  y = (doc as any).lastAutoTable.finalY + 9;
 
-  // ── Add-ons & upgrades table (only when present) ──
+  // ── Add-ons (only when present) ───────────────────────────
   if (t.addons.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
-    doc.text('ADD-ONS & UPGRADES', M, y);
+    y = ensureSpace(y, 30);
+    section('ADD-ONS & UPGRADES', y);
     autoTable(doc, {
+      ...tableBase,
       startY: y + 3,
-      margin: { left: M, right: M },
-      head: [['Add-on', 'Travellers', 'Calculation', 'Amount']],
-      body: t.addons.map((a) => [a.name, a.travellers, a.calc, rupee(a.total)]),
-      styles: { fontSize: 9, cellPadding: 2.5, textColor: DARK },
-      headStyles: { fillColor: [249, 250, 251], textColor: GRAY, fontStyle: 'bold', fontSize: 8 },
-      columnStyles: { 3: { halign: 'right', cellWidth: 26 } },
-      theme: 'grid',
-      tableLineColor: [243, 244, 246],
-      tableLineWidth: 0.1,
+      head: [['ADD-ON', 'FOR', 'CALCULATION', 'AMOUNT']],
+      body: t.addons.map((a) => [a.name, a.travellers, calcText(a.calc), money(a.total)]),
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 52 },
+        2: { textColor: C.muted, cellWidth: 44 },
+        3: { fontStyle: 'bold', cellWidth: 28 },
+      },
+      didParseCell: (data: any) => {
+        if (data.column.index === 3) data.cell.styles.halign = 'right';
+      },
     });
-    y = (doc as any).lastAutoTable.finalY + 12;
+    y = (doc as any).lastAutoTable.finalY + 9;
   }
 
-  // ── Emergency contact ──
-  if (t.emergencyName || t.emergencyPhone) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
-    doc.text('EMERGENCY CONTACT', M, y);
-    y += 3;
-    field(M, 'Name', t.emergencyName || '—');
-    field(M + col * 2, 'Phone', t.emergencyPhone || '—');
-    y += 16;
-  }
+  // ── Payment (left) + contacts (right) ─────────────────────
+  type Row = { k: string; v: string; color?: RGB };
+  const rows: Row[] = [{ k: 'Trip package', v: money(t.tripPrice) }];
+  if (t.addonsTotal > 0) rows.push({ k: 'Add-ons & upgrades', v: money(t.addonsTotal) });
+  if (t.couponDiscount > 0) rows.push({ k: `Coupon${t.couponCode ? ` (${t.couponCode})` : ''}`, v: '- ' + money(t.couponDiscount), color: C.green });
+  if (t.walletUsed > 0) rows.push({ k: 'Wallet used', v: '- ' + money(t.walletUsed), color: C.brand });
 
-  // ── Payment ──
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(...GRAY);
-  doc.text('PAYMENT', M, y);
-  y += 7;
-  const payRow = (label: string, value: string, opts?: { bold?: boolean; color?: [number, number, number]; size?: number }) => {
-    doc.setFont('helvetica', opts?.bold ? 'bold' : 'normal');
-    doc.setFontSize(opts?.size || 10);
-    doc.setTextColor(...(opts?.color || DARK));
-    doc.text(label, M, y);
-    doc.text(value, W - M, y, { align: 'right' });
-    y += opts?.size ? opts.size * 0.6 : 6;
-  };
-  payRow('Base package', rupee(t.tripPrice));
-  if (t.addonsTotal > 0) payRow('Add-ons & upgrades', rupee(t.addonsTotal));
-  if (t.couponDiscount > 0) payRow(`Coupon${t.couponCode ? ' (' + t.couponCode + ')' : ''}`, '- ' + rupee(t.couponDiscount), { color: [21, 128, 5] });
-  if (t.walletUsed > 0) payRow('Wallet used', '- ' + rupee(t.walletUsed), { color: [109, 40, 217] });
-  y += 2;
-  doc.setDrawColor(229, 231, 235);
-  doc.line(M, y, W - M, y);
-  y += 6;
-  payRow('Grand total', rupee(t.grandTotal), { bold: true, size: 12 });
-  if (t.pendingCash) {
-    payRow('Payment due in person', rupee(t.dueNow || 0), { bold: true, color: [194, 65, 12] });
-    payRow('Balance after this payment', rupee(t.remainingAfterDueNow || 0), { bold: true, color: [194, 65, 12] });
-  } else {
-    payRow('Amount paid', rupee(t.amountPaid), { bold: true, color: [21, 128, 5] });
-    if (t.remaining > 0) payRow('Pending balance', rupee(t.remaining), { bold: true, color: [194, 65, 12] });
-  }
-  if (t.txnId) {
-    y += 2;
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
-    doc.text(`Txn ID: ${t.txnId}`, M, y);
-    y += 6;
-  }
+  type Tile = { k: string; v: string; fg: RGB; bg: RGB };
+  const tiles: Tile[] = t.pendingCash
+    ? [
+        { k: 'DUE IN PERSON', v: money(t.dueNow || 0), fg: C.amber, bg: C.amberSoft },
+        { k: 'BALANCE AFTER', v: money(t.remainingAfterDueNow || 0), fg: C.slate, bg: C.slateSoft },
+      ]
+    : [
+        { k: 'AMOUNT PAID', v: money(t.amountPaid), fg: C.green, bg: C.greenSoft },
+        ...(t.remaining > 0 ? [{ k: 'BALANCE DUE', v: money(t.remaining), fg: C.amber, bg: C.amberSoft }] : []),
+      ];
 
-  // ── Important note ──
+  const payW = 114;
+  const gap = 6;
+  const sideX = M + payW + gap;
+  const sideW = CW - payW - gap;
+  const payH = 40.5 + rows.length * 6 + (t.txnId ? 5 : 0);
+  const hasEmergency = !!(t.emergencyName || t.emergencyPhone);
+  const emH = 25;
+
+  // "Before you go" tips — sit in the right column beside the payment card.
+  const tips = [
+    'Carry this ticket (printed or on phone) and a govt. photo ID: Aadhaar, DL or Passport.',
+    'Reach the pickup point 30 minutes before departure.',
+  ];
+  if (t.qrDataUrl) tips.push('Anyone can scan the QR code to check this ticket is valid.');
+  font('normal', 8, C.body);
+  const tipLines = tips.map((tp) => doc.splitTextToSize(tp, sideW - 14) as string[]);
+  const tipH = 11 + tipLines.reduce((s, l) => s + l.length * 3.8 + 1.4, 0) + 1.5;
+  const sideH = (hasEmergency ? emH + 4 : 0) + tipH;
+
+  y = ensureSpace(y, Math.max(payH, sideH) + 6);
+  section('PAYMENT & TRAVEL INFO', y);
   y += 4;
-  doc.setFillColor(255, 247, 237);
-  doc.setDrawColor(254, 215, 170);
-  const noteLines = doc.splitTextToSize(
-    'Please carry a printout or digital copy of this ticket + a valid government photo ID (Aadhaar / Driving Licence / Passport). Reach the pickup point 30 minutes before departure.',
-    210 - M * 2 - 8,
-  );
-  const noteH = noteLines.length * 4.6 + 8;
-  doc.roundedRect(M, y, 210 - M * 2, noteH, 2, 2, 'FD');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(154, 52, 18);
-  doc.text(noteLines, M + 4, y + 6);
+  const top = y;
 
-  // ── Footer ──
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text(
-    `Booked on ${t.bookedOn}  ·  support@ghumakkars.in  ·  +91 82180 20972`,
-    W / 2,
-    290,
-    { align: 'center' },
-  );
+  // Payment card
+  {
+    const px = M + 6;
+    const pr = M + payW - 6;
+    let cy = top + 8;
+    label('PAYMENT SUMMARY', px, cy, C.muted, 'left', 6.5);
+    cy += 6.5;
+    for (const r of rows) {
+      font('normal', 9, C.body);
+      doc.text(r.k, px, cy);
+      font('normal', 9, r.color || C.ink);
+      doc.text(r.v, pr, cy, { align: 'right' });
+      cy += 6;
+    }
+    cy -= 2.5;
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.2);
+    doc.line(px, cy, pr, cy);
+    cy += 6.5;
+    font('heavy', 11, C.ink);
+    doc.text('Grand total', px, cy);
+    doc.text(money(t.grandTotal), pr, cy, { align: 'right' });
+    cy += 4;
+    const tw = (pr - px - (tiles.length - 1) * 3) / tiles.length;
+    tiles.forEach((tl, i) => {
+      const tx = px + i * (tw + 3);
+      doc.setFillColor(...tl.bg);
+      doc.roundedRect(tx, cy, tw, 13, 2, 2, 'F');
+      label(tl.k, tx + 3.5, cy + 4.8, tl.fg, 'left', 6);
+      font('heavy', 11.5, tl.fg);
+      doc.text(tl.v, tx + 3.5, cy + 10.4);
+    });
+    cy += 13;
+    if (t.txnId) {
+      cy += 5;
+      font('normal', 7, C.faint);
+      doc.text('Txn ID', px, cy);
+      font('normal', 7, C.muted);
+      doc.text(String(t.txnId), px + 10.5, cy);
+    }
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(M, top, payW, cy + 5 - top, 3, 3, 'S');
+  }
+
+  // Right column: emergency contact + tips
+  {
+    let cy = top;
+    const ix = sideX + 5;
+    const iw = sideW - 10;
+    if (hasEmergency) {
+      doc.setFillColor(...C.brandSoft);
+      doc.roundedRect(sideX, cy, sideW, emH, 3, 3, 'F');
+      label('EMERGENCY CONTACT', ix, cy + 7, C.brand, 'left', 6.5);
+      font('bold', 10, C.ink);
+      doc.text(doc.splitTextToSize(t.emergencyName || '—', iw)[0], ix, cy + 13.5);
+      font('normal', 9, C.body);
+      doc.text(t.emergencyPhone || '—', ix, cy + 19.5);
+      cy += emH + 4;
+    }
+    doc.setFillColor(255, 251, 235);
+    doc.setDrawColor(253, 230, 138);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(sideX, cy, sideW, tipH, 3, 3, 'FD');
+    label('BEFORE YOU GO', ix, cy + 7, C.amber, 'left', 6.5);
+    let ny = cy + 12.5;
+    for (const lines of tipLines) {
+      doc.setFillColor(...C.amber);
+      doc.circle(ix + 1, ny - 1, 0.65, 'F');
+      font('normal', 8, [120, 53, 15]);
+      doc.text(lines, ix + 4, ny);
+      ny += lines.length * 3.8 + 1.4;
+    }
+  }
+
+  // ── Footer on every page ──────────────────────────────────
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.2);
+    doc.line(M, H - 14, W - M, H - 14);
+    font('bold', 7.5, C.brand);
+    doc.text('Ghumakkars', M, H - 9);
+    font('normal', 7.5, C.muted);
+    doc.text('Help: +91 82180 20972  ·  support@ghumakkars.in  ·  www.ghumakkars.in', W / 2, H - 9, { align: 'center' });
+    doc.text(pages > 1 ? `Page ${i} of ${pages}` : `Ref #${t.ref}`, W - M, H - 9, { align: 'right' });
+  }
 
   return doc;
 }
@@ -380,7 +678,18 @@ export function buildTicketDoc(t: TicketData): jsPDF {
 export async function renderTicketBuffer(bookingId: string): Promise<{ buffer: Buffer; filename: string } | null> {
   const data = await loadTicketData(bookingId);
   if (!data) return null;
-  const doc = buildTicketDoc(data);
+  try {
+    const QRCode = (await import('qrcode')).default;
+    data.qrDataUrl = await QRCode.toDataURL(ticketVerifyUrl(data.bookingId!), {
+      margin: 0,
+      width: 300,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#2E1065', light: '#FFFFFF' },
+    });
+  } catch {
+    /* QR is a nice-to-have — the ticket still renders without it */
+  }
+  const doc = buildTicketDoc(data, await loadTicketFonts());
   const ab = doc.output('arraybuffer');
   return { buffer: Buffer.from(ab), filename: ticketFilename(data) };
 }
