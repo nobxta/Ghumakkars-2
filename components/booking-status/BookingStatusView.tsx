@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { useEffect, useState } from 'react';
 import localFont from 'next/font/local';
 import { getStatusConfig } from './statusConfig';
@@ -56,11 +57,8 @@ export default function BookingStatusView(props: BookingStatusViewProps) {
 
       {/* Minimal brand header (matches the focused Stitch shell) */}
       <header className="absolute left-0 top-0 z-20 flex w-full items-center justify-between px-5 py-5 sm:px-10">
-        <Link
-          href="/"
-          className={`bs-display text-xl font-extrabold tracking-tight sm:text-2xl ${light ? 'text-[#191b23]' : 'text-white'}`}
-        >
-          Ghumakkars
+        <Link href="/" aria-label="Ghumakkars home">
+          <BrandWordmark white={!light} className="h-6 sm:h-7" />
         </Link>
         <Link
           href="/profile"

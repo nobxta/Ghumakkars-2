@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { ArrowLeft } from 'lucide-react';
 
 /**
@@ -16,6 +17,9 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
       <div className="relative z-10 w-full max-w-md">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#7C3AED] transition-colors mb-4">
           <ArrowLeft className="h-4 w-4" /> Back to home
+        </Link>
+        <Link href="/" aria-label="Ghumakkars home" className="mb-6 flex justify-center">
+          <BrandWordmark priority className="h-8" />
         </Link>
         <div className="rounded-[24px] bg-white border border-[#E8E8EF] shadow-[0_10px_40px_rgba(15,23,42,0.06)] p-7 sm:p-8">
           {children}

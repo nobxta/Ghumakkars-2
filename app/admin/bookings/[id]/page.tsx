@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { createClient, getSessionUser } from '@/lib/supabase/client';
 import {
   ArrowLeft, MapPin, Clock, Users, User, Mail, Phone, Heart,
@@ -612,7 +613,7 @@ export default function AdminBookingDetailsPage() {
       <div className="hidden print:block max-w-4xl mx-auto px-6 pt-6 pb-4 border-b border-gray-300">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-2xl font-extrabold text-gray-900">Ghumakkars</p>
+            <BrandWordmark className="h-7 mb-1" />
             <p className="text-xs text-gray-500">Trip Booking Receipt</p>
           </div>
           <div className="text-right text-xs text-gray-600">

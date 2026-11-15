@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { useRouter, usePathname } from 'next/navigation';
-import { MapPin, Menu, X, LogOut, User, Calendar, Settings, Gift, Wallet, ChevronDown, Sparkles } from 'lucide-react';
+import { Menu, X, LogOut, User, Calendar, Settings, Gift, Wallet, ChevronDown, Sparkles } from 'lucide-react';
 import { createClient, getSessionUser } from '@/lib/supabase/client';
 
 export default function Navbar() {
@@ -88,15 +89,10 @@ export default function Navbar() {
           {/* Logo */}
           <Link 
             href="/" 
-            className="flex items-center space-x-2.5 group relative"
+            aria-label="Ghumakkars home"
+            className="flex items-center shrink-0 transition-opacity duration-200 hover:opacity-85"
           >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl blur-md opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
-              <MapPin className="h-6 w-6 md:h-7 md:w-7 text-purple-600 relative z-10 group-hover:scale-110 transition-transform duration-300" />
-            </div>
-            <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent tracking-tight">
-              Ghumakkars
-            </span>
+            <BrandWordmark priority className="h-6 md:h-7" />
           </Link>
 
           {/* Desktop Navigation */}

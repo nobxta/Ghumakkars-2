@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { usePathname } from 'next/navigation';
 import { MapPin, X, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react';
 import { ADMIN_NAV, isAdminNavActive, type AdminNavItem } from '@/components/admin/adminNav';
@@ -18,13 +19,14 @@ const ACCENT = '#7541F5';
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/admin" className="flex items-center gap-2.5 min-w-0 outline-none rounded-lg focus-visible:ring-2 focus-visible:ring-[#7541F5]/40">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white shadow-[0_4px_12px_rgba(117,65,245,0.35)]">
-        <MapPin className="h-[18px] w-[18px]" />
-      </div>
-      {!compact && (
+      {compact ? (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white shadow-[0_4px_12px_rgba(117,65,245,0.35)]">
+          <MapPin className="h-[18px] w-[18px]" />
+        </div>
+      ) : (
         <div className="min-w-0 leading-tight">
-          <div className="truncate text-[15px] font-bold tracking-tight text-slate-900">Ghumakkars</div>
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#7541F5]">Admin Console</div>
+          <BrandWordmark className="h-[22px]" />
+          <div className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#7541F5]">Admin Console</div>
         </div>
       )}
     </Link>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BrandWordmark from '@/components/BrandWordmark';
 import { MapPin, Mail, Phone, Instagram, MessageCircle } from 'lucide-react';
 
 export default function Footer() {
@@ -13,10 +14,9 @@ export default function Footer() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-8 md:gap-10">
           {/* Brand */}
           <div className="col-span-2">
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 flex items-center space-x-2 tracking-tight">
-              <MapPin className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />
-              <span>Ghumakkars</span>
-            </h3>
+            <Link href="/" aria-label="Ghumakkars home" className="inline-block mb-4">
+              <BrandWordmark className="h-7 md:h-8" />
+            </Link>
             <p className="text-sm md:text-base text-gray-600 mb-5 max-w-md font-light leading-relaxed">
               Making India&apos;s most breathtaking destinations accessible to everyone through
               thoughtfully curated, budget-friendly group trips.
