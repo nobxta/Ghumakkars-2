@@ -263,6 +263,12 @@ function statusBadge(status: string): { label: string; fg: RGB; bg: RGB } {
 }
 
 const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
+/** "SUBHAM KR GUPTA" → "Subham Kr Gupta"; names already in mixed case are kept. */
+const niceName = (s?: string) => {
+  const v = String(s || '').trim();
+  if (!v || v !== v.toUpperCase() || !/[A-Z]/.test(v)) return v;
+  return v.toLowerCase().replace(/(^|[\s.'-])([a-z])/g, (_m, p, c) => p + c.toUpperCase());
+};
 
 /**
  * Build the ticket PDF. Works in the browser and in Node. Pass `fonts`
@@ -286,6 +292,7 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   const M = 14;
   const CW = W - M * 2;
   const BOTTOM = H - 20; // keep clear of the footer
+  const PAD = 7; // one inner padding for every card, strip and table
 
   const font = (style: 'normal' | 'bold' | 'heavy', size: number, color: RGB) => {
     if (style === 'heavy') doc.setFont(hasFonts ? 'PoppinsHeavy' : 'helvetica', hasFonts ? 'normal' : 'bold');
@@ -304,11 +311,11 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   };
   const section = (title: string, y: number) => {
     doc.setFillColor(...C.brand);
-    doc.roundedRect(M, y - 3.1, 1.3, 4, 0.6, 0.6, 'F');
-    const w = label(title, M + 3.6, y, C.brandDeep, 'left', 7.5);
+    doc.roundedRect(M, y - 3.2, 1.4, 4.2, 0.7, 0.7, 'F');
+    const w = label(title, M + 4.2, y, C.brandDeep, 'left', 7.5);
     doc.setDrawColor(...C.line);
     doc.setLineWidth(0.2);
-    doc.line(M + 3.6 + w + 3, y - 1.2, W - M, y - 1.2);
+    doc.line(M + 4.2 + w + 3.5, y - 1.1, W - M, y - 1.1);
   };
   /** Booking reference — heavy, letter-spaced, centred. */
   const refText = (ref: string, cx: number, y: number, size: number) => {
@@ -329,7 +336,7 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   font('heavy', 17, C.brand);
   doc.text('Ghumakkars', M, 14.5);
   const brandW = doc.getTextWidth('Ghumakkars');
-  label('TRAVEL AGENCY', M + brandW + 3, 14.3, C.faint, 'left', 6.5);
+  label('TRAVEL AGENCY', M + brandW + 3, 14.5, C.faint, 'left', 6.5);
   label('E-TICKET', W - M, 9.8, C.brand, 'right', 7);
   font('normal', 8.5, C.muted);
   doc.text(`Booked on ${t.bookedOn}`, W - M, 14.5, { align: 'right' });
@@ -342,35 +349,52 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   doc.setFillColor(...C.brand);
   doc.roundedRect(M, hy, CW, hh, 4, 4, 'F');
 
-  const lx = M + 8;
-  const rx = splitX - 8;
+  const lx = M + PAD;
+  const rx = splitX - PAD;
+  const rowY = hy + 9.9; // baseline shared by the eyebrow label and the status pill
 
   // Status pill (top-right of the main part)
   const badge = statusBadge(t.status);
   font('bold', 6.8, badge.fg);
   const pw = doc.getTextWidth(badge.label) + 0.3 * (badge.label.length - 1) + 7;
   doc.setFillColor(...badge.bg);
-  doc.roundedRect(rx - pw, hy + 6.2, pw, 5.6, 2.8, 2.8, 'F');
-  doc.text(badge.label, rx - pw + 3.5, hy + 10, { charSpace: 0.3 });
+  doc.roundedRect(rx - pw, rowY - 3.7, pw, 5.6, 2.8, 2.8, 'F');
+  doc.text(badge.label, rx - pw + 3.5, rowY, { charSpace: 0.3 });
 
-  label('TRIP TICKET', lx, hy + 10.2, C.brandMuted);
+  label('TRIP TICKET', lx, rowY, C.brandMuted);
 
-  // Title (max 2 lines)
-  font('heavy', 18, C.white);
-  let titleLines: string[] = doc.splitTextToSize(t.tripTitle || 'Trip', rx - lx);
+  // Title (max 2 lines; a short title gets a bigger size) + destination,
+  // centred in the space between the top row and the journey divider.
+  const sepY = hy + 38.5;
+  const titleText = t.tripTitle || 'Trip';
+  let titleSize = 21;
+  font('heavy', titleSize, C.white);
+  let titleLines: string[] = doc.splitTextToSize(titleText, rx - lx);
+  if (titleLines.length > 1) {
+    titleSize = 18;
+    font('heavy', titleSize, C.white);
+    titleLines = doc.splitTextToSize(titleText, rx - lx);
+  }
   if (titleLines.length > 2) {
     titleLines = titleLines.slice(0, 2);
     titleLines[1] = titleLines[1].replace(/\s*\S*$/, '') + '...';
   }
-  let ty = hy + 19.5;
-  for (const l of titleLines) { doc.text(l, lx, ty); ty += 7.4; }
+  const ptToMm = 0.3528;
+  const capH = titleSize * ptToMm * 0.7;
+  const lineGap = titleSize * ptToMm * 1.15;
+  const destGap = t.destination ? 6.6 : 0;
+  const blockH = capH + (titleLines.length - 1) * lineGap + destGap;
+  const areaTop = rowY + 2;
+  const areaBottom = sepY - 3;
+  let ty = areaTop + Math.max(0, (areaBottom - areaTop - blockH) / 2) + capH;
+  titleLines.forEach((l, i) => doc.text(l, lx, ty + i * lineGap));
+  ty += (titleLines.length - 1) * lineGap;
   if (t.destination) {
     font('normal', 9.5, C.brandLine);
-    doc.text(doc.splitTextToSize(t.destination, rx - lx)[0], lx, ty - 1.4);
+    doc.text(doc.splitTextToSize(t.destination, rx - lx)[0], lx, ty + destGap);
   }
 
   // Journey row: departs —— duration —— returns
-  const sepY = hy + 38.5;
   doc.setDrawColor(...C.brandMid);
   doc.setLineWidth(0.25);
   doc.line(lx, sepY, rx, sepY);
@@ -385,7 +409,7 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   const b = rx - retW - 5;
   let durationInHero = false;
   if (b - a > 18) {
-    const ly = hy + 50.5;
+    const ly = hy + 51; // optical centre of the 12.5pt dates
     doc.setDrawColor(...C.brandMuted);
     doc.setLineWidth(0.3);
     doc.setLineDashPattern([1, 1], 0);
@@ -430,8 +454,8 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
     font('normal', 5.8, C.faint);
     doc.text('Scan to verify this ticket', sc, hy + 50.6, { align: 'center' });
   } else {
-    label('BOOKING REF', sc, hy + 24, C.muted, 'center', 6.5);
-    refText(t.ref, sc, hy + 32, 14);
+    label('BOOKING REF', sc, hy + 26, C.muted, 'center', 6.5);
+    refText(t.ref, sc, hy + 34, 14);
   }
 
   // ── Quick facts strip ─────────────────────────────────────
@@ -447,8 +471,8 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
     cells.push({ k: 'PICKUP POINT', v: pickup, w: CW - used });
     const pickupIdx = cells.length - 1;
     font('bold', 10, C.ink);
-    const pickupLines: string[] = doc.splitTextToSize(pickup, cells[pickupIdx].w - 12).slice(0, 2);
-    const sh = 15 + (pickupLines.length - 1) * 4.6;
+    const pickupLines: string[] = doc.splitTextToSize(pickup, cells[pickupIdx].w - PAD * 2).slice(0, 2);
+    const sh = 15.4 + (pickupLines.length - 1) * 4.6;
     doc.setFillColor(...C.brandSoft);
     doc.roundedRect(M, y, CW, sh, 3, 3, 'F');
     let cx = M;
@@ -458,9 +482,9 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
         doc.setLineWidth(0.25);
         doc.line(cx, y + 3.5, cx, y + sh - 3.5);
       }
-      label(c.k, cx + 6, y + 5.8, C.brand, 'left', 6.5);
+      label(c.k, cx + PAD, y + 5.8, C.brand, 'left', 6.5);
       font('bold', 10, C.ink);
-      doc.text(i === pickupIdx ? pickupLines : [c.v], cx + 6, y + 11.2);
+      doc.text(i === pickupIdx ? pickupLines : [c.v], cx + PAD, y + 11.2);
       cx += c.w;
     });
     y += sh + 9;
@@ -481,6 +505,17 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
     },
     headStyles: { fillColor: C.brandSoft, textColor: C.brandDeep, fontStyle: 'bold' as const, fontSize: 7, lineWidth: 0 },
   };
+  /** First/last columns get the shared inner padding so tables line up with the cards. */
+  const edgePadding = (data: any) => {
+    const last = data.table.columns.length - 1;
+    const cp = data.cell.styles.cellPadding;
+    const base = typeof cp === 'object' ? cp : { top: 2.3, bottom: 2.3, left: 3, right: 3 };
+    data.cell.styles.cellPadding = {
+      ...base,
+      left: data.column.index === 0 ? PAD : base.left,
+      right: data.column.index === last ? PAD : base.right,
+    };
+  };
   y = ensureSpace(y, 30);
   section('TRAVELLERS', y);
   autoTable(doc, {
@@ -489,17 +524,18 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
     head: [['#', 'NAME', 'AGE', 'GENDER', 'PHONE']],
     body: t.passengers.map((p, i) => [
       String(i + 1),
-      p.name || '—',
+      niceName(p.name) || '—',
       p.age != null && p.age !== '' ? String(p.age) : '—',
       cap(p.gender ? String(p.gender) : '') || '—',
       p.phone ? String(p.phone) : '—',
     ]),
+    didParseCell: edgePadding,
     columnStyles: {
-      0: { cellWidth: 10, textColor: C.faint },
+      0: { cellWidth: 14, textColor: C.faint },
       1: { fontStyle: 'bold' },
       2: { cellWidth: 18 },
       3: { cellWidth: 26 },
-      4: { cellWidth: 40 },
+      4: { cellWidth: 42 },
     },
     didDrawCell: (data: any) => {
       if (data.section !== 'body' || data.column.index !== 1) return;
@@ -527,13 +563,19 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
       ...tableBase,
       startY: y + 3,
       head: [['ADD-ON', 'FOR', 'CALCULATION', 'AMOUNT']],
-      body: t.addons.map((a) => [a.name, a.travellers, calcText(a.calc), money(a.total)]),
+      body: t.addons.map((a) => [
+        a.name,
+        a.travellers.split(', ').map(niceName).join(', '),
+        calcText(a.calc),
+        money(a.total),
+      ]),
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 52 },
-        2: { textColor: C.muted, cellWidth: 44 },
-        3: { fontStyle: 'bold', cellWidth: 28 },
+        0: { fontStyle: 'bold', cellWidth: 56 },
+        2: { textColor: C.muted, cellWidth: 42 },
+        3: { fontStyle: 'bold', cellWidth: 30 },
       },
       didParseCell: (data: any) => {
+        edgePadding(data);
         if (data.column.index === 3) data.cell.styles.halign = 'right';
       },
     });
@@ -562,9 +604,11 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   const gap = 6;
   const sideX = M + payW + gap;
   const sideW = CW - payW - gap;
-  const payH = 40.5 + rows.length * 6 + (t.txnId ? 5 : 0);
+  // Exact payment card height (mirrors the drawing below).
+  const payH = 8 + 6.5 + rows.length * 6 - 2.5 + 6.5 + 4 + 13.5 + (t.txnId ? 6 : 0) + 6;
   const hasEmergency = !!(t.emergencyName || t.emergencyPhone);
   const emH = 25;
+  const sideGap = 4;
 
   // "Before you go" tips — sit in the right column beside the payment card.
   const tips = [
@@ -573,19 +617,27 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
   ];
   if (t.qrDataUrl) tips.push('Anyone can scan the QR code to check this ticket is valid.');
   font('normal', 8, C.body);
-  const tipLines = tips.map((tp) => doc.splitTextToSize(tp, sideW - 14) as string[]);
-  const tipH = 11 + tipLines.reduce((s, l) => s + l.length * 3.8 + 1.4, 0) + 1.5;
-  const sideH = (hasEmergency ? emH + 4 : 0) + tipH;
+  const tipIndent = 4;
+  const tipLines = tips.map((tp) => doc.splitTextToSize(tp, sideW - PAD * 2 - tipIndent) as string[]);
+  const tipLead = 3.8;
+  const tipGapAfter = 1.6;
+  const tipBodyH = tipLines.reduce((sum, l) => sum + l.length * tipLead + tipGapAfter, 0) - tipGapAfter;
+  const tipMinH = 13.5 + tipBodyH - tipLead + 6; // first baseline + body + bottom padding
+  const sideMinH = (hasEmergency ? emH + sideGap : 0) + tipMinH;
+  const colH = Math.max(payH, sideMinH); // both columns end on the same line
 
-  y = ensureSpace(y, Math.max(payH, sideH) + 6);
+  y = ensureSpace(y, colH + 6);
   section('PAYMENT & TRAVEL INFO', y);
   y += 4;
   const top = y;
 
   // Payment card
   {
-    const px = M + 6;
-    const pr = M + payW - 6;
+    const px = M + PAD;
+    const pr = M + payW - PAD;
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(M, top, payW, colH, 3, 3, 'S');
     let cy = top + 8;
     label('PAYMENT SUMMARY', px, cy, C.muted, 'left', 6.5);
     cy += 6.5;
@@ -605,55 +657,55 @@ export function buildTicketDoc(t: TicketData, fonts?: TicketFonts | null): jsPDF
     doc.text('Grand total', px, cy);
     doc.text(money(t.grandTotal), pr, cy, { align: 'right' });
     cy += 4;
-    const tw = (pr - px - (tiles.length - 1) * 3) / tiles.length;
+    const tileGap = 3;
+    const tw = (pr - px - (tiles.length - 1) * tileGap) / tiles.length;
     tiles.forEach((tl, i) => {
-      const tx = px + i * (tw + 3);
+      const tx = px + i * (tw + tileGap);
       doc.setFillColor(...tl.bg);
-      doc.roundedRect(tx, cy, tw, 13, 2, 2, 'F');
-      label(tl.k, tx + 3.5, cy + 4.8, tl.fg, 'left', 6);
+      doc.roundedRect(tx, cy, tw, 13.5, 2, 2, 'F');
+      label(tl.k, tx + 4, cy + 5, tl.fg, 'left', 6);
       font('heavy', 11.5, tl.fg);
-      doc.text(tl.v, tx + 3.5, cy + 10.4);
+      doc.text(tl.v, tx + 4, cy + 10.4);
     });
-    cy += 13;
+    cy += 13.5;
     if (t.txnId) {
-      cy += 5;
+      cy += 6;
       font('normal', 7, C.faint);
       doc.text('Txn ID', px, cy);
+      const tw2 = doc.getTextWidth('Txn ID ');
       font('normal', 7, C.muted);
-      doc.text(String(t.txnId), px + 10.5, cy);
+      doc.text(String(t.txnId), px + tw2 + 1, cy);
     }
-    doc.setDrawColor(...C.line);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(M, top, payW, cy + 5 - top, 3, 3, 'S');
   }
 
-  // Right column: emergency contact + tips
+  // Right column: emergency contact + tips (tips card stretches to the column bottom)
   {
     let cy = top;
-    const ix = sideX + 5;
-    const iw = sideW - 10;
+    const ix = sideX + PAD;
+    const iw = sideW - PAD * 2;
     if (hasEmergency) {
       doc.setFillColor(...C.brandSoft);
       doc.roundedRect(sideX, cy, sideW, emH, 3, 3, 'F');
-      label('EMERGENCY CONTACT', ix, cy + 7, C.brand, 'left', 6.5);
+      label('EMERGENCY CONTACT', ix, cy + 8, C.brand, 'left', 6.5);
       font('bold', 10, C.ink);
-      doc.text(doc.splitTextToSize(t.emergencyName || '—', iw)[0], ix, cy + 13.5);
+      doc.text(doc.splitTextToSize(niceName(t.emergencyName) || '—', iw)[0], ix, cy + 14.2);
       font('normal', 9, C.body);
-      doc.text(t.emergencyPhone || '—', ix, cy + 19.5);
-      cy += emH + 4;
+      doc.text(t.emergencyPhone || '—', ix, cy + 19.8);
+      cy += emH + sideGap;
     }
+    const tipH = top + colH - cy;
     doc.setFillColor(255, 251, 235);
     doc.setDrawColor(253, 230, 138);
     doc.setLineWidth(0.3);
     doc.roundedRect(sideX, cy, sideW, tipH, 3, 3, 'FD');
-    label('BEFORE YOU GO', ix, cy + 7, C.amber, 'left', 6.5);
-    let ny = cy + 12.5;
+    label('BEFORE YOU GO', ix, cy + 8, C.amber, 'left', 6.5);
+    let ny = cy + 13.5;
     for (const lines of tipLines) {
       doc.setFillColor(...C.amber);
-      doc.circle(ix + 1, ny - 1, 0.65, 'F');
+      doc.circle(ix + 0.8, ny - 1.05, 0.65, 'F');
       font('normal', 8, [120, 53, 15]);
-      doc.text(lines, ix + 4, ny);
-      ny += lines.length * 3.8 + 1.4;
+      doc.text(lines, ix + tipIndent, ny, { lineHeightFactor: tipLead / (8 * 0.3528) });
+      ny += lines.length * tipLead + tipGapAfter;
     }
   }
 
